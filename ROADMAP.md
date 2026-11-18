@@ -7,20 +7,23 @@ Status of the engine. Saving comes first; loading comes after saving is complete
 - Engine: configurable, validated content repository; profiles (tool + account +
   environment); provenance and conflict handling; several machines on one harness
   (rebase + YAML merge); silent background capture; guided setup and one-line installers.
-- Adapters: Claude Code (hooks), Cowork (scheduled), claude.ai (data export).
+- Adapters: Claude Code (hooks); the Claude account - claude.ai, Desktop, Cowork - through the
+  `harness-account` skill (Drive folder); Cowork local files on demand; monday.com (API).
+- One summary language for every tool (`harness/digest.py`).
 
 ## Not finished / not verified
 
-### claude.ai export automation - built, not verified end to end
-The export skill (`harness-export`) and its two Cowork scheduled tasks are built and
-tested in isolation, but the in-app part has not been run successfully yet:
-- Cowork's "Set up my harness export" (setup mode creating the two scheduled tasks).
-- Browser control in Cowork for requesting / downloading the export (the built-in
-  browser connection could not be established in the first trial).
-- Fallback that always works: download the export yourself (claude.ai Settings >
-  Privacy > Export data) into the watch folder; it is imported automatically.
-Next: run setup mode once per account, confirm the tasks exist, confirm one export
-arrives and is imported; document any differences in the skill.
+### Claude account skill (`harness-account`) - built, not verified in the app
+Built and tested in the engine (forms, Drive inbox, the same summary sections as
+Claude Code). Not yet run inside claude.ai / Cowork:
+- Can the skill create a file in the Google Drive folder from claude.ai, Desktop and
+  cloud Cowork? (If not: another route to the folder is needed.)
+- What Claude sees inside a Cowork scheduled task (memory, projects, scheduled tasks):
+  the first describe file's `cannot_see` tells.
+- Whether conversations are saved reliably without a hook ("save to harness" works;
+  saving on its own at the end of a conversation depends on the model).
+- Google Drive for desktop must sync the folder to `claude_ai.inbox_folder`.
+Fallback for history: download the data export once into the watch folder.
 
 ### Known limits
 - Cloud sessions cannot reach a local synced folder; they use the git storage backend.

@@ -432,12 +432,15 @@ class SkillCommand(Command):
 
     def run(self, args: argparse.Namespace) -> int:
         adapter = adapters.create(args.tool)
-        target = adapter.deliver_skill(Path(args.output).expanduser() if args.output else None)
-        if target is None:
-            raise ErrorExit(f"{args.tool} has no skill to install.")
-        print(f"Skill file: {target.resolve()}")
-        print("Upload it on the claude.ai page that opened.")
-        print("Then, in Cowork, type: Set up my harness export")
+        output = Path(args.output).expanduser() if args.output else None
+        accounts = list(getattr(adapter, "bindings", dict)()) or [""]
+        for account in accounts:  # one file per account: the skill names its account
+            target = adapter.deliver_skill(output, account) if account else adapter.deliver_skill(output)
+            if target is None:
+                raise ErrorExit(f"{args.tool} has no skill to install.")
+            print(f"Skill file{f' for {account}' if account else ''}: {target.resolve()}")
+        print("Upload it on the claude.ai page that opened (signed in as that account).")
+        print("Then, in Cowork (same account), type: Set up harness-account")
         return 0
 
 

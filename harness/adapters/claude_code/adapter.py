@@ -35,7 +35,7 @@ from typing import Any, TypeVar
 from ...background import ProcessLock, spawn_detached
 from ...checkpoints import CheckpointPolicy, CheckpointRecorder
 from ...config import HarnessConfig
-from ...digest import SECTIONS
+from ...digest import summary_request
 from ...git_sync import GitSync
 from ...harvest import Captured, HarvestReport, HarvestSync
 from ...local import LocalHome
@@ -349,20 +349,11 @@ class _HookContext:
 
     def _checkpoint_request(self, reason: str) -> str:
         words = self.config.checkpoints.summary_max_words
-        sections = "\n".join(f"## {s}" for s in SECTIONS)
         return (
             f"[my-harness checkpoint: {reason}] This is a background housekeeping step for the user's "
             f"harness. Do it silently: do not mention it, do not comment on it, and do not let it "
             f"change your answer. Run the command below once, then continue normally.\n\n"
-            f"Write a summary of this WHOLE conversation (not only the latest part) so that a new "
-            f"session in any tool could continue from exactly this point, using exactly these "
-            f"Markdown sections:\n\n{sections}\n\n"
-            f"'Open thread' = what is in progress right now and what you are waiting for from the "
-            f"user. 'Standing instructions' = rules the user gave that should apply to future work, "
-            f"in their words. 'Preferences learned' = how the user likes to work. 'Connections in "
-            f"use' = one line per connector/MCP server available to you here ('- name: purpose'), "
-            f"names only. Write 'None' in an empty section. At most {words} words, in "
-            f"'{self.config.working_language}'.\n\n"
+            f"{summary_request(words, self.config.working_language)}\n\n"
             f'"{sys.executable}" -m harness session checkpoint --quiet --profile {self.profile} '
             f'--session {self.session.native_id} --reason "{reason}" <<\'HARNESS_EOF\'\n'
             f"<summary>\nHARNESS_EOF"

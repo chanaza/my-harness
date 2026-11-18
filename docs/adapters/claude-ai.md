@@ -1,45 +1,48 @@
-# claude.ai adapter (chats, projects, memory)
+# Claude account adapter (claude.ai, Claude Desktop, Cowork)
 
-claude.ai keeps chats and projects in the account, not on the computer. The
-complete, official way out is its data export (Settings > Privacy > Export
-data), which arrives as a download link by e-mail. This adapter imports every
-export it finds; nothing is read from claude.ai directly.
+claude.ai chats, projects and memory, and Cowork sessions (which now run in the
+cloud), live in the Claude account, not on a computer. Anthropic offers no
+way to read them from outside for a single person. So the account saves itself:
 
-## What is captured, per account (by e-mail)
+1. **The `harness-account` skill**, uploaded once per account (it then works
+   in claude.ai, Claude Desktop and Cowork). It writes one file per run into
+   the Google Drive folder `claude_ai.drive_folder`:
+   - **describe mode** (a daily Cowork scheduled task): everything the account
+     has built, in a fixed form (`schemas/claude-account.schema.json`): profile,
+     instructions, memory, skills, agents, plugins, connections, projects,
+     workflows (scheduled tasks), apps (artifacts), native settings, and
+     `cannot_see` for anything it had no view of.
+   - **save mode** ("save to harness", or at the end of a meaningful
+     conversation): the conversation's summary in exactly the same sections as
+     Claude Code checkpoints (one definition in `harness/digest.py`).
+2. **This computer** reads that folder through Google Drive for desktop
+   (`claude_ai.inbox_folder`), checks each file against its form (a file that
+   does not match is reported, never saved) and saves it like any other tool.
+3. **A data export** (Settings > Privacy > Export data), downloaded to
+   `claude_ai.watch_folder`, is imported once: the history from before the skill.
 
-| From the export | Into the harness |
-|---|---|
-| Every conversation | `sessions/<profile>/<id>/meta.yaml` (title, real dates); the full conversation and its attachments in transcript storage |
-| Projects | `core/projects/<name>/project.yaml` (instructions) + `knowledge/` files |
-| Memory | `memory/` |
-| The export file itself | transcript storage `<profile>/exports/` (`claude_ai.archive_exports`) |
-
-Each account is its own profile, e.g. `claude-ai-personal-cloud`. Only
-conversations that changed since the last export are rewritten.
+Each account (by e-mail) is its own profile, e.g. `claude-ai-personal-cloud`.
 
 ## Settings (`claude_ai:` in harness.config.yaml)
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `watch_folder` | `~/Downloads` | Where downloaded exports are looked for |
+| `drive_folder` | `my-harness-inbox` | Google Drive folder the skill writes into |
+| `inbox_folder` | `~/my-harness-inbox` | Where this computer sees that folder (synced copy) |
+| `watch_folder` | `~/Downloads` | Where a downloaded export is looked for |
 | `file_pattern` | `data-*.zip` | Export file names |
 | `archive_exports` | `true` | Keep each export file in transcript storage |
-| `export_every_days` | `7` | How often a new export is requested |
-| `download_after_hours` | `3` | How long after the request the download task runs |
+| `skill_folder` | `~/Downloads` | Where the skill file is written for you to upload |
 
-## Getting exports automatically
+## Setting it up
 
-1. `python -m harness skill claude-ai` creates `harness-export.zip`
-   from your settings.
-2. Upload it in claude.ai: Settings > Capabilities > Skills.
-3. In Cowork, create two scheduled tasks (the command prints them, from your
-   settings):
-   - every `export_every_days`: "Run the harness-export skill in request mode."
-   - `download_after_hours` later: "Run the harness-export skill in download mode."
+1. `python -m harness skill claude-ai` writes one skill file per account.
+2. Upload each on claude.ai, signed in as that account.
+3. In Cowork (same account) type: `Set up harness-account`. It creates the
+   daily scheduled task and describes the account once.
+4. Install Google Drive for desktop and point `claude_ai.inbox_folder` at the
+   synced `my-harness-inbox` folder.
 
-The first asks claude.ai for an export; the second saves it once the e-mail has
-arrived. The computer picks the file up from the watch folder on its own
-(scheduled every `capture.poll_minutes`).
-
-Without the skill: request the export yourself and download it to the watch
-folder; it is saved the same way.
+Not verified yet: whether the skill can create files in Google Drive from
+every surface, and what Claude can see from inside a scheduled task. The first
+describe file tells (`cannot_see`).

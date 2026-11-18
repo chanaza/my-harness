@@ -127,18 +127,19 @@ def test_export_of_an_unconnected_account_is_reported(connected: ClaudeAiAdapter
     assert any("work@example.com is not connected" in e for e in report.errors)
 
 
-def test_export_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: ContentRepo, tmp_path: Path,
-                                             capsys):
+def test_account_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: ContentRepo, tmp_path: Path,
+                                              capsys):
     from harness.cli import main
-    repo.config_file.update({"claude_ai.export_every_days": 14})
-    repo.config_file.update({"claude_ai.skill_folder": str(tmp_path / "skills-out")})
-    assert main(["skill", "claude-ai"]) == 0          # no options: to the configured folder
-    target = tmp_path / "skills-out" / "harness-export.zip"
+    repo.config_file.update({"claude_ai.drive_folder": "my-inbox",
+                             "claude_ai.skill_folder": str(tmp_path / "skills-out")})
+    assert main(["skill", "claude-ai"]) == 0          # one file per connected account
+    target = tmp_path / "skills-out" / "harness-account-me-example-com.zip"
     with zipfile.ZipFile(target) as archive:
-        text = archive.read("harness-export/SKILL.md").decode()
-    assert "every 14 days" in text and str(tmp_path / "Downloads") in text
-    assert "3 hours" in text and "${" not in text
-    assert "Set up my harness export" in capsys.readouterr().out
+        text = archive.read("harness-account/SKILL.md").decode()
+    assert "my-inbox" in text and "me@example.com" in text and "${" not in text
+    for section in ("## Goal", "## Open thread", "## Connections in use"):   # the one summary language
+        assert section in text
+    assert "Set up harness-account" in capsys.readouterr().out
 
 
 def test_accounts_can_be_named_before_the_first_export(repo: ContentRepo, tmp_path: Path, monkeypatch):
@@ -168,9 +169,9 @@ def test_setup_prepares_the_skill_and_says_what_is_left(repo: ContentRepo, tmp_p
     result = SetupWizard(Answers("me@example.com", "personal", str(tmp_path / "f"), False), LocalHome()).run(
         SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
     target = result.next_steps[0].split(": upload ")[1].split(" on https")[0]
-    assert Path(target).is_file() and target.endswith("harness-export.zip")
-    assert "signed in as me@example.com" in result.next_steps[0]
-    assert "Set up my harness export" in result.next_steps[1]
+    assert Path(target).is_file() and target.endswith("harness-account-me-example-com.zip")
+    assert "as me@example.com" in result.next_steps[0]
+    assert "Set up harness-account" in result.next_steps[1]
 
 
 def test_claude_ai_can_be_skipped_and_is_not_asked_again(repo: ContentRepo, tmp_path: Path):
@@ -241,5 +242,77 @@ def test_steps_are_listed_for_every_account(repo: ContentRepo, tmp_path: Path, m
     uploads = [s for s in result.next_steps if ": upload " in s]
     assert len(uploads) == 2, result.next_steps
     steps = " ".join(result.next_steps)
-    assert steps.count("Set up my harness export") == 2
+    assert steps.count("Set up harness-account") == 2
     assert "a@example.com" in steps and "b@example.com" in steps
+
+
+DESCRIBE = """schema: claude-account/1
+account: me@example.com
+captured_at: 2026-11-19T06:00:00Z
+surface: cowork
+profile: {text: "Consultant, writes in Hebrew."}
+instructions:
+  - {name: personal-preferences, text: "Answer in Hebrew."}
+memory:
+  - {text: "Works at a consultancy."}
+skills:
+  - {name: deck-review, description: Review client decks, origin: mine}
+  - {name: pdf, description: PDFs, origin: anthropic}
+connections:
+  - {name: Gmail, kind: connector, purpose: e-mail}
+projects:
+  - {name: Client Decks, description: Decks, instructions: "Always Hebrew.", files: [style.md]}
+workflows:
+  - {name: Morning brief, schedule: every weekday 8:00, prompt: "Brief me."}
+apps:
+  - {name: Budget tracker, description: A page, link: https://claude.ai/artifact/x}
+cannot_see: [agents, plugins]
+"""
+
+CONVERSATION = """---
+schema: claude-conversation/1
+account: me@example.com
+surface: claude-ai
+title: Planning the harness
+project: ""
+saved_at: 2026-11-19T07:00:00Z
+---
+## Goal
+Plan it.
+## Decisions
+Drive.
+## Current state
+Planned.
+## Open thread
+None
+## Standing instructions
+Always answer in Hebrew.
+## Preferences learned
+None
+## Connections in use
+- Google Drive: files
+"""
+
+
+def test_account_skill_files_are_saved_in_the_harness_form(connected: ClaudeAiAdapter, repo: ContentRepo,
+                                                          tmp_path: Path):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    repo.config_file.update({"claude_ai.inbox_folder": str(inbox)})
+    (inbox / "describe-20261119-0600.yaml").write_text(DESCRIBE, encoding="utf-8")
+    (inbox / "conversation-20261119-0700-planning.md").write_text(CONVERSATION, encoding="utf-8")
+    (inbox / "describe-20261119-0601.yaml").write_text("schema: claude-account/1\nfree: text\n")
+    report = connected.run_harvest()
+    assert any("describe-20261119-0601.yaml: does not match the form" in e for e in report.errors)
+    profile = "claude-ai-personal-cloud"
+    assert repo.path("core", "skills", "deck-review", "SKILL.md").is_file()
+    assert not repo.path("core", "skills", "pdf").exists()                    # not the user's
+    assert repo.path("core", "projects", "client-decks").is_dir()
+    assert "id: gmail" in repo.path("core", "connections.yaml").read_text()
+    native = next(repo.path("native", profile).rglob("account.yaml"))
+    assert "Budget tracker" in native.read_text()
+    summary = repo.path("sessions", profile, "conversation-20261119-0700-planning", "summary.md")
+    assert "Plan it." in summary.read_text()
+    standing = repo.path("core", "instructions", profile, "standing-instructions.md").read_text()
+    assert "Always answer in Hebrew." in standing                              # same digest as Claude Code
+    assert not connected.run_harvest().counts                                  # each file once

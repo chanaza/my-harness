@@ -29,6 +29,30 @@ SESSION_SECTIONS = ("Goal", "Decisions", "Current state", "Open thread")
 HARNESS_SECTIONS = ("Standing instructions", "Preferences learned", "Connections in use")
 #: The sections a checkpoint is asked to contain, in order.
 SECTIONS = SESSION_SECTIONS + HARNESS_SECTIONS
+#: What each section means. The one definition every tool is given (Claude Code checkpoints,
+#: the account skill for claude.ai and Cowork, ...), so summaries read the same everywhere.
+SECTION_MEANINGS = {
+    "Goal": "what the user is trying to achieve",
+    "Decisions": "what was decided, and why when it matters",
+    "Current state": "what exists and works now",
+    "Open thread": "what is in progress right now and what you are waiting for from the user",
+    "Standing instructions": "rules the user gave that should apply to future work, in their words",
+    "Preferences learned": "how the user likes to work",
+    "Connections in use": "one line per connector/MCP server available to you here "
+                          "('- name: purpose'), names only",
+}
+
+
+def summary_request(max_words: int, language: str) -> str:
+    """The instruction for writing a summary in the harness's language, for any tool."""
+    sections = "\n".join(f"## {s}" for s in SECTIONS)
+    meanings = " ".join(f"'{s}' = {SECTION_MEANINGS[s]}." for s in SECTIONS)
+    return (f"Write a summary of this WHOLE conversation (not only the latest part) so that a new "
+            f"session in any tool could continue from exactly this point, using exactly these "
+            f"Markdown sections:\n\n{sections}\n\n{meanings} Write 'None' in an empty section. "
+            f"At most {max_words} words, in '{language}'.")
+
+
 EMPTY = re.compile(r"^\s*(-\s*)?(none|n/a|—|-)?\s*\.?\s*$", re.IGNORECASE)
 
 

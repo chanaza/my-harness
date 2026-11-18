@@ -25,6 +25,9 @@ OBSOLETE_SETTINGS: tuple[str, ...] = (
     "storage_by_profile.*.live_logs.*",
     # v0.14: the schedule is set per adapter type in capture_modes.
     "capture.poll_minutes",
+    # v0.15: claude.ai is captured through the harness-account skill, not a scheduled export.
+    "claude_ai.export_every_days",
+    "claude_ai.download_after_hours",
 )
 
 
@@ -62,8 +65,8 @@ class ClaudeAiSettings:
     watch_folder: str = "~/Downloads"
     file_pattern: str = "data-*.zip"
     archive_exports: bool = True
-    export_every_days: int = 7
-    download_after_hours: int = 3
+    inbox_folder: str = "~/my-harness-inbox"
+    drive_folder: str = "my-harness-inbox"
     skills_page: str = "https://claude.ai/new#customize/skills/new/upload"
     skill_folder: str = "~/Downloads"
 

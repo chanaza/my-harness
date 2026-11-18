@@ -31,10 +31,11 @@ It asks a few short questions (where your repository is, a name for each of
 your accounts, whether you use claude.ai) and shows what it found before
 saving anything.
 
-**2. If you use claude.ai,** the installer puts a file in your Downloads folder and
-opens claude.ai: upload the file there. Then, in Cowork, type
-`Set up my harness export`. That's all.
-(Can't find the file? Run `python -m harness skill claude-ai`: it makes it again.)
+**2. If you use claude.ai or Cowork,** the installer puts one skill file per
+account in your Downloads folder and opens claude.ai: upload it there, then in
+Cowork type `Set up harness-account`. Your account then saves itself to a Google
+Drive folder that this computer picks up.
+(Can't find the file? Run `python -m harness skill claude-ai`.)
 
 From then on, everything is saved by itself. Nothing is shown while it runs.
 
@@ -47,8 +48,8 @@ From then on, everything is saved by itself. Nothing is shown while it runs.
 | Tool | What | How |
 |---|---|---|
 | Claude Code (computer and cloud) | Instructions, skills, agents, memory, connections, every conversation | Every turn, in the background |
-| Cowork (Claude desktop app) | Skills, plugins, memory, scheduled tasks, every conversation and its files | Every 30 minutes |
-| claude.ai | Every chat, projects (instructions and files), memory | From its official export, weekly |
+| claude.ai and Cowork (your Claude account) | Instructions, memory, skills, projects, scheduled tasks, apps, conversation summaries | The account skill: daily, and when a conversation is saved |
+| Cowork sessions kept on this computer | Every conversation and its files | When you ask: `python -m harness harvest cowork` |
 
 Saving only: nothing from the harness is loaded back into your tools yet.
 What is finished and what is not: [ROADMAP.md](ROADMAP.md).

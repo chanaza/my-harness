@@ -44,7 +44,7 @@ FILE_FOLDERS = ("uploads", "outputs")
 @adapters.register
 class CoworkAdapter(AccountBoundAdapter):
     tool = TOOL
-    capture_modes = ("scheduled", "on_demand")
+    capture_modes = ("on_demand", "scheduled")
     capture_reason = "conversations and files live on one computer only"
 
     def __init__(self, local: LocalHome | None = None, locations: CoworkLocations | None = None) -> None:

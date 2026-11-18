@@ -1,53 +1,86 @@
 ---
-name: harness-export
-description: Keep the user's claude.ai data (chats, projects, memory) saved in their harness. Two modes - "request" asks claude.ai for a data export; "download" saves the export from the e-mail into the folder the harness watches. Use when a scheduled task asks to run harness-export (request every ${EVERY_DAYS} days, download ${DOWNLOAD_AFTER} hours later), or when the user asks to export claude.ai to their harness.
+name: harness-account
+description: Keep this Claude account (claude.ai, Claude Desktop, Cowork) saved in the user's harness (my-harness). Modes - "describe" writes everything the account has built (instructions, memory, skills, projects, scheduled tasks...) in a fixed form; "save" writes a summary of the current conversation; "setup" creates the daily scheduled task. Use when a scheduled task says to run harness-account, when the user says "save to harness" / "שמור להרנס" / "שמור", or at the end of a meaningful conversation (a decision, a result, or a wrap-up).
 ---
 
-# Export claude.ai to the harness
+# Save this Claude account to the harness
 
-The user's harness (my-harness) saves everything they build with AI outside any
-single tool. claude.ai chats and projects can only leave claude.ai through its
-official data export, which arrives by e-mail. This skill moves that along.
-Work quietly; report only the outcome in one or two sentences.
+The user's harness saves everything they build with AI outside any single tool,
+in one shared form, so it can move between tools. You write ONE file per run
+into the Google Drive folder **${DRIVE_FOLDER}** (create it if missing); the
+harness picks it up from there. Never write anywhere else, never include
+passwords, API keys or tokens. Work quietly; afterwards say in one sentence what
+was saved.
 
-**Which mode:** "set up my harness export" means setup mode. A scheduled task
-says "request" or "download". Anything else: do both, first "download", then
-"request".
+If you have no way to create a file in that Google Drive folder, do not pretend:
+tell the user in one sentence that this skill needs a Google Drive connection
+that can create files, and stop.
 
-## Setup mode: create the schedule (once per account)
+Account: ${ACCOUNT}. File names use the current UTC time, e.g. 20261119-0600.
 
-Create two scheduled tasks in Cowork (use the scheduling capability):
+**Which mode:** a scheduled task names it. "set up" = setup mode. "save" or a
+wrap-up of a conversation = save mode. Otherwise ask nothing: use save mode.
 
-1. Name "Harness - request claude.ai export", every ${EVERY_DAYS} days, prompt:
-   "Run the harness-export skill in request mode."
-2. Name "Harness - download claude.ai export", every ${EVERY_DAYS} days,
-   ${DOWNLOAD_AFTER} hours after the first, prompt:
-   "Run the harness-export skill in download mode."
+## Setup mode (once per account)
 
-Then run request mode once now, and tell the user in one sentence that it is set
-up and the first export will be saved within a few hours.
+Create one Cowork scheduled task: name "Harness - describe account", every day,
+prompt: "Run the harness-account skill in describe mode." Then run describe mode
+once now.
 
-You need control of the user's browser (or computer). Use the claude.ai account
-the user is signed in to; do not sign in to anything else.
+## Describe mode
 
-## Download mode: save the export that was requested
+Write `describe-<time>.yaml` with EXACTLY this structure. Fill every field from
+what you can actually see (your instructions, memory, available skills, tools
+and connectors, projects, scheduled tasks). Copy texts word for word; do not
+summarise them. Use an empty list for nothing, and put every kind you could not
+see at all into `cannot_see` instead of guessing. Add no other fields.
 
-1. Look in the user's e-mail for the most recent message from Anthropic / Claude
-   saying their data export is ready (from the last ${EVERY_DAYS} days).
-2. If there is one and its link has not expired, open the download link in the
-   browser and save the file in: `${WATCH_FOLDER}`
-   (its name starts with `data-`; keep the name).
-3. If there is none yet, say so and stop (the next download run will find it).
+```yaml
+schema: claude-account/1
+account: ${ACCOUNT}
+captured_at: 2026-11-19T06:00:00Z     # now, UTC
+surface: cowork                        # cowork | claude-ai | desktop
+profile:                               # what Claude knows about the user (name, role, work)
+  text: "..."
+instructions:                          # always-on instructions
+  - {name: personal-preferences, text: "..."}
+  - {name: "style: <style name>", text: "..."}
+memory:
+  - {text: "..."}
+skills:                                # every skill available here
+  - {name: ..., description: ..., origin: mine}        # mine | anthropic | plugin
+agents:                                # sub-agents (e.g. from plugins)
+  - {name: ..., description: ..., plugin: ...}
+plugins:
+  - {name: ..., description: ..., origin: mine}        # mine | marketplace
+connections:                           # connectors and MCP servers, names only
+  - {name: ..., kind: connector, purpose: ...}         # connector | mcp
+projects:
+  - {name: ..., description: ..., instructions: "...", files: [file name]}
+workflows:                             # scheduled tasks
+  - {name: ..., schedule: ..., prompt: "..."}
+apps:                                  # artifacts the user built (pages, apps)
+  - {name: ..., description: ..., link: ...}
+native:                                # settings with no equivalent elsewhere (model, features on)
+  - {name: ..., value: ...}
+cannot_see: []                         # kinds above you had no view of, e.g. [projects, apps]
+```
 
-## Request mode: ask for a new export
+## Save mode
 
-1. Open https://claude.ai/settings and go to **Privacy**.
-2. Choose **Export data** and confirm. An e-mail with a download link arrives
-   later; the download run (${DOWNLOAD_AFTER} hours later) saves it.
+Write `conversation-<time>-<short-title>.md`:
 
-## Notes
+```
+---
+schema: claude-conversation/1
+account: ${ACCOUNT}
+surface: claude-ai            # cowork | claude-ai | desktop
+title: <the conversation's title>
+project: <the project's name, or empty>
+saved_at: <now, UTC>
+---
+```
 
-- Never delete or change anything in the account.
-- The harness on the computer picks up the downloaded file by itself; nothing
-  else is needed.
-- If a step fails (e.g. the page looks different), say which step and stop.
+followed by the summary, written exactly as follows:
+
+${SUMMARY_REQUEST}

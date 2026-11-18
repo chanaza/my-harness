@@ -283,7 +283,7 @@
     },
     "claude_ai": {
       "type": "object",
-      "description": "Capturing claude.ai (chats, projects, memory) from its data export.",
+      "description": "Capturing the Claude account (claude.ai, Desktop, Cowork): the harness-account skill, and one-off data exports.",
       "properties": {
         "watch_folder": {
           "type": "string",
@@ -297,16 +297,6 @@
           "type": "boolean",
           "description": "Keep a copy of each export file in transcript storage."
         },
-        "export_every_days": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "How often to request a new export (used by the export skill)."
-        },
-        "download_after_hours": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "How long after requesting an export the download task runs."
-        },
         "skills_page": {
           "type": "string",
           "description": "The claude.ai page opened for uploading the export skill."
@@ -314,6 +304,14 @@
         "skill_folder": {
           "type": "string",
           "description": "Where the export skill file is written for upload (empty = the desktop)."
+        },
+        "drive_folder": {
+          "type": "string",
+          "description": "Google Drive folder the harness-account skill writes into."
+        },
+        "inbox_folder": {
+          "type": "string",
+          "description": "Where this computer sees that Drive folder (synced copy)."
         }
       },
       "additionalProperties": false

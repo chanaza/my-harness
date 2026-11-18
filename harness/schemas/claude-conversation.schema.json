@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/claude-conversation.schema.json",
+  "title": "claude-conversation/1",
+  "description": "Front matter of a conversation summary written by the harness-account skill in save mode.",
+  "type": "object",
+  "required": ["schema", "account", "surface", "title", "saved_at"],
+  "properties": {
+    "schema": {"const": "claude-conversation/1"},
+    "account": {"type": "string", "minLength": 3},
+    "surface": {"enum": ["cowork", "claude-ai", "desktop"]},
+    "title": {"type": "string", "minLength": 1},
+    "project": {"type": ["string", "null"]},
+    "saved_at": {"type": ["string", "object"]}
+  }
+}

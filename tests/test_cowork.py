@@ -111,11 +111,11 @@ def test_accounts_are_discovered(app: CoworkLocations):
     assert "1 conversations" in accounts[0].summary and "chana-deck-review" in accounts[0].summary
 
 
-def test_setup_names_each_account_and_schedules_capture(connected: CoworkAdapter, repo: ContentRepo):
+def test_setup_names_each_account_and_captures_on_demand(connected: CoworkAdapter, repo: ContentRepo):
     profiles = {p.id: p for p in ProfileRegistry(repo).all()}
     assert {"cowork-personal-local", "cowork-work-local"} <= set(profiles)
     assert profiles["cowork-work-local"].environment == "local"
-    assert connected.scheduled == [("capture-cowork", ["harvest", "cowork"], 30)]
+    assert connected.scheduled == []      # Cowork local files: on demand (capture_modes.cowork)
 
 
 def test_capture_everything(connected: CoworkAdapter, repo: ContentRepo, tmp_path: Path):

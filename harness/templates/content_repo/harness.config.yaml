@@ -25,7 +25,7 @@ capture_modes:
   #               and reading it costs no tokens)
   # `harness sources` shows them; run `harness update` after a change.
   claude-code: {mode: push}
-  cowork: {mode: scheduled, every_minutes: 30}
+  cowork: {mode: on_demand}    # Cowork now runs in the cloud: saved by the account skill; this reads local files
   claude-ai: {mode: scheduled, every_minutes: 30}
   monday: {mode: on_demand}
 
@@ -74,17 +74,17 @@ storage:
     path: ~/harness-storage/transcripts
 
 claude_ai:
-  # claude.ai chats, projects and memory are captured from its official data export.
-  # Exports are looked for in this folder (every capture run).
+  # The Claude account (claude.ai, Claude Desktop, Cowork) is saved by the harness-account skill.
+  # A data export (for the history before it) is imported when found in this folder.
   watch_folder: ~/Downloads
   # File name pattern of a claude.ai export.
   file_pattern: data-*.zip
   # Keep a copy of every export file in transcript storage.
   archive_exports: true
-  # How often to request a new export, in days (the "request" scheduled task).
-  export_every_days: 7
-  # How long after the request the "download" scheduled task runs, in hours.
-  download_after_hours: 3
+  # The harness-account skill (claude.ai, Claude Desktop, Cowork) writes into this Google Drive
+  # folder; inbox_folder is where this computer sees it (the Google Drive for desktop copy).
+  drive_folder: my-harness-inbox
+  inbox_folder: ~/my-harness-inbox
   # The claude.ai page opened for uploading the export skill.
   skills_page: https://claude.ai/new#customize/skills/new/upload
   # Where the export skill file is written for you to upload (empty = your desktop).

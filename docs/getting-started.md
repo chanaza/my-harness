@@ -55,25 +55,22 @@ like, e.g. `harness config set harvest.exclude "skill:pdf"`.
 
 That's all. Use your tool as usual.
 
-## claude.ai chats and projects
+## Your Claude account (claude.ai, Claude Desktop, Cowork)
 
-They live in your claude.ai account, not on the computer. The installer asks
-for your claude.ai account e-mail(s) (leave it empty to skip). If you give
-them, it puts `harness-export.zip` in your Downloads folder
-(setting `claude_ai.skill_folder`) and opens claude.ai:
+Chats, projects, memory and Cowork sessions live in your Claude account, not on
+the computer, so the account saves itself with a skill. The installer asks for
+your account e-mail(s) and puts one `harness-account-<e-mail>.zip` per account
+in your Downloads folder:
 
-1. Upload the file on the page that opened, in each account.
-2. In Cowork, in each account, type: `Set up my harness export`.
+1. Upload it on claude.ai, signed in as that account.
+2. In Cowork (same account), type: `Set up harness-account`.
+3. Install Google Drive for desktop, so this computer sees the Drive folder
+   `my-harness-inbox` the skill writes into.
 
-Can't find the file? `python -m harness skill claude-ai` creates it again and
-opens claude.ai.
-
-Cowork then requests an export every week and downloads it a few hours later
-(both times are settings: `claude_ai.export_every_days`,
-`claude_ai.download_after_hours`), and your computer saves everything in it:
-every chat, your projects (instructions and files) and memory. You can also
-download an export yourself (Settings > Privacy > Export data) into your
-Downloads folder; it is saved the same way.
+Every day the account describes itself (instructions, memory, skills,
+projects, scheduled tasks...), and conversations are saved when you say "save
+to harness" or at the end of a meaningful conversation. Details:
+[adapters/claude-ai.md](adapters/claude-ai.md).
 
 ## In Claude Code on the web (cloud sessions)
 

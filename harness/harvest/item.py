@@ -24,7 +24,8 @@ class Kind(StrEnum):
 #: never the user's content, so no adapter saves them. "<kind>:<name>".
 ENGINE_OWNED: frozenset[str] = frozenset({
     "skill:harness-save",     # Claude Code: save on request
-    "skill:harness-export",   # claude.ai: export automation
+    "skill:harness-export",   # claude.ai: export automation (before v0.15)
+    "skill:harness-account",  # the Claude account skill
 })
 
 
