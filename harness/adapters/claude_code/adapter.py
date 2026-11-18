@@ -66,6 +66,9 @@ class BackfillEntry:
 @adapters.register
 class ClaudeCodeAdapter(Adapter):
     tool = TOOL
+    capture_modes = ("push",)
+    capture_reason = ("conversations live on this computer and are deleted after 30 days; "
+                      "summaries need the model, so they are written while you work")
 
     def __init__(self, local: LocalHome | None = None,
                  locations: ClaudeCodeLocations | None = None) -> None:

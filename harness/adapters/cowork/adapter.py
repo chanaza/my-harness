@@ -1,7 +1,7 @@
 """``CoworkAdapter``: capture from Cowork in the Claude desktop app.
 
 Cowork has no hooks, so capture runs on a schedule (Task Scheduler / cron, every
-``capture.poll_minutes``). Each signed-in account is its own profile.
+``capture_modes.cowork`` in the config). Each signed-in account is its own profile.
 
 Per account it captures:
   skills ........... the account's skills (skills-plugin/.../skills/<name>/)
@@ -44,6 +44,8 @@ FILE_FOLDERS = ("uploads", "outputs")
 @adapters.register
 class CoworkAdapter(AccountBoundAdapter):
     tool = TOOL
+    capture_modes = ("scheduled", "on_demand")
+    capture_reason = "conversations and files live on one computer only"
 
     def __init__(self, local: LocalHome | None = None, locations: CoworkLocations | None = None) -> None:
         super().__init__(local)

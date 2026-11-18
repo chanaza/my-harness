@@ -55,7 +55,7 @@
         "poll_minutes": {
           "type": "integer",
           "minimum": 5,
-          "description": "For tools without hooks (e.g. Cowork): capture every N minutes."
+          "description": "Deprecated (replaced by capture_modes); still accepted until `harness upgrade` removes it."
         }
       },
       "additionalProperties": false
@@ -336,6 +336,30 @@
         }
       },
       "additionalProperties": false
+    },
+    "capture_modes": {
+      "type": "object",
+      "description": "How the harness captures each kind of tool (per adapter type, not per account).",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "enum": [
+              "push",
+              "scheduled",
+              "on_demand"
+            ]
+          },
+          "every_minutes": {
+            "type": "integer",
+            "minimum": 5
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false

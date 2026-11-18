@@ -51,6 +51,10 @@
               "type": "string"
             },
             "description": "Ids this profile had before being renamed (references to them are rewritten)."
+          },
+          "machine": {
+            "type": "string",
+            "description": "For local profiles: which computer (e.g. office, home). Same account on two computers = two profiles."
           }
         },
         "additionalProperties": false

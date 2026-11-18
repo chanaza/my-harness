@@ -26,6 +26,8 @@ def isolated_harness_home(tmp_path_factory, monkeypatch) -> None:
     (Kept outside tmp_path, which some tests need empty.)"""
     isolated = tmp_path_factory.mktemp("isolated")
     monkeypatch.setenv("HARNESS_HOME", str(isolated / "harness-home"))
+    # Tests run as a computer named "local" (so profile ids keep their familiar -local ending).
+    LocalHome().save_settings(machine="local")
     desktop = isolated / "desktop"
     desktop.mkdir()
     monkeypatch.setattr("harness.adapters.claude_ai.adapter._visible_folder", lambda: desktop)

@@ -87,6 +87,7 @@ class Answers(Prompter):
 @pytest.fixture
 def connected(app: CoworkLocations, repo: ContentRepo, tmp_path: Path, monkeypatch) -> CoworkAdapter:
     monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home"))
+    LocalHome().save_settings(machine="local")
     monkeypatch.setenv("CLAUDE_APP_DATA_DIR", str(app.root))
     scheduled = []
 
@@ -164,6 +165,7 @@ def test_same_skill_from_two_profiles_is_not_a_conflict(connected: CoworkAdapter
 def test_setup_without_a_tool_connects_every_tool_found(app, claude, repo, tmp_path, monkeypatch):
     from harness.cli import main
     monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home2"))
+    LocalHome().save_settings(machine="local")
     monkeypatch.setenv("CLAUDE_APP_DATA_DIR", str(app.root))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude.config_dir))
 

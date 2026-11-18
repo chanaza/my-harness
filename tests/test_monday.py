@@ -123,3 +123,34 @@ def test_agents_jobs_workflows_and_runs_land_in_the_right_places(monday, repo: C
 
     again = monday.run_harvest()
     assert not again.changed and not again.counts.get("conversations imported")   # nothing new
+
+
+def test_every_agent_the_user_owns_is_read_even_when_the_listing_leaves_it_out():
+    """monday's agent listing leaves out workspace agents; the account's agent users (with their
+    owners) are the source of truth. Other people's agents are not read; an own agent that
+    cannot be read is reported."""
+    from harness.adapters.monday.reader import MondayReader
+
+    def user(agent_user, owner):
+        return {"id": agent_user, "user": {"name": f"agent {agent_user}"},
+                "subscribers": [{"entity": {"id": owner}}]}
+
+    class Client:
+        def query(self, text):
+            if "custom_agents(limit" in text:
+                return {"custom_agents": [{"id": "1", "agent_user_id": "u1"}]}
+            if "agents(limit: 100) { id" in text:
+                return {"me": {"id": "me"}, "agents": [user("u1", "me"), user("u2", "me"),
+                                                       user("u3", "someone"), user("u4", "me")]}
+            if "kinds: [PERSONAL]" in text:
+                assert '"u3"' not in text and '"u1"' not in text
+                return {"custom_agents": [{"id": "2", "agent_user_id": "u2"}]}
+            if "kinds:" in text:
+                return {"custom_agents": []}
+            return {}
+
+    reader = MondayReader(Client())
+    reader.schema.selection = lambda type_name: "id agent_user_id"
+    reader._each = lambda *args: []
+    assert sorted(agent.definition["id"] for agent in reader.agents()) == ["1", "2"]
+    assert reader.problems == ["agent agent u4: yours, but monday did not return it"]

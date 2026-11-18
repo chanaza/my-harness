@@ -46,6 +46,8 @@ MAPPED = frozenset({"profile", "goal", "identity", "user_prompt", "policies", "k
 @adapters.register
 class MondayAdapter(AccountBoundAdapter):
     tool = TOOL
+    capture_modes = ("on_demand", "scheduled")
+    capture_reason = "always reachable through its API, and reading costs no AI credits"
     environment = "cloud"  # an online service, not a machine
 
     def __init__(self, local: LocalHome | None = None,

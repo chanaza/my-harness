@@ -134,8 +134,32 @@ set), refreshes the connection of every tool on this machine, and saves once.
 
 Every computer (and cloud environment) saves to the same harness repository.
 Before pushing, each one first brings in what the others pushed, so they
-never overwrite each other. Each computer is its own profile, e.g.
-`claude-code-personal-local` and `claude-code-personal-cloud`.
+never overwrite each other.
+
+Each computer has a short name (setup asks for it once, e.g. `office` or
+`home`), and its profiles end with it: `claude-code-work-office`,
+`claude-code-work-home`, `claude-code-personal-cloud`.
+
+**A second computer:** run the same installation command there and give it
+a different name. **A computer installed before names existed:** run
+`python -m harness machine name office` once.
+
+## How each tool is captured
+
+One line per kind of tool in `harness.config.yaml`, for every account and computer:
+
+```yaml
+capture_modes:
+  claude-code: {mode: push}                        # every turn, by the tool itself
+  cowork: {mode: scheduled, every_minutes: 30}
+  claude-ai: {mode: scheduled, every_minutes: 30}
+  monday: {mode: on_demand}                        # `harness harvest monday`
+```
+
+`push` = the tool sends; `scheduled` = this computer checks every N minutes;
+`on_demand` = only when you run `harness harvest <tool>`. After a change run
+`python -m harness update`. `python -m harness sources` shows each tool's mode,
+why, which accounts are connected here and when it was last captured.
 
 ## If something goes wrong
 

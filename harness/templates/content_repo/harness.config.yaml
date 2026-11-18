@@ -16,8 +16,18 @@ capture:
   context_window_tokens: 200000
   # Do the slow work (capture, transcript, commit, push) in the background, so you never wait.
   background: true
-  # Tools without hooks (e.g. Cowork) are captured on a schedule: every N minutes.
-  poll_minutes: 30
+
+capture_modes:
+  # How each kind of tool is captured (one line per adapter type, for every account):
+  #   push      - the tool sends while you work (hooks); nothing to schedule
+  #   scheduled - checked every N minutes (data that lives on one computer, or files that arrive)
+  #   on_demand - only when you run `harness harvest <tool>` (the source is always reachable
+  #               and reading it costs no tokens)
+  # `harness sources` shows them; run `harness update` after a change.
+  claude-code: {mode: push}
+  cowork: {mode: scheduled, every_minutes: 30}
+  claude-ai: {mode: scheduled, every_minutes: 30}
+  monday: {mode: on_demand}
 
 checkpoints:
   # A checkpoint refreshes the rolling session summary (sessions/<tool>/<id>/summary.md).

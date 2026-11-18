@@ -237,6 +237,78 @@ class StatusCommand(Command):
         return 0
 
 
+class SourcesCommand(Command):
+    name = "sources"
+    help = ("How each kind of tool is captured (capture_modes in the settings), why, and when it "
+            "was last captured on this machine.")
+
+    def run(self, args: argparse.Namespace) -> int:
+        local = LocalHome()
+        repo_path = local.content_repo()
+        if not repo_path:
+            raise ErrorExit("No harness repository on this machine. Run `harness setup`.")
+        config = ContentRepo(repo_path).config
+        bound = local.settings().get("profiles") or {}
+        print(f"This computer: {local.machine() or '(no name yet: `harness machine name <name>`)'}")
+        for tool in adapters.names():
+            adapter = adapters.create(tool, local)
+            mode = config.capture_mode(tool, adapter.capture_modes[0])
+            when = f" every {mode.every_minutes} min" if mode.mode == "scheduled" else ""
+            profiles = ", ".join(sorted(set((bound.get(tool) or {}).values()))) or "not connected here"
+            print(f"  {tool:12} {mode.mode}{when}  |  {profiles}  |  last: "
+                  f"{local.last_capture(tool) or 'never'}")
+            if adapter.capture_reason:
+                print(f"  {'':12} why: {adapter.capture_reason}")
+        print("Change a mode in harness.config.yaml (capture_modes), then run `harness update`.")
+        return 0
+
+
+class MachineNameCommand(Command):
+    name = "name"
+    help = "Name this computer (e.g. office, home); its local profiles are renamed to end with it."
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("name")
+        repo_argument(parser)
+
+    def run(self, args: argparse.Namespace) -> int:
+        from ...text import slugify
+        local = LocalHome()
+        name = slugify(args.name)
+        old_name = local.machine() or "local"
+        repo = open_repo(args)
+        registry = ProfileRegistry(repo)
+        mine = {p for bindings in (local.settings().get("profiles") or {}).values()
+                for p in bindings.values()}
+        for profile in registry.all():
+            if profile.id not in mine or profile.environment != "local":
+                continue
+            new_id = profile.id
+            if profile.id.endswith(f"-{old_name}"):
+                new_id = profile.id[: -len(old_name)] + name
+            if new_id != profile.id:
+                try:
+                    registry.rename(profile.id, new_id)
+                except ProfileError as exc:
+                    raise ErrorExit(str(exc)) from None
+                local.rename_profile(profile.id, new_id)
+                print(f"  ~ {profile.id} -> {new_id}")
+            registry.update(new_id, machine=name)
+        local.save_settings(machine=name)
+        GitSync(repo.root, repo.config.git).sync(f"computer named {name}", push=True)
+        print(f"This computer is now '{name}'.")
+        return 0
+
+
+class MachineCommand(Command):
+    name = "machine"
+    help = "This computer's name in the harness (two computers = two sets of local profiles)."
+    subcommands = (MachineNameCommand,)
+
+    def run(self, args: argparse.Namespace) -> int:  # pragma: no cover - dispatch only
+        raise NotImplementedError
+
+
 class UpdateCommand(Command):
     name = "update"
     help = "Update everything on this machine: engine, harness repository, tool connections."
@@ -315,6 +387,7 @@ class HarvestCommand(Command):
         for path in report.conflicts:
             print(f"  ! conflict: {path.relative_to(repo.root)}")
         GitSync(repo.root, repo.config.git).sync(f"{args.tool}: harvest ({report.summary()})", push=True)
+        adapter.local.record_capture(args.tool)
         print(f"Harvest: {report.summary()}")
         return 1 if report.errors else 0
 
