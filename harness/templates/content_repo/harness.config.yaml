@@ -77,6 +77,8 @@ claude_ai:
   download_after_hours: 3
   # The claude.ai page opened for uploading the export skill.
   skills_page: https://claude.ai/settings
+  # Where the export skill file is written for you to upload (empty = your desktop).
+  skill_folder: ~/Downloads
 
 assets:
   # Larger files are stored outside Git and referenced from assets/<id>/asset.yaml.

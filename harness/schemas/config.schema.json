@@ -310,6 +310,10 @@
         "skills_page": {
           "type": "string",
           "description": "The claude.ai page opened for uploading the export skill."
+        },
+        "skill_folder": {
+          "type": "string",
+          "description": "Where the export skill file is written for upload (empty = the desktop)."
         }
       },
       "additionalProperties": false

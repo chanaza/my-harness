@@ -59,14 +59,14 @@ That's all. Use your tool as usual.
 
 They live in your claude.ai account, not on the computer. The installer asks
 for your claude.ai account e-mail(s) (leave it empty to skip). If you give
-them, it puts `harness-export.zip` on your desktop and opens
-claude.ai's skills page:
+them, it puts `harness-export.zip` in your Downloads folder
+(setting `claude_ai.skill_folder`) and opens claude.ai:
 
 1. Upload the file there (Skills > Upload skill), in each account.
 2. In Cowork, in each account, type: `Set up my harness export`.
 
-Can't find the file? `python -m harness skill claude-ai` creates it again on
-your desktop, shows it, and opens the upload page.
+Can't find the file? `python -m harness skill claude-ai` creates it again and
+opens claude.ai.
 
 Cowork then requests an export every week and downloads it a few hours later
 (both times are settings: `claude_ai.export_every_days`,

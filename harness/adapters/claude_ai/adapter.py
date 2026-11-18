@@ -87,7 +87,11 @@ class ClaudeAiAdapter(AccountBoundAdapter):
     def deliver_skill(self, target: Path | None = None) -> Path:
         """Write the export skill where the user sees it, show it, and open the upload page."""
         name, files = self.skill_package()
-        target = target or _visible_folder() / f"{name}.zip"
+        if target is None:
+            configured = self._settings().skill_folder
+            folder = Path(configured).expanduser() if configured else _visible_folder()
+            folder.mkdir(parents=True, exist_ok=True)
+            target = folder / f"{name}.zip"
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
             for path, content in files.items():
                 archive.writestr(path, content)
@@ -239,8 +243,8 @@ def _file_signature(path: Path) -> str:
 
 
 def _visible_folder() -> Path:
-    """The desktop the user actually sees (on Windows often redirected into OneDrive),
-    else Downloads, else home."""
+    """When claude_ai.skill_folder is empty: the desktop the user actually sees (on Windows
+    often redirected into OneDrive), else Downloads, else home."""
     candidates = [_windows_desktop()] if os.name == "nt" else []
     candidates += [Path.home() / "Desktop", Path.home() / "Downloads"]
     for folder in candidates:

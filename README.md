@@ -31,10 +31,10 @@ It asks a few short questions (where your repository is, a name for each of
 your accounts, whether you use claude.ai) and shows what it found before
 saving anything.
 
-**2. If you use claude.ai,** the installer puts a file on your desktop and opens
-claude.ai's skills page: upload the file there. Then, in Cowork, type
+**2. If you use claude.ai,** the installer puts a file in your Downloads folder and
+opens claude.ai: upload the file there. Then, in Cowork, type
 `Set up my harness export`. That's all.
-(Can't find the file? Run `python -m harness skill claude-ai`: it makes it again and shows it.)
+(Can't find the file? Run `python -m harness skill claude-ai`: it makes it again.)
 
 From then on, everything is saved by itself. Nothing is shown while it runs.
 

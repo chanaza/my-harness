@@ -129,11 +129,11 @@ def test_export_of_an_unconnected_account_is_reported(connected: ClaudeAiAdapter
 
 def test_export_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: ContentRepo, tmp_path: Path,
                                              capsys):
-    from harness.adapters.claude_ai import adapter as module
     from harness.cli import main
     repo.config_file.update({"claude_ai.export_every_days": 14})
-    assert main(["skill", "claude-ai"]) == 0          # no options: to the desktop, shown
-    target = module._visible_folder() / "harness-export.zip"
+    repo.config_file.update({"claude_ai.skill_folder": str(tmp_path / "skills-out")})
+    assert main(["skill", "claude-ai"]) == 0          # no options: to the configured folder
+    target = tmp_path / "skills-out" / "harness-export.zip"
     with zipfile.ZipFile(target) as archive:
         text = archive.read("harness-export/SKILL.md").decode()
     assert "every 14 days" in text and str(tmp_path / "Downloads") in text
@@ -167,8 +167,7 @@ def test_setup_prepares_the_skill_and_says_what_is_left(repo: ContentRepo, tmp_p
     repo.config_file.update({"claude_ai.watch_folder": str(tmp_path / "empty")})
     result = SetupWizard(Answers("me@example.com", "personal", str(tmp_path / "f"), False), LocalHome()).run(
         SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
-    from harness.adapters.claude_ai import adapter as module
-    assert (module._visible_folder() / "harness-export.zip").is_file()
+    assert Path(result.next_steps[0].split("upload the file ")[1].split(" in claude.ai")[0]).is_file()
     assert "Set up my harness export" in result.next_steps[-1]
 
 
