@@ -1,0 +1,40 @@
+# Saves what the harness connector dropped into inbox/connector/ (claude.ai, Cowork, ...).
+# Started by the connector (at most every connector.run_every_minutes, see harness.config.yaml)
+# and once a day for anything left. Runs never overlap: files that arrive meanwhile wait
+# for the next run. Without GitHub Actions, `python -m harness inbox` on any computer does the same.
+name: harness inbox
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+concurrency:
+  group: harness-inbox
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  inbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the harness engine
+        run: pip install --quiet "git+https://github.com/chanaza/my-harness"
+      - name: Save the inbox
+        env:
+          HARNESS_HOME: ${{ runner.temp }}/harness-home
+        run: |
+          git config user.name "harness inbox"
+          git config user.email "harness-inbox@users.noreply.github.com"
+          if [ -n "$(ls -A inbox/connector 2>/dev/null | grep -v '^\.')" ]; then
+            python -m harness inbox --repo .
+          else
+            echo "Inbox empty."
+          fi

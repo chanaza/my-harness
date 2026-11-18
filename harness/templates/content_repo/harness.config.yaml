@@ -73,6 +73,14 @@ storage:
     backend: filesystem
     path: ~/harness-storage/transcripts
 
+connector:
+  # Tools without direct access (claude.ai, Cowork, ...) save through the harness connector.
+  # When the skill saves a conversation: reply (after every reply) | meaningful | request.
+  # After a change run `harness skill claude-ai` and upload the new skill file.
+  save_every: reply
+  # The inbox is processed (GitHub Actions) at most this often, in minutes.
+  run_every_minutes: 30
+
 claude_ai:
   # The Claude account (claude.ai, Claude Desktop, Cowork) is saved by the harness-account skill.
   # A data export (for the history before it) is imported when found in this folder.
@@ -81,10 +89,6 @@ claude_ai:
   file_pattern: data-*.zip
   # Keep a copy of every export file in transcript storage.
   archive_exports: true
-  # The harness-account skill (claude.ai, Claude Desktop, Cowork) writes into this Google Drive
-  # folder; inbox_folder is where this computer sees it (the Google Drive for desktop copy).
-  drive_folder: my-harness-inbox
-  inbox_folder: ~/my-harness-inbox
   # The claude.ai page opened for uploading the export skill.
   skills_page: https://claude.ai/new#customize/skills/new/upload
   # Where the export skill file is written for you to upload (empty = your desktop).

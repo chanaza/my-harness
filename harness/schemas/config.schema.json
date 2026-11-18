@@ -304,14 +304,6 @@
         "skill_folder": {
           "type": "string",
           "description": "Where the export skill file is written for upload (empty = the desktop)."
-        },
-        "drive_folder": {
-          "type": "string",
-          "description": "Google Drive folder the harness-account skill writes into."
-        },
-        "inbox_folder": {
-          "type": "string",
-          "description": "Where this computer sees that Drive folder (synced copy)."
         }
       },
       "additionalProperties": false
@@ -357,6 +349,26 @@
           }
         },
         "additionalProperties": false
+      }
+    },
+    "connector": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The harness connector: how tools without direct access save into the inbox.",
+      "properties": {
+        "save_every": {
+          "enum": [
+            "reply",
+            "meaningful",
+            "request"
+          ],
+          "description": "When the skill saves the conversation."
+        },
+        "run_every_minutes": {
+          "type": "integer",
+          "minimum": 5,
+          "description": "How often the inbox is processed at most."
+        }
       }
     }
   },

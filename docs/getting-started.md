@@ -58,18 +58,18 @@ That's all. Use your tool as usual.
 ## Your Claude account (claude.ai, Claude Desktop, Cowork)
 
 Chats, projects, memory and Cowork sessions live in your Claude account, not on
-the computer, so the account saves itself with a skill. The installer asks for
-your account e-mail(s) and puts one `harness-account-<e-mail>.zip` per account
-in your Downloads folder:
+the computer, so the account saves itself, through your own small
+[harness connector](connector.md) (set up once, about 15 minutes). The installer
+asks for your account e-mail(s) and puts one `harness-account-<e-mail>.zip` per
+account in your Downloads folder:
 
-1. Upload it on claude.ai, signed in as that account.
-2. In Cowork (same account), type: `Set up harness-account`.
-3. Install Google Drive for desktop, so this computer sees the Drive folder
-   `my-harness-inbox` the skill writes into.
+1. Set up the connector and add it to each account ([connector.md](connector.md)).
+2. Upload the skill file on claude.ai, signed in as that account.
+3. In Cowork (same account), type: `Set up harness-account`.
 
-Every day the account describes itself (instructions, memory, skills,
-projects, scheduled tasks...), and conversations are saved when you say "save
-to harness" or at the end of a meaningful conversation. Details:
+Conversations are saved after every reply (setting `connector.save_every`), and
+every day the account describes itself (instructions, memory, skills, projects,
+scheduled tasks...). Details:
 [adapters/claude-ai.md](adapters/claude-ai.md).
 
 ## In Claude Code on the web (cloud sessions)

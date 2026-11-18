@@ -28,6 +28,8 @@ OBSOLETE_SETTINGS: tuple[str, ...] = (
     # v0.15: claude.ai is captured through the harness-account skill, not a scheduled export.
     "claude_ai.export_every_days",
     "claude_ai.download_after_hours",
+    "claude_ai.inbox_folder",
+    "claude_ai.drive_folder",
 )
 
 
@@ -65,10 +67,15 @@ class ClaudeAiSettings:
     watch_folder: str = "~/Downloads"
     file_pattern: str = "data-*.zip"
     archive_exports: bool = True
-    inbox_folder: str = "~/my-harness-inbox"
-    drive_folder: str = "my-harness-inbox"
     skills_page: str = "https://claude.ai/new#customize/skills/new/upload"
     skill_folder: str = "~/Downloads"
+
+
+@dataclass(frozen=True)
+class ConnectorSettings:
+    """The harness connector: tools without direct access save through it into inbox/."""
+    save_every: str = "reply"          # reply | meaningful | request
+    run_every_minutes: int = 30        # how often the inbox is processed at most
 
 
 @dataclass(frozen=True)
@@ -122,6 +129,10 @@ class HarnessConfig:
     @property
     def checkpoints(self) -> CheckpointSettings:
         return _section(CheckpointSettings, self.data["checkpoints"])
+
+    @property
+    def connector(self) -> ConnectorSettings:
+        return _section(ConnectorSettings, self.data.get("connector") or {})
 
     @property
     def claude_ai(self) -> ClaudeAiSettings:

@@ -1,9 +1,9 @@
 """``ClaudeAiAdapter``: capture a Claude account (claude.ai, Claude Desktop, Cowork in the cloud).
 
 The account is saved by the ``harness-account`` skill, uploaded once per account: it
-writes what the account has built, and conversation summaries, into a Google Drive
-folder this computer syncs (see ``inbox.py``). A data export, when one is found, is
-imported too (the history from before the skill).
+sends what the account has built, and conversation summaries, through the harness
+connector into the repository's inbox (see ``harness/inbox.py``). A data export, when
+one is found, is imported too (the history from before the skill).
 
 claude.ai keeps chats and projects in the account, not on the computer; the
 complete, official way out is the data export (a zip sent by e-mail). This
@@ -30,7 +30,6 @@ from importlib import resources
 from pathlib import Path
 from string import Template
 
-from ...checkpoints import CheckpointRecorder
 from ...harvest import Captured, HarvestReport, HarvestSync, Kind
 from ...local import LocalHome, StateFile
 from ...profiles import ProfileRegistry
@@ -41,19 +40,24 @@ from ...storage import Storage
 from ...text import slugify
 from ..base import Account, AccountBoundAdapter, HarnessNotConfigured, adapters
 from .export import ClaudeAiExport, Conversation
-from .inbox import AccountInbox, InboxFile, describe_items
 
 TOOL = "claude-ai"
 #: Skill names may not contain "claude" (reserved by claude.ai).
 SKILL_NAME = "harness-account"
+#: connector.save_every -> when the skill saves the conversation (said to the model).
+SAVE_WHEN = {
+    "reply": "after EVERY reply you give in a conversation (as the last step of the reply)",
+    "meaningful": "whenever something meaningful happened: a decision, a result, or a wrap-up",
+    "request": "only when the user asks (\"save to harness\", \"שמור להרנס\")",
+}
 
 
 @adapters.register
 class ClaudeAiAdapter(AccountBoundAdapter):
     tool = TOOL
     capture_modes = ("scheduled", "on_demand")
-    capture_reason = ("the account skill writes files to a Google Drive folder; this computer "
-                      "picks them up when they arrive")
+    capture_reason = ("the account skill sends through the harness connector; the inbox is "
+                      "processed in GitHub (Actions), exports are picked up when downloaded")
     environment = "cloud"  # an account service, not a machine
     account_question = ("The e-mail address of your claude.ai account (several: separate them with "
                         "commas). If you don't use claude.ai, just press Enter")
@@ -116,15 +120,14 @@ class ClaudeAiAdapter(AccountBoundAdapter):
     def after_setup(self, profiles: list[str]) -> list[str]:
         """One skill file per account, and the steps for each account by its e-mail."""
         settings = self._settings()
-        steps = []
+        steps = ["Once for all accounts and tools: set up the harness connector "
+                 "(docs/connector.md) and add it in claude.ai: Settings > Connectors."]
         for email, profile in self.bindings().items():
             if profile not in profiles:
                 continue
             target = self.deliver_skill(account=email)
             steps.append(f"Signed in to claude.ai as {email}: upload {target} on {settings.skills_page}.")
             steps.append("Then, in Cowork (same account), type: Set up harness-account")
-        steps.append(f"Google Drive for desktop must sync the Drive folder '{settings.drive_folder}' "
-                     f"to {settings.inbox_folder} (or set claude_ai.inbox_folder to where it is synced).")
         steps.append("Can't find a skill file later? Run: python -m harness skill claude-ai")
         return steps
 
@@ -135,15 +138,16 @@ class ClaudeAiAdapter(AccountBoundAdapter):
     def skill_package(self, account: str = "") -> tuple[str, dict[str, bytes]]:
         """The account skill, filled in from this harness's settings and summary language."""
         from ...digest import summary_request
-        settings = self._settings()
         root = self.local.content_repo()
         config = ContentRepo(root).config if root and ContentRepo(root).config_file.path.is_file() else None
         words = config.checkpoints.summary_max_words if config else 400
         language = config.working_language if config else "en"
         template = resources.files(__package__).joinpath("skill", "SKILL.md").read_text("utf-8")
+        connector = config.connector if config else None
+        save_every = connector.save_every if connector else "reply"
         text = Template(template).safe_substitute(
-            DRIVE_FOLDER=settings.drive_folder, ACCOUNT=account or "<the account's e-mail>",
-            SUMMARY_REQUEST=summary_request(words, language))
+            PROFILE=self.bindings().get(account, "<the profile id>"), TOOL=self.tool,
+            SAVE_WHEN=SAVE_WHEN[save_every], SUMMARY_REQUEST=summary_request(words, language))
         return SKILL_NAME, {f"{SKILL_NAME}/SKILL.md": text.encode("utf-8")}
 
     # --- what an export holds ----------------------------------------------------------------
@@ -181,7 +185,6 @@ class ClaudeAiAdapter(AccountBoundAdapter):
         config = repo.config
         report = HarvestReport()
         processed = self.local.state("exports", self.tool)
-        self._harvest_inbox(repo, report, session)
         for export in self.exports():
             signature = _file_signature(export.path)
             if processed.get(export.path.name) == signature:
@@ -209,50 +212,6 @@ class ClaudeAiAdapter(AccountBoundAdapter):
             processed.set(export.path.name, signature)
             processed.save()
         return report
-
-    def inbox(self) -> AccountInbox:
-        return AccountInbox(Path(self._settings().inbox_folder).expanduser())
-
-    def _harvest_inbox(self, repo: ContentRepo, report: HarvestReport, session: str | None) -> None:
-        """Files the account skill wrote, each once (by name and size/time)."""
-        inbox = self.inbox()
-        processed = self.local.state("inbox", self.tool)
-        exclude = repo.config.harvest_exclude
-        for describe in inbox.describes():
-            profile = self._new_and_bound(describe, processed, report)
-            if profile:
-                items = [i for i in describe_items(describe, self.tool)
-                         if not any(fnmatch(f"{i.kind.value}:{i.name}", p) for p in exclude)]
-                # Its own record of what it saved: an export run must not remove these, nor they its.
-                part = HarvestSync(repo, self.local.state("harvest", f"{profile}--account")).run(
-                    items, Origin.now(profile, session))
-                report.counts.update(part.counts)
-                report.errors += part.errors
-                report.conflicts += part.conflicts
-                processed.set(describe.path.name, _file_signature(describe.path))
-        for conversation in inbox.conversations():
-            profile = self._new_and_bound(conversation, processed, report)
-            if profile:
-                record = SessionRecord(repo, profile, conversation.path.stem)
-                data = conversation.data
-                record.touch(topic=data.get("title"), surface=data.get("surface"),
-                             project=data.get("project") or None, activity_at=str(data.get("saved_at")))
-                CheckpointRecorder(self.local, repo, record).write(conversation.body,
-                                                                   "saved by the account skill")
-                report.counts["conversations saved"] += 1
-                processed.set(conversation.path.name, _file_signature(conversation.path))
-        report.errors += inbox.problems
-        processed.save()
-
-    def _new_and_bound(self, file: InboxFile, processed: StateFile, report: HarvestReport) -> str | None:
-        """The profile of a file not saved yet; None when already saved or its account is unknown."""
-        if processed.get(file.path.name) == _file_signature(file.path):
-            return None
-        profile = self.bindings().get(file.account)
-        if not profile:
-            report.errors.append(f"{file.path.name}: account {file.account} is not connected "
-                                 "(run `harness setup claude-ai`)")
-        return profile
 
     # --- installation --------------------------------------------------------------------------
 

@@ -5,6 +5,7 @@ from .capture import (
     BackfillCommand,
     HarvestCommand,
     HookCommand,
+    InboxCommand,
     InstallCommand,
     MachineCommand,
     MemoryCommand,
@@ -23,7 +24,7 @@ from .repository import ConfigCommand, InitCommand, MergeFileCommand, UpgradeCom
 DEFAULT_COMMANDS: tuple[type[Command], ...] = (
     SetupCommand, StatusCommand, SourcesCommand, MachineCommand, UpdateCommand,
     InitCommand, ValidateCommand, ConfigCommand, UpgradeCommand,
-    ProfileCommand, InstallCommand, HarvestCommand, BackfillCommand, HookCommand,
+    ProfileCommand, InstallCommand, HarvestCommand, InboxCommand, BackfillCommand, HookCommand,
     SessionCommand, MemoryCommand, SkillCommand, MondayCommand, MergeFileCommand,
 )
 

@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/harness-describe.schema.json",
+  "title": "harness-describe/1",
+  "description": "Everything a tool account has built, one list per kind of the harness (written by a tool's harness skill through the harness connector).",
+  "type": "object",
+  "required": [
+    "schema",
+    "profile",
+    "tool",
+    "captured_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "named": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "text": {
+      "type": "object",
+      "required": [
+        "text"
+      ],
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "properties": {
+    "schema": {
+      "const": "harness-describe/1"
+    },
+    "captured_at": {
+      "type": [
+        "string",
+        "object"
+      ]
+    },
+    "surface": {
+      "type": "string",
+      "description": "Where inside the tool, e.g. cowork, claude-ai, desktop."
+    },
+    "profile": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The harness profile this tool account is (written into the skill)."
+    },
+    "instructions": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/named"
+          },
+          {
+            "$ref": "#/$defs/text"
+          }
+        ]
+      }
+    },
+    "memory": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/text"
+      }
+    },
+    "skills": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/named"
+          },
+          {
+            "properties": {
+              "origin": {
+                "enum": [
+                  "mine",
+                  "anthropic",
+                  "plugin"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "agents": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/named"
+      }
+    },
+    "plugins": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/named"
+          },
+          {
+            "properties": {
+              "origin": {
+                "enum": [
+                  "mine",
+                  "marketplace"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "connections": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/named"
+          },
+          {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "connector",
+                  "mcp"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "projects": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/named"
+      }
+    },
+    "workflows": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/named"
+      }
+    },
+    "apps": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/named"
+      }
+    },
+    "native": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/named"
+      }
+    },
+    "cannot_see": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "tool": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The tool that wrote it, e.g. claude-ai, cowork, chatgpt."
+    },
+    "user_profile": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/text"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "What the tool knows about the user (core/profile)."
+    }
+  }
+}

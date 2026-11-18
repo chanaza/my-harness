@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/harness-conversation.schema.json",
+  "title": "harness-conversation/1",
+  "description": "Front matter of a conversation summary written by a tool's harness skill.",
+  "type": "object",
+  "required": [
+    "schema",
+    "profile",
+    "tool",
+    "title",
+    "saved_at"
+  ],
+  "properties": {
+    "schema": {
+      "const": "harness-conversation/1"
+    },
+    "surface": {
+      "type": "string",
+      "description": "Where inside the tool, e.g. cowork, claude-ai, desktop."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "saved_at": {
+      "type": [
+        "string",
+        "object"
+      ]
+    },
+    "profile": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The harness profile this tool account is (written into the skill)."
+    },
+    "tool": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The tool that wrote it, e.g. claude-ai, cowork, chatgpt."
+    }
+  }
+}

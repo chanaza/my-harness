@@ -237,6 +237,27 @@ class StatusCommand(Command):
         return 0
 
 
+class InboxCommand(Command):
+    name = "inbox"
+    help = ("Save what the harness connector dropped into inbox/connector/ (run by GitHub Actions; "
+            "works on any computer too).")
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        repo_argument(parser)
+
+    def run(self, args: argparse.Namespace) -> int:
+        from ...inbox import InboxProcessor
+        repo = open_repo(args)
+        git = GitSync(repo.root, repo.config.git)
+        git.pull()
+        report = InboxProcessor(repo).run()
+        for problem in report.errors:
+            print(f"  x {problem}")
+        git.sync(f"inbox: {report.summary()}", push=True)
+        print(f"Inbox: {report.summary()}")
+        return 0
+
+
 class SourcesCommand(Command):
     name = "sources"
     help = ("How each kind of tool is captured (capture_modes in the settings), why, and when it "

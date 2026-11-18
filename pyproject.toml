@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "my-harness"
-version = "0.15.0"
+version = "0.16.0"
 description = "A tool-agnostic engine for keeping your AI harness (instructions, skills, memory, sessions) portable across AI tools."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,7 +29,7 @@ include = ["harness*"]
 [tool.setuptools.package-data]
 # Schemas and the content-repo template ship inside the package so that
 # `harness init` works from any install location.
-harness = ["schemas/*.json", "templates/**/*", "templates/**/.*", "adapters/*/skill/*.md"]
+harness = ["schemas/*.json", "templates/**/*", "templates/**/.*", "templates/content_repo/.github/workflows/*.yml", "adapters/*/skill/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

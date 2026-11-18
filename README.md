@@ -32,9 +32,9 @@ your accounts, whether you use claude.ai) and shows what it found before
 saving anything.
 
 **2. If you use claude.ai or Cowork,** the installer puts one skill file per
-account in your Downloads folder and opens claude.ai: upload it there, then in
-Cowork type `Set up harness-account`. Your account then saves itself to a Google
-Drive folder that this computer picks up.
+account in your Downloads folder: upload it on claude.ai, then in Cowork type
+`Set up harness-account`. It saves through your own small connector
+([docs/connector.md](docs/connector.md), set up once).
 (Can't find the file? Run `python -m harness skill claude-ai`.)
 
 From then on, everything is saved by itself. Nothing is shown while it runs.
@@ -48,7 +48,7 @@ From then on, everything is saved by itself. Nothing is shown while it runs.
 | Tool | What | How |
 |---|---|---|
 | Claude Code (computer and cloud) | Instructions, skills, agents, memory, connections, every conversation | Every turn, in the background |
-| claude.ai and Cowork (your Claude account) | Instructions, memory, skills, projects, scheduled tasks, apps, conversation summaries | The account skill: daily, and when a conversation is saved |
+| claude.ai and Cowork (your Claude account) | Instructions, memory, skills, projects, scheduled tasks, apps, conversation summaries | The account skill, through your connector: after every reply, and a daily description |
 | Cowork sessions kept on this computer | Every conversation and its files | When you ask: `python -m harness harvest cowork` |
 
 Saving only: nothing from the harness is loaded back into your tools yet.

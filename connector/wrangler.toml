@@ -1,0 +1,9 @@
+# Cloudflare Workers settings for the harness connector. Secrets are set with
+# `npx wrangler secret put GITHUB_TOKEN` and `npx wrangler secret put SECRET_PATH`, never here.
+name = "harness-connector"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+REPO = "your-github-name/your-harness-repository"
+BRANCH = "main"

@@ -13,17 +13,15 @@ Status of the engine. Saving comes first; loading comes after saving is complete
 
 ## Not finished / not verified
 
-### Claude account skill (`harness-account`) - built, not verified in the app
-Built and tested in the engine (forms, Drive inbox, the same summary sections as
-Claude Code). Not yet run inside claude.ai / Cowork:
-- Can the skill create a file in the Google Drive folder from claude.ai, Desktop and
-  cloud Cowork? (If not: another route to the folder is needed.)
-- What Claude sees inside a Cowork scheduled task (memory, projects, scheduled tasks):
-  the first describe file's `cannot_see` tells.
-- Whether conversations are saved reliably without a hook ("save to harness" works;
-  saving on its own at the end of a conversation depends on the model).
-- Google Drive for desktop must sync the folder to `claude_ai.inbox_folder`.
-Fallback for history: download the data export once into the watch folder.
+### Harness connector + account skill - built, not verified in the app
+Built and tested (connector with simulated GitHub, inbox processing, forms, the same
+summary sections as Claude Code). Not yet run for real:
+- Deploying the connector (Cloudflare) and adding it to claude.ai as a custom connector.
+- What Claude sees inside a Cowork scheduled task (the first describe's `cannot_see`).
+- How reliably a model saves after every reply without a hook.
+- GitHub Actions run in the content repository (started by the connector, daily sweep).
+Fallback for history: the data export, downloaded once into the watch folder.
+Next: OAuth sign-in for the connector, together with reading (loading).
 
 ### Known limits
 - Cloud sessions cannot reach a local synced folder; they use the git storage backend.

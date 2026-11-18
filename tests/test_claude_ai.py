@@ -130,13 +130,14 @@ def test_export_of_an_unconnected_account_is_reported(connected: ClaudeAiAdapter
 def test_account_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: ContentRepo, tmp_path: Path,
                                               capsys):
     from harness.cli import main
-    repo.config_file.update({"claude_ai.drive_folder": "my-inbox",
+    repo.config_file.update({"connector.save_every": "meaningful",
                              "claude_ai.skill_folder": str(tmp_path / "skills-out")})
     assert main(["skill", "claude-ai"]) == 0          # one file per connected account
     target = tmp_path / "skills-out" / "harness-account-me-example-com.zip"
     with zipfile.ZipFile(target) as archive:
         text = archive.read("harness-account/SKILL.md").decode()
-    assert "my-inbox" in text and "me@example.com" in text and "${" not in text
+    assert "profile: claude-ai-personal-cloud" in text and "${" not in text
+    assert "a decision, a result, or a wrap-up" in text                     # connector.save_every
     for section in ("## Goal", "## Open thread", "## Connections in use"):   # the one summary language
         assert section in text
     assert "Set up harness-account" in capsys.readouterr().out
@@ -168,10 +169,11 @@ def test_setup_prepares_the_skill_and_says_what_is_left(repo: ContentRepo, tmp_p
     repo.config_file.update({"claude_ai.watch_folder": str(tmp_path / "empty")})
     result = SetupWizard(Answers("me@example.com", "personal", str(tmp_path / "f"), False), LocalHome()).run(
         SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
-    target = result.next_steps[0].split(": upload ")[1].split(" on https")[0]
+    assert "harness connector" in result.next_steps[0]
+    target = result.next_steps[1].split(": upload ")[1].split(" on https")[0]
     assert Path(target).is_file() and target.endswith("harness-account-me-example-com.zip")
-    assert "as me@example.com" in result.next_steps[0]
-    assert "Set up harness-account" in result.next_steps[1]
+    assert "as me@example.com" in result.next_steps[1]
+    assert "Set up harness-account" in result.next_steps[2]
 
 
 def test_claude_ai_can_be_skipped_and_is_not_asked_again(repo: ContentRepo, tmp_path: Path):
@@ -246,11 +248,12 @@ def test_steps_are_listed_for_every_account(repo: ContentRepo, tmp_path: Path, m
     assert "a@example.com" in steps and "b@example.com" in steps
 
 
-DESCRIBE = """schema: claude-account/1
-account: me@example.com
+DESCRIBE = """schema: harness-describe/1
+profile: claude-ai-personal-cloud
+tool: claude-ai
 captured_at: 2026-11-19T06:00:00Z
 surface: cowork
-profile: {text: "Consultant, writes in Hebrew."}
+user_profile: {text: "Consultant, writes in Hebrew."}
 instructions:
   - {name: personal-preferences, text: "Answer in Hebrew."}
 memory:
@@ -270,8 +273,9 @@ cannot_see: [agents, plugins]
 """
 
 CONVERSATION = """---
-schema: claude-conversation/1
-account: me@example.com
+schema: harness-conversation/1
+profile: claude-ai-personal-cloud
+tool: claude-ai
 surface: claude-ai
 title: Planning the harness
 project: ""
@@ -294,16 +298,20 @@ None
 """
 
 
-def test_account_skill_files_are_saved_in_the_harness_form(connected: ClaudeAiAdapter, repo: ContentRepo,
-                                                          tmp_path: Path):
-    inbox = tmp_path / "inbox"
-    inbox.mkdir()
-    repo.config_file.update({"claude_ai.inbox_folder": str(inbox)})
+def test_connector_inbox_is_saved_in_the_harness_form(connected: ClaudeAiAdapter, repo: ContentRepo):
+    from harness.inbox import InboxProcessor
+    inbox = repo.path("inbox", "connector")
+    inbox.mkdir(parents=True)
     (inbox / "describe-20261119-0600.yaml").write_text(DESCRIBE, encoding="utf-8")
     (inbox / "conversation-20261119-0700-planning.md").write_text(CONVERSATION, encoding="utf-8")
-    (inbox / "describe-20261119-0601.yaml").write_text("schema: claude-account/1\nfree: text\n")
-    report = connected.run_harvest()
+    (inbox / "describe-20261119-0601.yaml").write_text("schema: harness-describe/1\nfree: text\n")
+    (inbox / "describe-20261119-0602.yaml").write_text(DESCRIBE.replace("claude-ai-personal-cloud", "nobody"))
+    report = InboxProcessor(repo).run()
     assert any("describe-20261119-0601.yaml: does not match the form" in e for e in report.errors)
+    assert any("'nobody' is not registered" in e for e in report.errors)
+    rejected = repo.path("inbox", "rejected")
+    assert (rejected / "describe-20261119-0601.yaml.problem.txt").is_file()
+    assert not any(inbox.iterdir())                                            # the inbox is emptied
     profile = "claude-ai-personal-cloud"
     assert repo.path("core", "skills", "deck-review", "SKILL.md").is_file()
     assert not repo.path("core", "skills", "pdf").exists()                    # not the user's
@@ -315,4 +323,5 @@ def test_account_skill_files_are_saved_in_the_harness_form(connected: ClaudeAiAd
     assert "Plan it." in summary.read_text()
     standing = repo.path("core", "instructions", profile, "standing-instructions.md").read_text()
     assert "Always answer in Hebrew." in standing                              # same digest as Claude Code
-    assert not connected.run_harvest().counts                                  # each file once
+    (inbox / "describe-20261119-0700.yaml").write_text(DESCRIBE, encoding="utf-8")
+    assert InboxProcessor(repo).run().counts["unchanged"] >= 1                 # its records are in the repo
