@@ -59,6 +59,7 @@ class HarvestSync:
         seen: dict[str, str] = dict(self.state.get(self.STATE_KEY, {}))
         written: dict[str, str] = dict(self.state.get(self.WRITTEN_KEY, {}))
         items_list = list(items)
+        items_list = [item for item in items_list if not item.engine_owned]
         for item in items_list:
             fingerprint = item.fingerprint
             if seen.get(item.key) == fingerprint:

@@ -58,11 +58,37 @@ def _same(a: Any, b: Any) -> bool:
 
 
 class StructuredMerge:
-    """Merges one YAML file the way Git's merge drivers expect (result written to ``ours``)."""
+    """Merges one YAML or Markdown file the way Git's merge drivers expect (result written to
+    ``ours``). Markdown: the frontmatter merges like YAML; the text merges only when at most
+    one side changed it (otherwise it is a real conflict, left to Git)."""
 
     CONFIG = "harness.config.yaml"
 
     def merge_file(self, base: Path, ours: Path, theirs: Path, name: str = "") -> bool:
+        if Path(name).suffix == ".md":
+            return self._merge_markdown(base, ours, theirs)
+        return self._merge_yaml(base, ours, theirs, name)
+
+    def _merge_markdown(self, base: Path, ours: Path, theirs: Path) -> bool:
+        from .documents import MarkdownDocument
+        try:
+            docs = [MarkdownDocument.read(p) if p.is_file() and p.stat().st_size else None
+                    for p in (base, ours, theirs)]
+        except yaml_io.YAMLError:
+            return False
+        bodies = [d.body.strip() if d else None for d in docs]
+        if bodies[1] == bodies[2] or bodies[0] == bodies[2]:
+            body = docs[1].body if docs[1] else ""
+        elif bodies[0] == bodies[1]:
+            body = docs[2].body if docs[2] else ""
+        else:
+            return False  # both changed the text differently: a real conflict
+        meta = merge_values(docs[0].meta if docs[0] else MISSING, docs[1].meta if docs[1] else MISSING,
+                            docs[2].meta if docs[2] else MISSING)
+        MarkdownDocument(meta if isinstance(meta, dict) else {}, body).write(ours)
+        return True
+
+    def _merge_yaml(self, base: Path, ours: Path, theirs: Path, name: str = "") -> bool:
         try:
             data = [yaml_io.load(p.read_text("utf-8")) if p.is_file() and p.stat().st_size else None
                     for p in (base, ours, theirs)]

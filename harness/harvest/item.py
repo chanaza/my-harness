@@ -20,6 +20,14 @@ class Kind(StrEnum):
     NATIVE = "native"             # tool-specific settings with no portable equivalent
 
 
+#: Things the engine itself installs in tools (its own skills). They are the engine's,
+#: never the user's content, so no adapter saves them. "<kind>:<name>".
+ENGINE_OWNED: frozenset[str] = frozenset({
+    "skill:harness-save",     # Claude Code: save on request
+    "skill:harness-export",   # claude.ai: export automation
+})
+
+
 @dataclass
 class Captured:
     """An item read from a tool.
@@ -35,6 +43,10 @@ class Captured:
     files: dict[str, bytes] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
     scope: str = "global"
+
+    @property
+    def engine_owned(self) -> bool:
+        return f"{self.kind.value}:{self.name}" in ENGINE_OWNED
 
     @property
     def key(self) -> str:

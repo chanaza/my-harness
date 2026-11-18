@@ -350,3 +350,17 @@ def test_pull_brings_in_another_machines_settings(tmp_path: Path):
     git(tmp_path / "windows", "commit", "-q", "--allow-empty", "-m", "local")
     assert GitSync(tmp_path / "windows", GitSettings(True, True)).pull()
     assert (tmp_path / "windows" / "harness.config.yaml").read_text() == "exclude: [skill:pdf]\n"
+
+
+def test_engine_skills_are_never_saved_by_any_adapter(repo: ContentRepo, tmp_path: Path):
+    from harness.harvest import Captured, HarvestSync, Kind
+    from harness.local import LocalHome
+    from harness.migrations import run_migrations
+    from harness.provenance import Origin
+    item = Captured(Kind.SKILL, "harness-export", "x", {"SKILL.md": b"---\nname: harness-export\n---\nx\n"})
+    report = HarvestSync(repo, LocalHome().state("h", "p")).run([item], Origin.now("chatgpt-work"))
+    assert not report.counts and not repo.path("core", "skills", "harness-export").exists()
+    old = repo.path("core", "skills", "harness-save")
+    old.mkdir(parents=True)
+    (old / "SKILL.md").write_text("x")
+    assert run_migrations(repo)["remove-engine-artifacts"] == ["core/skills/harness-save"]

@@ -75,3 +75,24 @@ def test_merge_driver_command_survives_a_posix_shell(tmp_path: Path, monkeypatch
     expected = "C:/Users/me/AppData/Python312/python.exe -m harness merge-file"
     assert driver.replace("'", "").startswith(expected)
     assert "\\" not in driver
+
+
+def test_same_skill_saved_by_two_machines_merges(tmp_path: Path):
+    from harness.merge import StructuredMerge
+    ours, theirs, base = tmp_path / "o.md", tmp_path / "t.md", tmp_path / "b.md"
+    base.write_text("")
+    skill = ("---\nname: x\nprovenance:\n  source: {{profile: {}, at: '2026-01-0{}T00:00:00Z'}}\n"
+             "---\nSame text\n")
+    ours.write_text(skill.format("cloud", 1))
+    theirs.write_text(skill.format("local", 2))
+    assert StructuredMerge().merge_file(base, ours, theirs, "core/skills/x/SKILL.md")
+    assert "Same text" in ours.read_text()
+
+
+def test_different_text_on_both_sides_is_a_real_conflict(tmp_path: Path):
+    from harness.merge import StructuredMerge
+    ours, theirs, base = tmp_path / "o.md", tmp_path / "t.md", tmp_path / "b.md"
+    base.write_text("---\nname: x\n---\nOriginal\n")
+    ours.write_text("---\nname: x\n---\nMine\n")
+    theirs.write_text("---\nname: x\n---\nTheirs\n")
+    assert not StructuredMerge().merge_file(base, ours, theirs, "memory/x.md")

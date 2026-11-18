@@ -20,8 +20,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from ...harvest import Captured, Kind
-from .constants import HOOK_MARKER, SKILL_NAME, TOOL
+from ...harvest import ENGINE_OWNED, Captured, Kind
+from .constants import HOOK_MARKER, TOOL
 from .locations import ClaudeCodeLocations
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
@@ -43,7 +43,7 @@ class ClaudeCodeHarvester:
         return [i for i in items if not self.is_excluded(i.kind.value, i.name)]
 
     #: Installed by the engine itself, never the user's content.
-    ENGINE_OWNED = (f"skill:{SKILL_NAME}",)
+    ENGINE_OWNED = tuple(ENGINE_OWNED)
 
     def is_excluded(self, kind: str, name: str) -> bool:
         label = f"{kind}:{name}"

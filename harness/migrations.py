@@ -73,7 +73,25 @@ class SimplifySessionRecords(Migration):
         return []
 
 
-MIGRATIONS: tuple[Migration, ...] = (SimplifySessionRecords(),)
+class RemoveEngineArtifacts(Migration):
+    """Skills the engine installs (harness-save, harness-export) are not the user's content."""
+
+    id = "remove-engine-artifacts"
+    description = "Remove the engine's own skills saved by older versions"
+
+    def apply(self, repo: ContentRepo) -> list[str]:
+        from .harvest import ENGINE_OWNED
+        changes = []
+        for owned in sorted(ENGINE_OWNED):
+            kind, name = owned.split(":", 1)
+            folder = repo.path("core", f"{kind}s", name)
+            if kind == "skill" and folder.is_dir():
+                shutil.rmtree(folder)
+                changes.append(f"core/skills/{name}")
+        return changes
+
+
+MIGRATIONS: tuple[Migration, ...] = (SimplifySessionRecords(), RemoveEngineArtifacts())
 
 
 def run_migrations(repo: ContentRepo) -> dict[str, list[str]]:

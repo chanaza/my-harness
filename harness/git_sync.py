@@ -105,12 +105,13 @@ class GitSync:
         self._git("config", f"merge.{self.MERGE_DRIVER}.name", "harness YAML merge", check=False)
         self._git("config", f"merge.{self.MERGE_DRIVER}.driver", f"{command} %O %A %B %P", check=False)
         attributes = self.root / ".git" / "info" / "attributes"
-        rule = f"*.yaml merge={self.MERGE_DRIVER}"
         existing = attributes.read_text("utf-8") if attributes.is_file() else ""
-        if rule not in existing:
+        missing = [f"{pattern} merge={self.MERGE_DRIVER}" for pattern in ("*.yaml", "*.md")
+                   if f"{pattern} merge={self.MERGE_DRIVER}" not in existing]
+        if missing:
             attributes.parent.mkdir(parents=True, exist_ok=True)
             attributes.write_text(existing + ("" if existing.endswith("\n") or not existing else "\n")
-                                  + rule + "\n", encoding="utf-8")
+                                  + "\n".join(missing) + "\n", encoding="utf-8")
 
     def _failed(self, result: SyncResult) -> SyncResult:
         self._log(f"{result.message} ({self.root})")
