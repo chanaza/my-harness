@@ -317,6 +317,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "monday": {
+      "type": "object",
+      "description": "Capturing monday.com (agents and workflows first).",
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "api_version": {
+          "type": "string",
+          "description": "monday API version; agents are only in the preview ('dev') version today."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

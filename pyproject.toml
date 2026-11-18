@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "my-harness"
-version = "0.11.8"
+version = "0.12.0"
 description = "A tool-agnostic engine for keeping your AI harness (instructions, skills, memory, sessions) portable across AI tools."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,6 +14,7 @@ dependencies = [
     "jsonschema>=4.18",
     "referencing>=0.30",
     "rfc3339-validator>=0.1.4",  # enables "format: date-time" checks
+    "keyring>=24",  # API tokens in the operating system's password store
 ]
 
 [project.optional-dependencies]

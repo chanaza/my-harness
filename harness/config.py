@@ -61,6 +61,12 @@ class ClaudeAiSettings:
 
 
 @dataclass(frozen=True)
+class MondaySettings:
+    endpoint: str = "https://api.monday.com/v2"
+    api_version: str = "dev"
+
+
+@dataclass(frozen=True)
 class GitSettings:
     auto_commit: bool
     auto_push: bool
@@ -104,6 +110,10 @@ class HarnessConfig:
     @property
     def claude_ai(self) -> ClaudeAiSettings:
         return _section(ClaudeAiSettings, self.data.get("claude_ai") or {})
+
+    @property
+    def monday(self) -> MondaySettings:
+        return _section(MondaySettings, self.data.get("monday") or {})
 
     @property
     def git(self) -> GitSettings:

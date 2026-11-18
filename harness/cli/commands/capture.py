@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import sys
 import traceback
@@ -10,7 +11,10 @@ from collections import Counter
 from pathlib import Path
 
 from ...adapters import HarnessNotConfigured, adapters
+from ...adapters.monday import MondayClient, MondayError, MondayProbe
 from ...checkpoints import CheckpointRecorder
+from ...config import MondaySettings
+from ...credentials import CredentialError, CredentialStore
 from ...git_sync import GitSync
 from ...local import LocalHome
 from ...memory import KINDS, MemoryStore
@@ -362,6 +366,50 @@ class SkillCommand(Command):
         print("Upload it on the claude.ai page that opened.")
         print("Then, in Cowork, type: Set up my harness export")
         return 0
+
+
+class MondayProbeCommand(Command):
+    name = "probe"
+    help = "Show what your monday.com account lets the harness read (names and counts only)."
+
+    TOKEN_HELP = ("monday.com API token needed. In monday.com: click your profile picture > "
+                  "Developers > My access tokens > Show > copy it. Paste it here (it is kept in this "
+                  "computer's password store, never in your harness)")
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--account", default="default", help="A name for this monday account.")
+
+    def run(self, args: argparse.Namespace) -> int:
+        store = CredentialStore()
+        key = f"monday:{args.account}"
+        token = store.get(key)
+        if not token:
+            token = getpass.getpass(f"{self.TOKEN_HELP}: ").strip()
+            if not token:
+                raise ErrorExit("No token given.")
+            try:
+                store.set(key, token)
+            except CredentialError as exc:
+                print(f"  ! {exc}")
+        root = LocalHome().content_repo()
+        settings = ContentRepo(root).config.monday if root else MondaySettings()
+        client = MondayClient(token, settings.endpoint, settings.api_version)
+        try:
+            report = MondayProbe(client).run()
+        except MondayError as exc:
+            raise ErrorExit(str(exc)) from None
+        for line in report.lines():
+            print(line)
+        return 0
+
+
+class MondayCommand(Command):
+    name = "monday"
+    help = "monday.com: agents, workflows and boards."
+    subcommands = (MondayProbeCommand,)
+
+    def run(self, args: argparse.Namespace) -> int:  # pragma: no cover - dispatch only
+        raise NotImplementedError
 
 
 class HookCommand(Command):

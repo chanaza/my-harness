@@ -80,6 +80,12 @@ claude_ai:
   # Where the export skill file is written for you to upload (empty = your desktop).
   skill_folder: ~/Downloads
 
+monday:
+  # monday.com API address.
+  endpoint: https://api.monday.com/v2
+  # API version. Agents are only available in the preview version ("dev") today.
+  api_version: dev
+
 assets:
   # Larger files are stored outside Git and referenced from assets/<id>/asset.yaml.
   max_inline_size_mb: 10
