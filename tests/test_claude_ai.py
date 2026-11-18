@@ -130,7 +130,7 @@ def test_export_of_an_unconnected_account_is_reported(connected: ClaudeAiAdapter
 def test_account_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: ContentRepo, tmp_path: Path,
                                               capsys):
     from harness.cli import main
-    repo.config_file.update({"connector.save_every": "meaningful",
+    repo.config_file.update({"connector.summary_every_replies": 7,
                              "claude_ai.skill_folder": str(tmp_path / "skills-out")})
     assert main(["skill", "claude-ai"]) == 0          # one file per connected account
     target = tmp_path / "skills-out" / "harness-account-me-example-com.zip"
@@ -141,10 +141,10 @@ def test_account_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: 
     from harness.inbox import write_connector_instructions
     assert write_connector_instructions(repo) == ["connector/instructions/claude-ai.md"]
     full = repo.path("connector", "instructions", "claude-ai.md").read_text()
-    assert "a decision, a result, or a wrap-up" in full                     # connector.save_every
+    assert "every 7 replies" in full and "exchange mode" in full            # connector settings
     for section in ("## Goal", "## Open thread", "## Connections in use"):   # the one summary language
         assert section in full
-    assert "${PROFILE}" in full and "${SAVE_WHEN}" not in full              # profile: by the connector
+    assert "${PROFILE}" in full and "${AFTER_EVERY_REPLY}" not in full      # profile: by the connector
     assert write_connector_instructions(repo) == []                         # unchanged: not rewritten
     assert "Set up harness-account" in capsys.readouterr().out
 
@@ -408,3 +408,28 @@ def test_descriptions_saved_before_full_content_are_cleaned(repo: ContentRepo):
     assert not numbered.exists() and not project.exists() and not bare.parent.exists()
     assert not state.exists() and changes
     assert DescribeBeforeFullContent().apply(repo) == []                   # once
+
+
+def exchange(number: int, text: str) -> str:
+    return ("---\nschema: harness-exchange/1\nprofile: claude-ai-personal-cloud\ntool: claude-ai\n"
+            f"conversation: conversation-20261119-0700-plan\nnumber: {number}\n"
+            f"at: 2026-11-19T07:{number:02d}:00Z\ntitle: Plan\n---\n"
+            f"## User\n\nq{number}\n\n## Assistant\n\n{text}\n")
+
+
+def test_exchanges_make_a_word_for_word_log(connected: ClaudeAiAdapter, repo: ContentRepo):
+    """To continue anywhere: the latest summary plus every exchange after it, in reply order."""
+    from harness.inbox import InboxProcessor
+    inbox = repo.path("inbox", "connector")
+    inbox.mkdir(parents=True)
+    for number, text in ((2, "second"), (1, "first"), (10, "tenth"), (2, "second again")):
+        (inbox / f"exchange-20261119-0700-plan-{number}.md").write_text(exchange(number, text))
+        report = InboxProcessor(repo).run()
+        assert not report.errors, report.errors
+    folder = repo.path("sessions", "claude-ai-personal-cloud", "conversation-20261119-0700-plan")
+    log = (folder / "log.md").read_text()
+    assert log.index("first") < log.index("second again") < log.index("tenth")   # reply order, late ones too
+    assert "Replies 3-9 were not received." in log                          # a gap is never silent
+    assert log.count("Reply 2 ") == 1                                       # sent twice: kept once
+    from conftest import validate
+    assert validate(repo).ok, validate(repo).problems

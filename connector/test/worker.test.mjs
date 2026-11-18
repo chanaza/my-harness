@@ -8,7 +8,7 @@ const calls = [];
 globalThis.fetch = async (url, init = {}) => {
   calls.push({ url, method: init.method, body: init.body && JSON.parse(init.body) });
   if (url.includes("connector/instructions/claude-ai.md")) return new Response("Profile: ${PROFILE}. Save after every reply.");
-  if (url.includes("harness.config.yaml")) return new Response("connector:\n  save_every: reply\n  run_every_minutes: 45\n");
+  if (url.includes("harness.config.yaml")) return new Response("connector:\n  transcript: exchange\n  run_every_minutes: 45\n");
   if (url.includes("/runs?")) return Response.json({ workflow_runs: [] });
   if (url.includes("contents/inbox/connector?")) return Response.json(globalThis.inbox || []);
   if (init.method === "GET") return new Response("{}", { status: 404 });
@@ -68,4 +68,10 @@ test("instructions come from the repository, for the asking profile", async () =
   const result = await ask({ tool: "claude-ai", profile: "claude-ai-work-cloud" });
   assert.equal(result.content[0].text, "Profile: claude-ai-work-cloud. Save after every reply.");
   assert.equal((await ask({ tool: "../secrets", profile: "x" })).isError, true);
+});
+
+test("an exchange is accepted with its own form", async () => {
+  const content = "---\nschema: harness-exchange/1\nprofile: claude-ai-work-cloud\ntool: claude-ai\nconversation: conversation-1-x\nnumber: 3\n---\n## User\nq\n";
+  assert.equal((await save("exchange-20261119-0700-plan-3.md", content)).isError, false);
+  assert.match((await save("exchange-1-x-3.md", GOOD)).content[0].text, /harness-exchange\/1/);
 });

@@ -11,7 +11,7 @@ def to_iso(stamp: str | None) -> str | None:
     """A tool's timestamp ('2026-11-18T07:20:10.123456Z' / '+00:00') in the schema format."""
     if not stamp:
         return None
-    text = str(stamp).replace("+00:00", "Z")
+    text = str(stamp).strip().replace(" ", "T", 1).replace("+00:00", "Z")  # also YAML's own dates
     return text.split(".")[0].rstrip("Z") + "Z"
 
 

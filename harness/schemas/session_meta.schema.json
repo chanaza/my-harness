@@ -124,6 +124,11 @@
     "surface": {
       "type": "string",
       "description": "Where inside the tool the conversation ran, e.g. cowork, claude-ai, desktop."
+    },
+    "log_last": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The last reply number in log.md (conversations saved through the harness connector)."
     }
   },
   "additionalProperties": false

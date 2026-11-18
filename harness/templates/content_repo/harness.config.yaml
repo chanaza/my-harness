@@ -75,9 +75,11 @@ storage:
 
 connector:
   # Tools without direct access (claude.ai, Cowork, ...) save through the harness connector.
-  # When the skill saves a conversation: reply (after every reply) | meaningful | request.
-  # After a change run `harness skill claude-ai` and upload the new skill file.
-  save_every: reply
+  # To continue a conversation anywhere: its latest summary plus every exchange after it.
+  # transcript: exchange = after every reply the skill sends that exchange word for word; off = not.
+  transcript: exchange
+  # A summary of the whole conversation every N replies (and when you say "save to harness").
+  summary_every_replies: 10
   # The inbox is processed (GitHub Actions) at most this often, in minutes.
   run_every_minutes: 30
 

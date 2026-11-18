@@ -7,7 +7,9 @@ way to read them from outside for a single person. So the account saves itself:
 1. **The `harness-account` skill**, uploaded once per account (it then works
    in claude.ai, Claude Desktop and Cowork). It sends one file per run through
    the [harness connector](../connector.md) into the repository's inbox:
-   - **save mode** (`connector.save_every`: after every reply by default): the
+   - **exchange mode** (after every reply, `connector.transcript`): that exchange,
+     word for word, appended to the conversation's `log.md`.
+   - **save mode** (every `connector.summary_every_replies` replies): the
      conversation's summary in exactly the same sections as Claude Code
      checkpoints (one definition in `harness/digest.py`).
    - **describe mode** (a daily Cowork scheduled task): everything the account

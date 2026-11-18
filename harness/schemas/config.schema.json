@@ -356,18 +356,22 @@
       "additionalProperties": false,
       "description": "The harness connector: how tools without direct access save into the inbox.",
       "properties": {
-        "save_every": {
-          "enum": [
-            "reply",
-            "meaningful",
-            "request"
-          ],
-          "description": "When the skill saves the conversation."
-        },
         "run_every_minutes": {
           "type": "integer",
           "minimum": 5,
           "description": "How often the inbox is processed at most."
+        },
+        "transcript": {
+          "enum": [
+            "exchange",
+            "off"
+          ],
+          "description": "exchange: after every reply the latest exchange, word for word; off: summaries only."
+        },
+        "summary_every_replies": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "A summary of the whole conversation every N replies."
         }
       }
     }

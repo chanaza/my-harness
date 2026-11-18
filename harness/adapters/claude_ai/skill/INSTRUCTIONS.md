@@ -16,8 +16,12 @@ conversation and continue normally.
 
 Profile: ${PROFILE} (tool: ${TOOL}). File names use the current UTC time, e.g. 20261119-0600.
 
-**When to save the conversation:** ${SAVE_WHEN}. Each save sends the summary of
-the WHOLE conversation so far (the newest file replaces the earlier ones).
+**What to send in a conversation:** ${AFTER_EVERY_REPLY}. Also send a summary when the
+user says "save to harness" and when the conversation wraps up. Together they let the
+user continue the conversation anywhere: the latest summary plus every exchange after it.
+Number your replies in the conversation 1, 2, 3...; the conversation's file names use
+when it started (`<started>` = UTC time of its first message, e.g. 20261119-0700) and a
+short title, and stay the same for the whole conversation.
 
 **Which mode:** a scheduled task names it. "set up" = setup mode. "save the project" =
 project mode. Otherwise save mode; and in a conversation inside a project, also run
@@ -111,10 +115,38 @@ projects:
 Every knowledge file in full; a file you cannot read: leave it out and add
 `not_readable: <which files, why>` to the project.
 
+## Exchange mode (after a reply)
+
+Send `exchange-<started>-<short-title>-<n>.md`, where n is the number of the reply you
+just gave:
+
+```
+---
+schema: harness-exchange/1
+profile: ${PROFILE}
+tool: ${TOOL}
+conversation: conversation-<started>-<short-title>
+number: <n>
+at: <now, UTC>
+title: <the conversation's title>
+surface: claude-ai            # cowork | claude-ai | desktop
+---
+## User
+
+<the user's message, word for word>
+
+## Assistant
+
+<your reply, word for word>
+```
+
+Copy both word for word, nothing shortened. Files attached to the message: list their
+names only.
+
 ## Save mode
 
-Send `conversation-<started>-<short-title>.md`, where <started> is when the
-conversation started (so every save of the same conversation has the same name):
+Send `conversation-<started>-<short-title>.md` (the same name at every save of the
+conversation; the newest replaces the earlier one):
 
 ```
 ---

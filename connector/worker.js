@@ -15,7 +15,8 @@
 //   BRANCH        default "main"
 //   SECRET_PATH   long random text; the connector's address is https://<host>/mcp/<SECRET_PATH>
 
-const NAME = /^(describe|conversation)-[A-Za-z0-9._-]{1,120}\.(yaml|md)$/;
+const NAME = /^(describe-[A-Za-z0-9._-]{1,120}\.yaml|(conversation|exchange)-[A-Za-z0-9._-]{1,140}\.md)$/;
+const SCHEMAS = { describe: "harness-describe/1", conversation: "harness-conversation/1", exchange: "harness-exchange/1" };
 const MAX_BYTES = 1_000_000;
 const WORKFLOW = "harness-inbox.yml";
 
@@ -39,13 +40,14 @@ const INSTRUCTIONS_TOOL = {
 const TOOL = {
   name: "save_to_harness",
   description:
-    "Save one file to the user's harness (my-harness) inbox. file_name: describe-<time>.yaml " +
-    "or conversation-<started>-<title>.md, exactly as the harness skill says; content: the file. " +
+    "Save one file to the user's harness (my-harness) inbox. file_name: describe-<time>.yaml, " +
+    "conversation-<started>-<title>.md or exchange-<started>-<title>-<n>.md, exactly as the harness " +
+    "instructions say; content: the file. " +
     "Answers with what is wrong when the file does not match its form.",
   inputSchema: {
     type: "object",
     properties: {
-      file_name: { type: "string", description: "describe-<time>.yaml or conversation-<started>-<title>.md" },
+      file_name: { type: "string", description: "describe-<time>.yaml, conversation-<started>-<title>.md or exchange-<started>-<title>-<n>.md" },
       content: { type: "string", description: "The whole file, as the harness skill describes it." },
     },
     required: ["file_name", "content"],
@@ -123,11 +125,11 @@ async function instructions({ tool, profile }, env) {
 // The full form is checked by the engine; here only what makes a file unusable.
 function checkAtTheDoor(name, content) {
   if (typeof name !== "string" || !NAME.test(name)) {
-    return "file_name must be describe-<time>.yaml or conversation-<started>-<title>.md";
+    return "file_name must be describe-<time>.yaml, conversation-<started>-<title>.md or exchange-<started>-<title>-<n>.md";
   }
   if (typeof content !== "string" || !content.trim()) return "content is empty";
   if (new TextEncoder().encode(content).length > MAX_BYTES) return "content is larger than 1 MB";
-  const schema = name.startsWith("describe-") ? "harness-describe/1" : "harness-conversation/1";
+  const schema = SCHEMAS[name.split("-")[0]];
   if (!new RegExp(`^\\s*(---\\s*\\n)?schema:\\s*${schema.replace("/", "\\/")}\\s*$`, "m").test(content)) {
     return `the file must start with "schema: ${schema}" (see the harness skill)`;
   }

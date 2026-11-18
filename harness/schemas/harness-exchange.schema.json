@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/harness-exchange.schema.json",
+  "title": "harness-exchange/1",
+  "description": "Front matter of one exchange (the user's message and the reply, word for word), sent after a reply by a tool's harness skill.",
+  "type": "object",
+  "required": [
+    "schema",
+    "profile",
+    "tool",
+    "conversation",
+    "number"
+  ],
+  "properties": {
+    "schema": {
+      "const": "harness-exchange/1"
+    },
+    "profile": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The harness profile this tool account is (written into the skill)."
+    },
+    "tool": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The tool that wrote it, e.g. claude-ai, cowork, chatgpt."
+    },
+    "conversation": {
+      "type": "string",
+      "pattern": "^conversation-[A-Za-z0-9._-]+$",
+      "description": "The conversation's summary file name without .md (the same for every save of it)."
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The reply's number in the conversation (1, 2, 3...)."
+    },
+    "at": {
+      "type": [
+        "string",
+        "object"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "surface": {
+      "type": "string"
+    },
+    "project": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

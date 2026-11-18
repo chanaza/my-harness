@@ -30,6 +30,8 @@ OBSOLETE_SETTINGS: tuple[str, ...] = (
     "claude_ai.download_after_hours",
     "claude_ai.inbox_folder",
     "claude_ai.drive_folder",
+    # v0.19: a summary every N replies plus the latest exchange after every reply.
+    "connector.save_every",
 )
 
 
@@ -74,7 +76,8 @@ class ClaudeAiSettings:
 @dataclass(frozen=True)
 class ConnectorSettings:
     """The harness connector: tools without direct access save through it into inbox/."""
-    save_every: str = "reply"          # reply | meaningful | request
+    transcript: str = "exchange"       # exchange (the latest exchange after every reply) | off
+    summary_every_replies: int = 10    # a summary of the whole conversation every N replies
     run_every_minutes: int = 30        # how often the inbox is processed at most
 
 

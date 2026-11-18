@@ -67,7 +67,8 @@ account in your Downloads folder:
 2. Upload the skill file on claude.ai, signed in as that account.
 3. In Cowork (same account), type: `Set up harness-account`.
 
-Conversations are saved after every reply (setting `connector.save_every`), and
+After every reply the exchange is saved word for word, and every 10 replies a
+summary (settings `connector.transcript`, `connector.summary_every_replies`), and
 every day the account describes itself (instructions, memory, skills, projects,
 scheduled tasks...). Details:
 [adapters/claude-ai.md](adapters/claude-ai.md).

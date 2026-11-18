@@ -8,6 +8,11 @@ which drops one file per call into the repository's inbox:
                                      (schemas/harness-describe.schema.json)
   conversation-<time>-<title>.md .. a conversation's summary in the harness's sections
                                      (front matter: schemas/harness-conversation.schema.json)
+  exchange-<time>-<title>-<n>.md .. reply n of that conversation and the message before it,
+                                     word for word, appended to the conversation's log.md
+                                     (front matter: schemas/harness-exchange.schema.json)
+
+To continue a conversation anywhere: its summary.md plus log.md after it.
 
 The processor (run by `harness inbox`, e.g. from GitHub Actions) checks each file
 against its form, saves it like any other capture, and removes it from the inbox. A
@@ -33,7 +38,7 @@ from .documents import MarkdownDocument
 from .harvest import Captured, HarvestReport, HarvestSync, Kind
 from .local import LocalHome, StateFile
 from .profiles import ProfileError, ProfileRegistry
-from .provenance import Origin
+from .provenance import Origin, to_iso
 from .repo import ContentRepo
 from .sessions import SessionRecord
 from .text import slugify
@@ -42,6 +47,8 @@ DESCRIBE_PATTERN = "describe-*.yaml"
 #: describe-<time>-2of3.yaml: one part of a description that was too large for one file.
 PART = re.compile(r"^(describe-.+)-(\d+)of(\d+)\.yaml$")
 CONVERSATION_PATTERN = "conversation-*.md"
+EXCHANGE_PATTERN = "exchange-*.md"
+EXCHANGE_NUMBER = re.compile(r"-(\d+)\.md$")
 
 
 def _validator(name: str) -> Draft202012Validator:
@@ -75,7 +82,11 @@ class InboxProcessor:
     def pending(self) -> list[Path]:
         if not self.folder.is_dir():
             return []
-        return sorted(p for p in self.folder.iterdir() if p.is_file() and not p.name.startswith("."))
+        def order(path: Path) -> tuple[str, int]:   # exchanges in reply order, not name order
+            number = EXCHANGE_NUMBER.search(path.name)
+            return (EXCHANGE_NUMBER.sub("", path.name), int(number.group(1)) if number else 0)
+        return sorted((p for p in self.folder.iterdir() if p.is_file() and not p.name.startswith(".")),
+                      key=order)
 
     def run(self) -> HarvestReport:
         report = HarvestReport()
@@ -88,6 +99,8 @@ class InboxProcessor:
                     raise ValueError(f"profile {file.profile!r} is not registered in core/profiles.yaml")
                 if path.name.startswith("describe-"):
                     self._describe(file, known[file.profile].tool, report)
+                elif path.name.startswith("exchange-"):
+                    self._exchange(file, report)
                 else:
                     self._conversation(file, report)
                 for done in paths:
@@ -145,7 +158,13 @@ class InboxProcessor:
             meta = _plain(dict(document.meta))
             self._check(meta, "harness-conversation.schema.json")
             return InboxFile(path, meta, document.body)
-        raise ValueError("unknown kind of file (expected describe-*.yaml or conversation-*.md)")
+        if path.match(EXCHANGE_PATTERN):
+            document = MarkdownDocument.parse(path.read_text("utf-8"))
+            meta = _plain(dict(document.meta))
+            self._check(meta, "harness-exchange.schema.json")
+            return InboxFile(path, meta, document.body)
+        raise ValueError("unknown kind of file (expected describe-*.yaml, conversation-*.md "
+                         "or exchange-*.md)")
 
     @staticmethod
     def _check(data: Any, schema: str) -> None:
@@ -173,7 +192,7 @@ class InboxProcessor:
         data = file.data
         record = SessionRecord(self.repo, file.profile, file.path.stem)
         record.touch(topic=data.get("title"), surface=data.get("surface"),
-                     project=data.get("project") or None, activity_at=str(data.get("saved_at")))
+                     project=data.get("project") or None, activity_at=to_iso(data.get("saved_at")))
         recorder = CheckpointRecorder(self.local, self.repo, record)
         recorder.write(file.body, "saved through the harness connector")
         report.counts["conversations saved"] += 1
@@ -189,6 +208,33 @@ class InboxProcessor:
             shutil.move(str(path), str(self.folder / path.name))
             moved.append(path.name)
         return moved
+
+    def _exchange(self, file: InboxFile, report: HarvestReport) -> None:
+        """Keep one exchange as exchanges/<n>.md and rebuild log.md from all of them in reply
+        order: an exchange that arrives late still lands in its place, one sent twice is kept
+        once (the newest), and missing replies are marked so a gap is never silent."""
+        data = file.data
+        record = SessionRecord(self.repo, file.profile, data["conversation"])
+        number = int(data["number"])
+        when = f" · {data['at']}" if data.get("at") else ""
+        entry = record.folder / "exchanges" / f"{number:05d}.md"
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        entry.write_text(f"### Reply {number}{when}\n\n{file.body.strip()}\n", encoding="utf-8")
+        numbers = sorted(int(p.stem) for p in entry.parent.glob("*.md"))
+        parts = [f"# {data.get('title') or data['conversation']}\n\n"
+                 "Word for word, reply by reply (as sent by the tool's harness skill).\n"]
+        expected = 1
+        for n in numbers:
+            if n > expected:
+                parts.append(f"\n> Replies {expected}-{n - 1} were not received.\n" if n - 1 > expected
+                             else f"\n> Reply {expected} was not received.\n")
+            parts.append("\n---\n\n" + (entry.parent / f"{n:05d}.md").read_text("utf-8"))
+            expected = n + 1
+        (record.folder / "log.md").write_text("".join(parts), encoding="utf-8")
+        record.touch(activity_at=to_iso(data.get("at")), log_last=numbers[-1],
+                     **{k: v for k, v in (("topic", data.get("title")), ("surface", data.get("surface")),
+                                         ("project", data.get("project") or None)) if v})
+        report.counts["exchanges saved"] += 1
 
     def _reject(self, path: Path, reason: str) -> None:
         self.rejected.mkdir(parents=True, exist_ok=True)

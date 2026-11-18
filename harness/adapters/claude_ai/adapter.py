@@ -44,11 +44,11 @@ from .export import ClaudeAiExport, Conversation
 TOOL = "claude-ai"
 #: Skill names may not contain "claude" (reserved by claude.ai).
 SKILL_NAME = "harness-account"
-#: connector.save_every -> when the skill saves the conversation (said to the model).
-SAVE_WHEN = {
-    "reply": "after EVERY reply you give in a conversation (as the last step of the reply)",
-    "meaningful": "whenever something meaningful happened: a decision, a result, or a wrap-up",
-    "request": "only when the user asks (\"save to harness\", \"שמור להרנס\")",
+#: connector.transcript -> what the skill sends after every reply (said to the model).
+AFTER_EVERY_REPLY = {
+    "exchange": ("after EVERY reply you give, as its last step, send that exchange (exchange mode); "
+                 "and every ${EVERY} replies, a summary of the whole conversation (save mode)"),
+    "off": "every ${EVERY} replies, a summary of the whole conversation (save mode)",
 }
 
 
@@ -150,7 +150,9 @@ class ClaudeAiAdapter(AccountBoundAdapter):
         from ...digest import summary_request
         template = resources.files(__package__).joinpath("skill", "INSTRUCTIONS.md").read_text("utf-8")
         return Template(template).safe_substitute(
-            VERSION=__version__, TOOL=self.tool, SAVE_WHEN=SAVE_WHEN[config.connector.save_every],
+            VERSION=__version__, TOOL=self.tool,
+            AFTER_EVERY_REPLY=Template(AFTER_EVERY_REPLY[config.connector.transcript]).substitute(
+                EVERY=config.connector.summary_every_replies),
             SUMMARY_REQUEST=summary_request(config.checkpoints.summary_max_words, config.working_language))
 
     # --- what an export holds ----------------------------------------------------------------

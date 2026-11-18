@@ -70,7 +70,11 @@ it on claude.ai (signed in as that account), then in Cowork type
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `save_every` | `reply` | When the skill saves the conversation: `reply` (after every reply), `meaningful` (decisions, results, wrap-ups) or `request` (only when you ask). After a change: `python -m harness skill claude-ai` and upload the new file. |
+| `transcript` | `exchange` | After every reply the skill sends that exchange word for word (`off`: summaries only) |
+| `summary_every_replies` | `10` | A summary of the whole conversation every N replies |
+
+To continue a conversation anywhere: `sessions/<profile>/<conversation>/summary.md` plus
+`log.md` after it. Changes reach every account by themselves (no new upload).
 | `run_every_minutes` | `30` | How often, at most, the inbox is saved into place |
 
 ## Not locked in
