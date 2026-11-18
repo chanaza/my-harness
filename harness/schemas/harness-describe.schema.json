@@ -377,6 +377,10 @@
       "type": "string",
       "pattern": "^[0-9]+/[0-9]+$",
       "description": "This file's part, e.g. 2/3, when the description is split."
+    },
+    "partial": {
+      "type": "boolean",
+      "description": "true: describes only what is listed (e.g. one project, from inside it); nothing else is touched."
     }
   }
 }

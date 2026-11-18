@@ -372,6 +372,16 @@ def test_connector_inbox_is_saved_in_the_harness_form(connected: ClaudeAiAdapter
         "captured_at: 2026-11-20T06:00:00Z\npart: 2/2\nconnections:" + tail, encoding="utf-8")
     InboxProcessor(repo).run()
     assert not any(inbox.iterdir())                                            # both parts saved together
+    native_before = next(repo.path("native", "claude-ai-personal-cloud").rglob("account.yaml")).read_text()
+    (inbox / "describe-20261121-0900-project-briefs.yaml").write_text(
+        "schema: harness-describe/1\nprofile: claude-ai-personal-cloud\ntool: claude-ai\n"
+        "captured_at: 2026-11-21T09:00:00Z\npartial: true\nprojects:\n"
+        "  - name: Briefs\n    instructions: Short.\n    knowledge: [{path: tone.md, content: Warm.}]\n")
+    InboxProcessor(repo).run()
+    assert repo.path("core", "projects", "briefs", "knowledge", "tone.md").read_text() == "Warm."
+    native_after = next(repo.path("native", "claude-ai-personal-cloud").rglob("account.yaml")).read_text()
+    assert native_after == native_before
+    assert "id: gmail" in repo.path("core", "connections.yaml").read_text()   # a project run removes nothing
     from conftest import validate
     report = validate(repo)
     assert report.ok, report.problems                                          # the repository stays valid

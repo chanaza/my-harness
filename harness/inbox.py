@@ -159,7 +159,11 @@ class InboxProcessor:
         from fnmatch import fnmatch
         items = [i for i in describe_items(file, tool)
                  if not any(fnmatch(f"{i.kind.value}:{i.name}", p) for p in exclude)]
-        state = StateFile(self.repo.path("inbox", ".state", f"{file.profile}-describe.json"))
+        # A partial description (e.g. one project, from inside it) keeps its own records, so it
+        # neither removes nor replaces what the full daily description saved.
+        scope = "describe" if not file.data.get("partial") else \
+            "partial-" + slugify("-".join(p["name"] for p in file.data.get("projects") or []) or "items")
+        state = StateFile(self.repo.path("inbox", ".state", f"{file.profile}-{scope}.json"))
         part = HarvestSync(self.repo, state).run(items, Origin.now(file.profile, None))
         report.counts.update(part.counts)
         report.errors += part.errors
@@ -273,6 +277,8 @@ def describe_items(describe: InboxFile, tool: str) -> list[Captured]:
         items.append(Captured(Kind.APP, entry["name"], origin, _files(entry["files"]),
                               meta={"description": entry.get("description") or entry["name"],
                                     "fields": {"link": entry.get("link")} if entry.get("link") else {}}))
+    if data.get("partial"):   # only what is listed: the account's own file is left as it is
+        return items
     rest = {key: data[key] for key in ("user_profile", "native", "cannot_see", "surface") if data.get(key)}
     others = {key: [{"name": e["name"], "description": e.get("description"), "origin": e.get("origin")}
                     for e in data.get(key) or [] if e.get("origin") not in (None, "mine")]

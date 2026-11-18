@@ -19,7 +19,9 @@ Profile: ${PROFILE} (tool: ${TOOL}). File names use the current UTC time, e.g. 2
 **When to save the conversation:** ${SAVE_WHEN}. Each save sends the summary of
 the WHOLE conversation so far (the newest file replaces the earlier ones).
 
-**Which mode:** a scheduled task names it. "set up" = setup mode. Otherwise save mode.
+**Which mode:** a scheduled task names it. "set up" = setup mode. "save the project" =
+project mode. Otherwise save mode; and in a conversation inside a project, also run
+project mode once per conversation (projects can only be read from inside them).
 
 ## Setup mode (once per account)
 
@@ -87,6 +89,27 @@ native:                                # settings with no equivalent elsewhere (
   - {name: ..., value: ...}
 cannot_see: []                         # kinds you had no view of at all, e.g. [apps]
 ```
+
+## Project mode (inside a project)
+
+Send `describe-<time>-project-<short-name>.yaml` with ONLY this project, in full:
+
+```yaml
+schema: harness-describe/1
+profile: ${PROFILE}
+tool: ${TOOL}
+captured_at: 2026-11-19T06:00:00Z
+surface: claude-ai
+partial: true                          # only this project; nothing else is touched
+projects:
+  - name: <the project's name>
+    description: ...
+    instructions: "<the project's instructions, word for word>"
+    knowledge: [{path: <file name>, content: "<the file, word for word>"}]
+```
+
+Every knowledge file in full; a file you cannot read: leave it out and add
+`not_readable: <which files, why>` to the project.
 
 ## Save mode
 
