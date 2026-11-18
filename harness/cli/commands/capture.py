@@ -14,7 +14,7 @@ from ...checkpoints import CheckpointRecorder
 from ...git_sync import GitSync
 from ...local import LocalHome
 from ...memory import KINDS, MemoryStore
-from ...profiles import ProfileError, ProfileRegistry
+from ...profiles import ENVIRONMENTS, ProfileError, ProfileRegistry
 from ...provenance import Origin
 from ...sessions import SessionRecord
 from ..base import Command, ErrorExit
@@ -41,13 +41,15 @@ class ProfileAddCommand(Command):
     def configure(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument("tool", help="Tool id, e.g. claude-code, chatgpt.")
         parser.add_argument("label", help="Which account, in your words (no e-mail).")
-        parser.add_argument("--id", help="Profile id (default: <tool>-<label>).")
+        parser.add_argument("--environment", choices=ENVIRONMENTS, help="local or cloud.")
+        parser.add_argument("--id", help="Profile id (default: <tool>-<label>[-<environment>]).")
         parser.add_argument("--description")
         repo_argument(parser)
 
     def run(self, args: argparse.Namespace) -> int:
         try:
-            profile = ProfileRegistry(open_repo(args)).add(args.tool, args.label, args.description, args.id)
+            profile = ProfileRegistry(open_repo(args)).add(args.tool, args.label, args.description,
+                                                           args.id, args.environment)
         except ProfileError as exc:
             raise ErrorExit(str(exc)) from None
         print(f"Profile: {profile.id}")
@@ -63,14 +65,58 @@ class ProfileListCommand(Command):
 
     def run(self, args: argparse.Namespace) -> int:
         for profile in ProfileRegistry(open_repo(args)).all():
-            print(f"{profile.id:30} {profile.tool:14} {profile.label}")
+            print(f"{profile.id:34} {profile.tool:14} {profile.environment or '-':7} {profile.label}")
+        return 0
+
+
+class ProfileSetCommand(Command):
+    name = "set"
+    help = "Change a profile's label, environment or description."
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("profile")
+        parser.add_argument("--label")
+        parser.add_argument("--environment", choices=ENVIRONMENTS)
+        parser.add_argument("--description")
+        repo_argument(parser)
+
+    def run(self, args: argparse.Namespace) -> int:
+        try:
+            profile = ProfileRegistry(open_repo(args)).update(
+                args.profile, label=args.label, environment=args.environment, description=args.description)
+        except ProfileError as exc:
+            raise ErrorExit(str(exc)) from None
+        print(f"Profile {profile.id}: {profile.tool}, {profile.environment or '-'}, {profile.label}")
+        return 0
+
+
+class ProfileRenameCommand(Command):
+    name = "rename"
+    help = "Rename a profile everywhere (registry, folders, references, this machine's binding)."
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("old")
+        parser.add_argument("new")
+        repo_argument(parser)
+
+    def run(self, args: argparse.Namespace) -> int:
+        repo = open_repo(args)
+        try:
+            changes = ProfileRegistry(repo).rename(args.old, args.new)
+        except ProfileError as exc:
+            raise ErrorExit(str(exc)) from None
+        LocalHome().rename_profile(args.old, args.new)
+        for change in changes:
+            print(f"  ~ {change}")
+        GitSync(repo.root, repo.config.git).sync(f"rename profile {args.old} -> {args.new}", push=True)
+        print(f"Renamed {args.old} -> {args.new}")
         return 0
 
 
 class ProfileCommand(Command):
     name = "profile"
     help = "Manage profiles (a tool + an account)."
-    subcommands = (ProfileAddCommand, ProfileListCommand)
+    subcommands = (ProfileAddCommand, ProfileListCommand, ProfileSetCommand, ProfileRenameCommand)
 
     def run(self, args: argparse.Namespace) -> int:  # pragma: no cover - dispatch only
         raise NotImplementedError
@@ -87,6 +133,8 @@ class InstallCommand(Command):
         parser.add_argument("--profile", required=True, help="Profile id, e.g. claude-code-personal.")
         parser.add_argument("--label", help="Account label if the profile is new (default: from the id).")
         parser.add_argument("--repo", help="Content repository on this machine (remembered).")
+        parser.add_argument("--environment", choices=ENVIRONMENTS,
+                            help="Where this account's tool runs (recorded on a new profile).")
         parser.add_argument("--no-hooks", action="store_true",
                             help="Only bind the profile (for manual `harness harvest`), no hooks or skill.")
 
@@ -95,7 +143,7 @@ class InstallCommand(Command):
         label = args.label or args.profile.removeprefix(f"{args.tool}-")
         try:
             done = adapter.install(args.profile, label, Path(args.repo) if args.repo else None,
-                                   hooks=not args.no_hooks)
+                                   hooks=not args.no_hooks, environment=args.environment)
         except (HarnessNotConfigured, ProfileError) as exc:
             raise ErrorExit(str(exc)) from None
         for line in done:
@@ -181,10 +229,14 @@ class SessionCheckpointCommand(Command):
             recorder = CheckpointRecorder.current(local, repo, args.profile)
             if recorder is None:
                 raise ErrorExit(f"No current session for {args.profile}; pass --session.")
-        number = recorder.write(_read_stdin_text(), args.reason)
+        result = recorder.write(_read_stdin_text(), args.reason)
         GitSync(repo.root, repo.config.git).sync(
-            f"{args.profile}: checkpoint {number} of {recorder.session.id}", push=True)
-        print(f"Checkpoint {number} saved for {recorder.session.id}.")
+            f"{args.profile}: checkpoint {result.number} of {recorder.session.id}", push=True)
+        print(f"Checkpoint {result.number} saved for {recorder.session.id}.")
+        for path in result.digested:
+            print(f"  + {path}")
+        if result.transcript:
+            print(f"  + transcript: {result.transcript}")
         return 0
 
 

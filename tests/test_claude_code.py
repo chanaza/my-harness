@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-import pytest
-from conftest import validate
+from conftest import CC_PROFILE as PROFILE
+from conftest import event, validate, write_transcript
 
 from harness.adapters.claude_code import (
     HOOK_EVENTS,
@@ -15,70 +15,7 @@ from harness.adapters.claude_code import (
     TranscriptReader,
 )
 from harness.harvest import Kind
-from harness.local import LocalHome
 from harness.repo import ContentRepo
-
-PROFILE = "claude-code-personal"
-
-
-@pytest.fixture
-def claude(tmp_path: Path) -> ClaudeCodeLocations:
-    """A fake ~/.claude with one of everything."""
-    home = tmp_path / "claude-home"
-    (home / "skills" / "synced" / "bucket" / "deck-review" / "references").mkdir(parents=True)
-    (home / "skills" / "synced" / "bucket" / "deck-review" / "SKILL.md").write_text(
-        "---\nname: deck-review\ndescription: Review decks\nallowed-tools: Read\n---\n"
-        "# Deck review\nSteps.\n")
-    (home / "skills" / "synced" / "bucket" / "deck-review" / "references" / "style.md").write_text("Style")
-    (home / "commands").mkdir()
-    (home / "commands" / "standup.md").write_text("Write my standup.\n")
-    (home / "agents").mkdir()
-    (home / "agents" / "researcher.md").write_text(
-        "---\nname: researcher\ndescription: Finds sources\ntools: Read, WebSearch\nmodel: opus\n---\n"
-        "You research.\n")
-    (home / "CLAUDE.md").write_text("Always answer in Hebrew.\n")
-    (home / "projects" / "-home-me-app" / "memory").mkdir(parents=True)
-    (home / "projects" / "-home-me-app" / "memory" / "MEMORY.md").write_text("Uses Postgres.\n")
-    (home / "settings.json").write_text(json.dumps({"model": "opus", "env": {"TOKEN": "secret"}}))
-    (home / "plugins" / "synced" / "bucket" / "my-plugin").mkdir(parents=True)
-    (home / "plugins" / "synced" / "bucket" / "manifest.json").write_text("{}")
-    user_config = tmp_path / ".claude.json"
-    user_config.write_text(json.dumps({"mcpServers": {"monday": {
-        "type": "http", "url": "https://mcp.monday.com/sse", "headers": {"Authorization": "Bearer x"}}}}))
-    project = tmp_path / "app"
-    (project / ".claude").mkdir(parents=True)
-    (project / "CLAUDE.md").write_text("Project rules.\n")
-    return ClaudeCodeLocations(home, user_config, project)
-
-
-@pytest.fixture
-def adapter(repo: ContentRepo, claude: ClaudeCodeLocations, tmp_path: Path) -> ClaudeCodeAdapter:
-    local = LocalHome(tmp_path / "harness-home")
-    adapter = ClaudeCodeAdapter(local, claude)
-    adapter.install(PROFILE, "personal", repo.root)
-    return adapter
-
-
-def write_transcript(path: Path, prompts: int, tokens: int, compact: str | None = None) -> Path:
-    lines = []
-    for i in range(prompts):
-        lines.append({"type": "user", "message": {"role": "user", "content": f"question {i}"}})
-        lines.append({"type": "user", "message": {"role": "user", "content": [
-            {"type": "tool_result", "content": "ignored"}]}})
-        lines.append({"type": "assistant", "message": {"role": "assistant", "content": [
-            {"type": "text", "text": f"answer {i}"}], "usage": {
-            "input_tokens": 1, "cache_read_input_tokens": tokens - 1, "cache_creation_input_tokens": 0}}})
-    if compact:
-        lines.append({"type": "user", "isCompactSummary": True,
-                      "message": {"role": "user", "content": compact}})
-    path.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
-    return path
-
-
-def event(name: str, transcript: Path, project: Path, **extra) -> dict:
-    return {"hook_event_name": name, "session_id": "sess-1", "transcript_path": str(transcript),
-            "cwd": str(project), **extra}
-
 
 # --- transcript ------------------------------------------------------------------------
 

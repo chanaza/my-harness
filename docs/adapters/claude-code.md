@@ -24,7 +24,7 @@ Skip items with `harvest.exclude` in `harness.config.yaml`, e.g.
 |---|---|
 | SessionStart | Register the session, harvest, save the tool's compaction summary after a compaction |
 | UserPromptSubmit | Count the message toward the next checkpoint |
-| Stop | Harvest; live-log the exchange past `capture.live_log_threshold_percent`; request a checkpoint when due |
+| Stop | Harvest; rolling tail of the last exchanges; workspace state; live-log past `capture.live_log_threshold_percent`; request a structured checkpoint when due |
 | PreCompact | Copy the full transcript to transcript storage |
 | SessionEnd | Copy the transcript; commit and push |
 
@@ -41,7 +41,7 @@ Requires Python 3.11+ and Git.
 ```bash
 pip install git+https://github.com/chanaza/my-harness
 git clone https://github.com/<you>/<your-content-repo> <folder>
-python -m harness install claude-code --profile claude-code-personal --repo <folder>
+python -m harness install claude-code --profile claude-code-personal-local --environment local --repo <folder>
 ```
 
 Several accounts on one machine: run each with its own `CLAUDE_CONFIG_DIR`
@@ -51,6 +51,6 @@ which account is running from that folder.
 To capture without hooks (e.g. a temporary cloud session):
 
 ```bash
-python -m harness install claude-code --profile claude-code-personal --repo <folder> --no-hooks
+python -m harness install claude-code --profile claude-code-personal-cloud --environment cloud --repo <folder> --no-hooks
 python -m harness harvest claude-code
 ```

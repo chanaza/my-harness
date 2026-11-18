@@ -39,9 +39,14 @@ class ContentRepo:
         """Absolute path of a location inside the repository."""
         return self.root.joinpath(*parts)
 
-    def storage(self, name: str) -> Storage:
-        """The storage backend configured for ``name`` (e.g. 'transcripts')."""
-        return self._backends.create(self.config.storage_settings(name))
+    def storage(self, name: str, profile: str | None = None) -> Storage:
+        """The storage backend configured for ``name`` (e.g. 'transcripts'), for ``profile``.
+
+        Relative settings (a git backend's 'origin') resolve against this repository.
+        """
+        settings = self.config.storage_settings(name, profile)
+        settings.setdefault("content_repo", str(self.root))
+        return self._backends.create(settings)
 
     def __repr__(self) -> str:
         return f"ContentRepo({str(self.root)!r})"

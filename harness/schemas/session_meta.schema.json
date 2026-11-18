@@ -68,6 +68,38 @@
     "last_activity_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "workspace": {
+      "type": "array",
+      "description": "Git repositories the session worked in.",
+      "items": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "remote": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string"
+          },
+          "dirty": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "tail": {
+      "type": "string",
+      "description": "Key of the rolling tail in live-log storage."
     }
   },
   "additionalProperties": false

@@ -5,9 +5,11 @@ All thresholds come from the ``checkpoints`` section of harness.config.yaml.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 from .config import CheckpointSettings
+from .digest import SummaryDigest
 from .local import LocalHome
 from .repo import ContentRepo
 from .sessions import SessionRecord
@@ -51,6 +53,13 @@ class CheckpointPolicy:
         return CheckpointProgress(user_messages_since=0, percent_at_last=percent, forced_done=forced)
 
 
+@dataclass(frozen=True)
+class CheckpointResult:
+    number: int
+    digested: list[str] = field(default_factory=list)
+    transcript: str | None = None
+
+
 class CheckpointRecorder:
     """Keeps a session's checkpoint progress on this machine and writes checkpoints.
 
@@ -86,17 +95,26 @@ class CheckpointRecorder:
         progress.user_messages_since += 1
         self._save(progress)
 
-    def record_percent(self, percent: float | None) -> None:
+    def record_turn(self, percent: float | None, transcript: Path | None) -> None:
+        """Remember the latest usage and transcript location (used when a checkpoint is written)."""
         self.state.set("last_percent", percent)
+        if transcript:
+            self.state.set("transcript_path", str(transcript))
         self.state.save()
 
-    def write(self, text: str, reason: str) -> int:
-        """Store the summary as the next checkpoint and reset progress. Returns its number."""
+    def write(self, text: str, reason: str) -> CheckpointResult:
+        """Store the summary as the next checkpoint, digest its sections, save the transcript,
+        and reset progress."""
         progress = self.progress()
         percent = self.state.get("last_percent")
         number = self.session.write_summary(text, reason, percent, progress.user_messages_since)
+        digest = SummaryDigest(self.repo, self.session).apply(text)
+        transcript = None
+        if self.repo.config.capture.transcript_on_checkpoint and self.state.get("transcript_path"):
+            storage = self.repo.storage("transcripts", self.session.profile)
+            transcript = self.session.save_transcript(storage, Path(self.state.get("transcript_path")))
         self._save(CheckpointPolicy(self.repo.config.checkpoints).reset(progress, percent))
-        return number
+        return CheckpointResult(number, digest.written, transcript)
 
     def _save(self, progress: CheckpointProgress) -> None:
         self.state.set("progress", asdict(progress))

@@ -29,7 +29,7 @@ class Adapter(ABC):
 
     @abstractmethod
     def install(self, profile_id: str, label: str, repo_root: Path | None = None,
-                hooks: bool = True) -> list[str]:
+                hooks: bool = True, environment: str | None = None) -> list[str]:
         """Bind this machine's tool account to a profile (and, with ``hooks``, install
         automatic capture); return what was done."""
 

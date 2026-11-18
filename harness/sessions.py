@@ -14,6 +14,7 @@ from . import yaml_io
 from .documents import MarkdownDocument
 from .provenance import now_iso
 from .repo import ContentRepo
+from .storage import Storage
 
 SESSIONS_AREA = "sessions"
 _SAFE_ID = re.compile(r"[^A-Za-z0-9._-]+")
@@ -46,8 +47,22 @@ class SessionRecord:
     def live_log_key(self) -> str:
         return self.storage_key("live-log.md")
 
+    @property
+    def tail_key(self) -> str:
+        return self.storage_key("tail.md")
+
     def transcript_key(self, extension: str) -> str:
         return self.storage_key(f"transcript{extension}")
+
+    def save_transcript(self, storage: Storage, source: Path) -> str | None:
+        """Copy the tool's transcript file into transcript storage; returns its key."""
+        source = Path(source)
+        if not source.is_file():
+            return None
+        key = self.transcript_key(source.suffix)
+        storage.write_text(key, source.read_text("utf-8"))
+        self.touch(transcript=key)
+        return key
 
     # --- meta.yaml ------------------------------------------------------------
 

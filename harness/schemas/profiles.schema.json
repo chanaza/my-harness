@@ -37,6 +37,13 @@
           "added_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "environment": {
+            "enum": [
+              "local",
+              "cloud"
+            ],
+            "description": "Where this account's tool runs: on your computer (local) or in a cloud session (cloud)."
           }
         },
         "additionalProperties": false

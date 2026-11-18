@@ -5,8 +5,9 @@ Hook events and what they do:
   SessionStart      register the session; harvest; after a compaction, save the
                     tool's own compaction summary
   UserPromptSubmit  count the message toward the next checkpoint
-  Stop              harvest; live-log the exchange past the threshold; when a
-                    checkpoint is due, ask the model to refresh the summary
+  Stop              harvest; refresh the rolling tail and workspace state; live-log
+                    the exchange past the threshold; when a checkpoint is due, ask
+                    the model to refresh the structured summary
   PreCompact        copy the full transcript to transcript storage
   SessionEnd        copy the transcript; commit and push
 """
@@ -23,6 +24,7 @@ from typing import Any, TypeVar
 
 from ...checkpoints import CheckpointPolicy, CheckpointRecorder
 from ...config import HarnessConfig
+from ...digest import SECTIONS
 from ...git_sync import GitSync
 from ...harvest import Captured, HarvestReport, HarvestSync
 from ...local import LocalHome
@@ -30,6 +32,7 @@ from ...profiles import ProfileRegistry
 from ...provenance import Origin, now_iso
 from ...repo import ContentRepo
 from ...sessions import SessionRecord
+from ...workspace import WorkspaceScanner
 from ..base import Adapter, adapters
 from .harvester import TOOL, ClaudeCodeHarvester
 from .locations import ClaudeCodeLocations
@@ -97,13 +100,14 @@ class ClaudeCodeAdapter(Adapter):
     # --- installation ------------------------------------------------------------------
 
     def install(self, profile_id: str, label: str, repo_root: Path | None = None,
-                hooks: bool = True) -> list[str]:
+                hooks: bool = True, environment: str | None = None) -> list[str]:
         done: list[str] = []
         if repo_root:
             self.local.save_settings(content_repo=str(Path(repo_root).resolve()))
             done.append(f"content repository: {Path(repo_root).resolve()}")
         repo = self.repo()
-        profile = ProfileRegistry(repo).add(self.tool, label, profile_id=profile_id)
+        profile = ProfileRegistry(repo).add(self.tool, label, profile_id=profile_id,
+                                            environment=environment)
         done.append(f"profile: {profile.id}")
 
         settings = self.local.settings()
@@ -173,8 +177,10 @@ class _HookContext:
             return None  # the model is already answering our request; never loop
         report = self._safely("harvest", lambda: self.adapter.run_harvest(self.session.id))
         percent = self._percent()
+        self.recorder.record_turn(percent, self.transcript.path if self.transcript.path.is_file() else None)
+        self._safely("workspace", self._record_workspace)
+        self._safely("tail", self._write_tail)
         self._safely("live log", lambda: self._live_log(percent))
-        self.recorder.record_percent(percent)
         if report and report.changed:
             self._sync(f"harvest ({report.summary()})")
         reason = self.policy.due(self.recorder.progress(), percent)
@@ -222,26 +228,51 @@ class _HookContext:
         cut = capture.live_log_max_chars
         entry = (f"\n## {now_iso()} · {percent:.0f}%\n\n**User:** {exchange.prompt[:cut]}\n\n"
                  f"**Assistant:** {exchange.answer[:cut]}\n")
-        self.repo.storage("live_logs").append_text(self.session.live_log_key, entry)
+        self.repo.storage("live_logs", self.profile).append_text(self.session.live_log_key, entry)
         self.session.touch(live_log=self.session.live_log_key)
 
-    def _copy_transcript(self) -> None:
-        if not self.transcript.path.is_file():
+    def _write_tail(self) -> None:
+        count = self.config.capture.tail_exchanges
+        if not count:
             return
-        key = self.session.transcript_key(self.transcript.path.suffix)
-        self.repo.storage("transcripts").write_text(key, self.transcript.path.read_text("utf-8"))
-        self.session.touch(transcript=key)
+        exchanges = self.transcript.exchanges(last=count)
+        if not exchanges:
+            return
+        blocks = [f"## {i}\n\n**User:**\n\n{e.prompt}\n\n**Assistant:**\n\n{e.answer}\n"
+                  for i, e in enumerate(exchanges, 1)]
+        text = (f"# Last {len(exchanges)} exchanges of {self.session.native_id} ({now_iso()})\n\n"
+                + "\n".join(blocks))
+        storage = self.repo.storage("live_logs", self.profile)
+        if not storage.exists(self.session.tail_key) or storage.read_text(self.session.tail_key) != text:
+            storage.write_text(self.session.tail_key, text)
+            self.session.touch(tail=self.session.tail_key)
+
+    def _record_workspace(self) -> None:
+        project = self.adapter.locations.project_dir
+        if project:
+            repos = [r.to_dict() for r in WorkspaceScanner(project).scan()]
+            if repos and self.session.meta().get("workspace") != repos:
+                self.session.touch(workspace=repos)
+
+    def _copy_transcript(self) -> None:
+        self.session.save_transcript(self.repo.storage("transcripts", self.profile), self.transcript.path)
 
     def _checkpoint_request(self, reason: str) -> str:
         words = self.config.checkpoints.summary_max_words
-        python = sys.executable
+        sections = "\n".join(f"## {s}" for s in SECTIONS)
         return (
             f"[my-harness checkpoint: {reason}] Before finishing, refresh the user's harness summary "
-            f"of this WHOLE conversation (not only the latest part): goals, decisions and reasons, "
-            f"current state, open items, and what you learned about the user's preferences. "
-            f"At most {words} words, written in '{self.config.working_language}'. "
-            f"Run exactly this, with the summary in place of <summary>:\n\n"
-            f'"{python}" -m harness session checkpoint --profile {self.profile} '
+            f"of this WHOLE conversation (not only the latest part), so that a new session in any "
+            f"tool could continue from exactly this point. Use exactly these Markdown sections:\n\n"
+            f"{sections}\n\n"
+            f"'Open thread' = what is in progress right now and what you are waiting for from the "
+            f"user. 'Standing instructions' = rules the user gave that should apply to future work, "
+            f"in their words. 'Preferences learned' = how the user likes to work. 'Connections in "
+            f"use' = one line per connector/MCP server available to you here ('- name: purpose'), "
+            f"names only. Write 'None' in an empty section. At most {words} words, in "
+            f"'{self.config.working_language}'. Run exactly this, with the summary in place of "
+            f"<summary>:\n\n"
+            f'"{sys.executable}" -m harness session checkpoint --profile {self.profile} '
             f'--session {self.session.native_id} --reason "{reason}" <<\'HARNESS_EOF\'\n'
             f"<summary>\nHARNESS_EOF\n\n"
             f"Then end your turn. No need to report this to the user."

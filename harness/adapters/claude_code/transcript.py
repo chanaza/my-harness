@@ -65,16 +65,24 @@ class TranscriptReader:
                              ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
         return tokens
 
-    def last_exchange(self) -> Exchange | None:
+    def exchanges(self, last: int | None = None) -> list[Exchange]:
+        """User prompts with the assistant's final text answer, oldest first."""
+        found: list[Exchange] = []
         prompt, answer = None, ""
         for entry in self.entries():
             if self.is_user_prompt(entry):
+                if prompt is not None:
+                    found.append(Exchange(prompt, answer))
                 prompt, answer = self.text_of(entry), ""
             elif entry.get("type") == "assistant" and not entry.get("isSidechain"):
-                text = self.text_of(entry)
-                if text:
-                    answer = text
-        return Exchange(prompt, answer) if prompt is not None else None
+                answer = self.text_of(entry) or answer
+        if prompt is not None:
+            found.append(Exchange(prompt, answer))
+        return found[-last:] if last else found
+
+    def last_exchange(self) -> Exchange | None:
+        exchanges = self.exchanges(last=1)
+        return exchanges[0] if exchanges else None
 
     def latest_compact_summary(self) -> str | None:
         summary = None

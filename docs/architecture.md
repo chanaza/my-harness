@@ -51,6 +51,27 @@ messages, every N points of context growth, once at a forced threshold,
 and on every tool compaction. The tail after the last checkpoint is covered
 by the live log and the transcript.
 
+## Continuity: picking up exactly where a session stopped
+
+What is kept for every session, so a new session (same tool, another
+account, or another tool) can continue from the same point:
+
+| Piece | Where | Written by |
+|---|---|---|
+| Structured summary: Goal, Decisions, Current state, **Open thread**, Standing instructions, Preferences learned, Connections in use | `sessions/<profile>/<id>/summary.md` | The model, when a checkpoint hook asks |
+| Standing instructions | `core/instructions/<profile>/standing-instructions.md` | Digested from the summary |
+| Preferences | `memory/<profile>-preferences-<id>.md` | Digested from the summary |
+| Connections the model can use | `core/connections.yaml` | Digested from the summary |
+| Tool compaction summaries | `sessions/.../compactions/` | Hook after compaction |
+| Last N exchanges, verbatim | live-log storage `tail.md` | Stop hook, every turn |
+| Live log past the threshold | live-log storage `live-log.md` | Stop hook |
+| Full transcript | transcript storage | At checkpoints, compaction, session end |
+| Workspace: repositories, branch, commit | `meta.yaml` `workspace` | Stop hook |
+
+Storage can differ per profile (`storage_by_profile`): a cloud profile that
+cannot reach a local synced folder uses a `git` backend (a branch of the
+content repository by default).
+
 ## Provenance and conflicts
 
 `schemas/provenance.schema.json` is shared by every cross-session item:

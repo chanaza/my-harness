@@ -45,6 +45,21 @@ class LocalHome:
         value = os.environ.get(REPO_ENV) or self.settings().get("content_repo")
         return Path(value).expanduser() if value else None
 
+    def rename_profile(self, old: str, new: str) -> None:
+        """Re-point this machine's tool bindings and state from ``old`` to ``new``."""
+        settings = self.settings()
+        for bindings in (settings.get("profiles") or {}).values():
+            for key, value in list(bindings.items()):
+                if value == old:
+                    bindings[key] = new
+        if settings:
+            self.save_settings(**settings)
+        for area in ("sessions", "profiles", "harvest"):
+            for suffix in ("", ".json"):
+                source = self.root / "state" / area / f"{old}{suffix}"
+                if source.exists():
+                    source.rename(self.root / "state" / area / f"{new}{suffix}")
+
     def state(self, *parts: str) -> StateFile:
         return StateFile(self.root.joinpath("state", *parts).with_suffix(".json"))
 

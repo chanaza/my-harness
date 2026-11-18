@@ -19,6 +19,11 @@ capture:
   live_log_max_chars: 600
   # Context window size used to turn token counts into a usage percent.
   context_window_tokens: 200000
+  # Keep the last N exchanges word for word (overwritten every turn), so a new session
+  # can pick up exactly where this one stopped. 0 = off.
+  tail_exchanges: 10
+  # Also save the full transcript at every checkpoint (not only at compaction / session end).
+  transcript_on_checkpoint: true
 
 checkpoints:
   # A checkpoint refreshes the rolling session summary (sessions/<tool>/<id>/summary.md).
@@ -34,7 +39,7 @@ checkpoints:
   # Also save the tool's own compaction summary whenever it compacts the conversation.
   on_compaction: true
   # Upper bound the model is asked to keep the summary under.
-  summary_max_words: 400
+  summary_max_words: 600
 
 git:
   # Commit to this repository after every capture.
@@ -50,8 +55,10 @@ harvest:
   exclude: []
 
 storage:
-  # Transcripts and live logs never go into Git. They go to these backends.
-  # 'filesystem' + a cloud-synced folder (OneDrive, Google Drive) = cloud storage, no API keys.
+  # Transcripts and live logs never go into the main branch. They go to these backends:
+  #   filesystem: a folder; a cloud-synced one (OneDrive, Google Drive) = cloud storage, no API keys.
+  #   git: a branch of a repository (remote 'origin' = this repository), reachable from anywhere.
+  # A profile that cannot reach the default (e.g. a cloud session) gets its own under storage_by_profile.
   transcripts:
     backend: filesystem
     path: ~/harness-storage/transcripts

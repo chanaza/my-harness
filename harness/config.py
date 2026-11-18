@@ -25,6 +25,8 @@ class CaptureSettings:
     live_log_fallback_messages: int
     live_log_max_chars: int
     context_window_tokens: int
+    tail_exchanges: int = 10
+    transcript_on_checkpoint: bool = True
 
 
 @dataclass(frozen=True)
@@ -103,8 +105,14 @@ class HarnessConfig:
     def tools(self) -> list[str]:
         return list(self.data["tools"])
 
-    def storage_settings(self, name: str) -> dict[str, Any]:
-        """Settings of a named storage area, e.g. 'transcripts'."""
+    def storage_settings(self, name: str, profile: str | None = None) -> dict[str, Any]:
+        """Settings of a named storage area, e.g. 'transcripts'.
+
+        A ``storage_by_profile.<profile>.<name>`` block, when present, wins.
+        """
+        override = ((self.data.get("storage_by_profile") or {}).get(profile) or {}).get(name)
+        if override:
+            return dict(override)
         try:
             return dict(self.data["storage"][name])
         except KeyError:
@@ -182,7 +190,7 @@ class ConfigFile:
         document = self._open()
         for key, value in changes.items():
             try:
-                document.set(key, value)
+                document.set(key, value, create=True)
             except KeyError as exc:
                 raise ConfigError(f"Cannot set {key!r}: {exc}") from None
         self._validated(document.to_plain())

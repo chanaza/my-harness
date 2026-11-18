@@ -64,6 +64,15 @@
           "type": "integer",
           "minimum": 1,
           "description": "Context window size used to compute usage percent."
+        },
+        "tail_exchanges": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Keep the last N exchanges verbatim (rolling) so a new session can pick up the exact thread (0 = off)."
+        },
+        "transcript_on_checkpoint": {
+          "type": "boolean",
+          "description": "Also save the full transcript at every checkpoint."
         }
       },
       "additionalProperties": false
@@ -83,13 +92,22 @@
           "properties": {
             "backend": {
               "enum": [
-                "filesystem"
+                "filesystem",
+                "git"
               ],
               "description": "Storage implementation. New backends are added in harness/storage/."
             },
             "path": {
               "type": "string",
               "description": "Root folder. '~' and $VARS are expanded."
+            },
+            "remote": {
+              "type": "string",
+              "description": "git backend: remote URL, or 'origin' for this repository's own remote."
+            },
+            "branch": {
+              "type": "string",
+              "description": "git backend: branch holding the documents."
             }
           },
           "additionalProperties": true
@@ -257,6 +275,41 @@
         }
       },
       "additionalProperties": false
+    },
+    "storage_by_profile": {
+      "type": "object",
+      "description": "Per-profile storage, overriding `storage` (e.g. a cloud profile that cannot reach a local folder).",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "required": [
+            "backend"
+          ],
+          "properties": {
+            "backend": {
+              "enum": [
+                "filesystem",
+                "git"
+              ],
+              "description": "Storage implementation. New backends are added in harness/storage/."
+            },
+            "path": {
+              "type": "string",
+              "description": "Root folder. '~' and $VARS are expanded."
+            },
+            "remote": {
+              "type": "string",
+              "description": "git backend: remote URL, or 'origin' for this repository's own remote."
+            },
+            "branch": {
+              "type": "string",
+              "description": "git backend: branch holding the documents."
+            }
+          },
+          "additionalProperties": true
+        }
+      }
     }
   },
   "additionalProperties": false

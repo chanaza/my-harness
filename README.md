@@ -61,15 +61,18 @@ are marked with ★.
 | `ContentRepo` | `harness/repo.py` | Entry point: a content repo with its layout, config and storage |
 | `ConfigFile`, `HarnessConfig` | `harness/config.py` | Read / change / upgrade harness.config.yaml (validated) |
 | `SchemaRegistry` | `harness/schemas/registry.py` | All JSON Schemas, cross-references resolved |
-| `Profile`, `ProfileRegistry` | `harness/profiles.py` | Tool + account identities every origin refers to |
+| `Profile`, `ProfileRegistry` | `harness/profiles.py` | Tool + account + environment (local/cloud) identities; rename |
 | `Origin`, `Provenance` | `harness/provenance.py` | Who created and changed each item |
 | `SessionRecord` | `harness/sessions.py` | One conversation: meta, rolling summary, compactions |
-| `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it |
+| `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it (+ transcript) |
+| `SummaryDigest` | `harness/digest.py` | Structured summary sections -> instructions, memory, connections |
+| `WorkspaceScanner` | `harness/workspace.py` | Repositories, branches and commits a session works in |
 | `MemoryStore` | `harness/memory.py` | Memory entries with conflict tracking |
 | `Captured`, `HarvestSync`, `ItemWriter` ★ | `harness/harvest/` | Turning what a tool holds into harness content |
 | `Adapter` ★, `AdapterRegistry` | `harness/adapters/` | One class per tool: harvest, hooks, install |
 | `ClaudeCodeAdapter` | `harness/adapters/claude_code/` | Claude Code ([docs](docs/adapters/claude-code.md)) |
-| `Storage` ★, `BackendRegistry` | `harness/storage/` | Storage for transcripts and live logs |
+| `Storage` ★, `BackendRegistry` | `harness/storage/` | Storage for transcripts and live logs (per profile) |
+| `FilesystemStorage`, `GitStorage` | `harness/storage/` | A (synced) folder, or a branch of a Git repository |
 | `GitSync` | `harness/git_sync.py` | Commit / push after captures |
 | `LocalHome` | `harness/local.py` | Per-machine settings and state (`~/.my-harness`) |
 | `RepoValidator`, `Check` ★, `FileReader` ★ | `harness/validation/` | Configurable checks over a content repo |
