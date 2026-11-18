@@ -16,8 +16,9 @@ your skill in claude.ai / Cowork  ->  harness connector  ->  inbox/connector/ in
 - **In the repository** GitHub Actions runs the engine (`harness inbox`): every
   file is checked against its full form and saved like any other capture. A file
   that does not match goes to `inbox/rejected/` with the reason next to it.
-- **How often:** at most every `connector.run_every_minutes` (default 30); files
-  that arrive meanwhile wait for the next run, and a daily run picks up the rest.
+- **How often:** at most every `connector.run_every_minutes` (default 30). Files that
+  arrive meanwhile wait; the connector checks every 5 minutes and starts the next run
+  as soon as it is allowed.
 
 ## Set it up (once, about 15 minutes)
 
@@ -42,7 +43,9 @@ On github.com: your picture > **Settings** > **Developer settings** >
    - `GITHUB_TOKEN` (Secret): the key from step 1
    - `SECRET_PATH` (Secret): a long random text, e.g. 40 letters and digits
      typed at random. It is part of the connector's address: keep it private.
-5. The connector's address is `https://harness-connector.<your-name>.workers.dev/mcp/<SECRET_PATH>`
+5. **Settings** > **Triggers** > **Cron Triggers** > **Add**: `*/5 * * * *` (every 5
+   minutes it checks whether files wait in the inbox; free).
+6. The connector's address is `https://harness-connector.<your-name>.workers.dev/mcp/<SECRET_PATH>`
    (the first part is shown on the Worker's page).
 
 ### 3. Add it to your Claude account

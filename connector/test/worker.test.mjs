@@ -9,6 +9,7 @@ globalThis.fetch = async (url, init = {}) => {
   calls.push({ url, method: init.method, body: init.body && JSON.parse(init.body) });
   if (url.includes("harness.config.yaml")) return new Response("connector:\n  save_every: reply\n  run_every_minutes: 45\n");
   if (url.includes("/runs?")) return Response.json({ workflow_runs: [] });
+  if (url.includes("contents/inbox/connector?")) return Response.json(globalThis.inbox || []);
   if (init.method === "GET") return new Response("{}", { status: 404 });
   return new Response("{}", { status: 201 });
 };
@@ -44,4 +45,18 @@ test("bad files are refused with the reason", async () => {
   assert.match((await save("describe-1.yaml", "free text")).content[0].text, /schema: harness-describe\/1/);
   const secret = GOOD + "token ghp_abcdefghijklmnop1234\n";
   assert.match((await save("conversation-1-x.md", secret)).content[0].text, /secret/);
+});
+
+test("the cron trigger starts a run only when files wait", async () => {
+  const run = async () => {
+    calls.length = 0;
+    const waits = [];
+    await worker.scheduled({}, env, { waitUntil: (p) => waits.push(p) });
+    await Promise.all(waits);
+    return calls.some((c) => c.method === "POST" && c.url.endsWith("/dispatches"));
+  };
+  globalThis.inbox = [];
+  assert.equal(await run(), false);
+  globalThis.inbox = [{ type: "file", name: "describe-1.yaml" }];
+  assert.equal(await run(), true);
 });

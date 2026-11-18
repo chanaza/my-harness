@@ -3,7 +3,8 @@
 // Tools that cannot write to the harness directly (claude.ai, Cowork, ...) call it from
 // their harness skill. It checks the file at the door, writes it to inbox/connector/ in
 // the harness repository, and starts the "harness inbox" GitHub Actions run at most every
-// connector.run_every_minutes (read from harness.config.yaml). Nothing is stored here.
+// connector.run_every_minutes (read from harness.config.yaml); a Cron Trigger checks every few
+// minutes for files still waiting. Nothing is stored here.
 //
 // Standard web code (a fetch handler): runs on Cloudflare Workers, Deno Deploy, Vercel
 // edge functions or any server with fetch. Settings (never in code):
@@ -33,6 +34,12 @@ const TOOL = {
 };
 
 export default {
+  // Every few minutes (a Cron Trigger, e.g. */5 * * * *): files waiting in the inbox are
+  // saved into place once connector.run_every_minutes has passed since the last run.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(startInboxRunIfWaiting(env, env.BRANCH || "main"));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     if (!env.SECRET_PATH || url.pathname !== `/mcp/${env.SECRET_PATH}`) {
@@ -108,6 +115,13 @@ async function startInboxRun(env, branch) {
     if (latest && Date.now() - Date.parse(latest.created_at) < minutes * 60_000) return;
   }
   await github(env, "POST", `actions/workflows/${WORKFLOW}/dispatches`, { ref: branch });
+}
+
+async function startInboxRunIfWaiting(env, branch) {
+  const listing = await github(env, "GET", `contents/inbox/connector?ref=${branch}`);
+  if (!listing.ok) return; // no inbox folder: nothing waits
+  const waiting = (await listing.json()).filter((f) => f.type === "file" && !f.name.startsWith("."));
+  if (waiting.length) await startInboxRun(env, branch);
 }
 
 async function runEveryMinutes(env, branch) {
