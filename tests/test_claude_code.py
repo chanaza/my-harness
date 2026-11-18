@@ -318,3 +318,15 @@ def test_sync_rebases_onto_another_machines_push(tmp_path: Path):
     files = subprocess.run(["git", "ls-tree", "--name-only", "main"], cwd=remote,
                            capture_output=True, text=True)
     assert files.stdout.split() == ["a.txt", "b.txt"]
+
+
+def test_plugins_are_kept_whole_unless_excluded(adapter: ClaudeCodeAdapter, repo: ContentRepo):
+    adapter.run_harvest()
+    plugin = repo.path("core", "plugins", "my-plugin")
+    assert (plugin / "skills" / "report" / "SKILL.md").read_text().endswith("Steps.\n")
+    assert "profile: claude-code-personal" in (plugin / "plugin.yaml").read_text()
+    assert validate(repo).ok, validate(repo).problems
+
+    repo.config_file.update({"harvest.exclude": ["plugin:my-plugin"]})
+    assert adapter.prune_harvest() == ["core/plugins/my-plugin"]
+    assert "my-plugin" in repo.path("core", "connections.yaml").read_text()  # still listed to install

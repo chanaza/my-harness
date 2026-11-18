@@ -27,6 +27,7 @@ class RepoValidator:
             SchemaCheck("core/skills/*/SKILL.md", "skill", frontmatter),
             SchemaCheck("core/agents/*.yaml", "agent"),
             SchemaCheck("core/workflows/*.yaml", "workflow"),
+            SchemaCheck("core/plugins/*/plugin.yaml", "plugin"),
             SchemaCheck("memory/**/*.md", "memory", frontmatter),
             SchemaCheck("apps/*/app.yaml", "app"),
             SchemaCheck("apps/*/schema/*.yaml", "table"),

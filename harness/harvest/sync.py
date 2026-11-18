@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .. import yaml_io
 from ..documents import MarkdownDocument
 from ..local import StateFile
 from ..provenance import Origin, Provenance
@@ -41,7 +42,7 @@ class HarvestSync:
     STATE_KEY = "fingerprints"
     WRITTEN_KEY = "written"
     #: Kinds whose written path can be removed on its own (connections share one file).
-    PRUNABLE = (Kind.SKILL, Kind.AGENT, Kind.INSTRUCTION, Kind.NATIVE, Kind.MEMORY)
+    PRUNABLE = (Kind.SKILL, Kind.AGENT, Kind.INSTRUCTION, Kind.NATIVE, Kind.MEMORY, Kind.PLUGIN)
     #: Kinds that mirror the tool: when the tool no longer has the item, neither does the harness.
     #: (Knowledge such as skills and memory is never deleted just because the tool dropped it.)
     MIRRORED = (Kind.NATIVE, Kind.CONNECTION)
@@ -126,11 +127,15 @@ class HarvestSync:
     def _owned_path(self, kind: Kind, path: Path) -> str:
         """The file or folder an item occupies (a skill owns its whole folder; a native item
         its entry, as reported by the writer)."""
-        target = path.parent if kind is Kind.SKILL else path
+        target = path.parent if kind in (Kind.SKILL, Kind.PLUGIN) else path
         return target.relative_to(self.repo.root).as_posix()
 
     @staticmethod
     def _last_profile(target: Path) -> str | None:
+        """Who last changed a harvested item (its SKILL.md / plugin.yaml / .md file)."""
+        if target.is_dir() and (target / "plugin.yaml").is_file():
+            data = yaml_io.load((target / "plugin.yaml").read_text("utf-8")) or {}
+            return Provenance.last_profile(data.get("provenance"))
         main = target / "SKILL.md" if target.is_dir() else target
         if not main.is_file() or main.suffix != ".md":
             return None

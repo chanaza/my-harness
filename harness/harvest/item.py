@@ -14,6 +14,7 @@ class Kind(StrEnum):
     AGENT = "agent"               # a sub-agent definition
     MEMORY = "memory"             # a memory document
     CONNECTION = "connection"     # an MCP server or plugin (names only, never secrets)
+    PLUGIN = "plugin"             # a whole plugin the user built (its skills, agents, commands)
     NATIVE = "native"             # tool-specific settings with no portable equivalent
 
 

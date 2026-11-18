@@ -227,6 +227,37 @@ class ConnectionWriter(ItemWriter):
         path.write_text(yaml_io.dump({"connections": connections}), encoding="utf-8")
 
 
+class PluginWriter(ItemWriter):
+    """A plugin the user built -> core/plugins/<name>/ (its files as-is) + plugin.yaml (provenance)."""
+
+    kind = Kind.PLUGIN
+    DESCRIPTOR = "plugin.yaml"
+
+    def location(self, name: str, scope: str, profile: str) -> Path | None:
+        return self.repo.path("core", "plugins", slugify(name))
+
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        folder = self.location(item.name, item.scope, origin.profile)
+        descriptor = folder / self.DESCRIPTOR
+        existing = yaml_io.load(descriptor.read_text("utf-8")) if descriptor.is_file() else None
+        conflict = bool(existing) and self._conflicting(existing.get("provenance"), origin)
+        if conflict:
+            folder = self._conflict_path(folder, origin)
+            descriptor = folder / self.DESCRIPTOR
+        elif folder.is_dir():
+            shutil.rmtree(folder)  # the plugin as it is now; Git keeps every earlier version
+        for relative, content in item.files.items():
+            path = folder.joinpath(*relative.split("/"))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        previous = None if conflict or not existing else existing.get("provenance")
+        descriptor.write_text(yaml_io.dump({
+            "name": slugify(item.name), "description": item.meta.get("description", item.name),
+            "origin": item.origin, "provenance": Provenance.updated(previous, origin),
+        }), encoding="utf-8")
+        return WriteResult("conflict" if conflict else ("updated" if existing else "created"), descriptor)
+
+
 class NativeWriter(ItemWriter):
     """Tool-specific files kept as-is (secrets already removed) -> native/<profile>/<scope>/...
 
@@ -258,7 +289,8 @@ class NativeWriter(ItemWriter):
 
 
 DEFAULT_WRITERS: tuple[type[ItemWriter], ...] = (
-    InstructionWriter, SkillWriter, AgentWriter, MemoryWriter, ConnectionWriter, NativeWriter,
+    InstructionWriter, SkillWriter, AgentWriter, MemoryWriter, ConnectionWriter, PluginWriter,
+    NativeWriter,
 )
 
 

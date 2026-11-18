@@ -7,7 +7,7 @@ Sources, global (config dir) and per project:
   agents/*.md .................... agents
   projects/*/memory/**/*.md ...... memory (Claude Code's own memory files)
   .claude.json / .mcp.json ....... MCP connections (names, type, executable or host only)
-  plugins/ ....................... plugin connections
+  plugins/ ....................... plugin connections, and the plugins themselves (whole)
   settings.json, output-styles/ .. native (secrets removed)
 """
 
@@ -81,10 +81,7 @@ class ClaudeCodeHarvester:
                 if _in_hidden_folder(main, skills):
                     continue  # e.g. skills/.trash: deleted skills are not the user's skills
                 folder = main.parent
-                files = {p.relative_to(folder).as_posix(): p.read_bytes()
-                         for p in sorted(folder.rglob("*"))
-                         if p.is_file() and p.stat().st_size <= MAX_FILE_BYTES}
-                yield Captured(Kind.SKILL, folder.name, str(folder), files, scope=scope)
+                yield Captured(Kind.SKILL, folder.name, str(folder), _folder_files(folder), scope=scope)
 
     def _commands(self) -> Iterator[Captured]:
         for scope, base in self._scopes():
@@ -141,8 +138,17 @@ class ClaudeCodeHarvester:
                     description = plugin.get("description") or f"Plugin '{plugin['name']}'"
                     found.setdefault(plugin["name"], (str(manifest), description))
         for name, (origin, description) in sorted(found.items()):
+            # The plugin as a connection: what to install in another tool.
             yield Captured(Kind.CONNECTION, name, origin, meta={
                 "tool": TOOL, "kind": "plugin", "description": description})
+        # The plugin's content, so plugins you built are kept whole. Plugins you did not
+        # build (e.g. Anthropic's) are skipped with harvest.exclude 'plugin:<name>'.
+        for manifest in plugins_dir.glob("*/*/manifest.json") if plugins_dir.is_dir() else []:
+            for plugin in _read_json(manifest).get("plugins") or []:
+                folder = manifest.parent / str((plugin or {}).get("name", ""))
+                if isinstance(plugin, dict) and plugin.get("name") and folder.is_dir():
+                    yield Captured(Kind.PLUGIN, plugin["name"], str(folder), _folder_files(folder),
+                                   meta={"description": plugin.get("description") or plugin["name"]})
 
     def _native(self) -> Iterator[Captured]:
         for scope, base in self._scopes():
@@ -158,6 +164,12 @@ class ClaudeCodeHarvester:
                 files = {f"output-styles/{p.name}": p.read_bytes() for p in sorted(styles.glob("*.md"))}
                 if files:
                     yield Captured(Kind.NATIVE, "output-styles", str(styles), files, scope=scope)
+
+
+def _folder_files(folder: Path) -> dict[str, bytes]:
+    """Every file of a folder (relative path -> bytes), skipping hidden folders and huge files."""
+    return {p.relative_to(folder).as_posix(): p.read_bytes() for p in sorted(folder.rglob("*"))
+            if p.is_file() and p.stat().st_size <= MAX_FILE_BYTES and not _in_hidden_folder(p, folder)}
 
 
 def _in_hidden_folder(path: Path, root: Path) -> bool:

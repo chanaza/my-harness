@@ -55,7 +55,9 @@ def claude(tmp_path: Path) -> ClaudeCodeLocations:
     (home / "projects" / "-home-me-app" / "memory").mkdir(parents=True)
     (home / "projects" / "-home-me-app" / "memory" / "MEMORY.md").write_text("Uses Postgres.\n")
     (home / "settings.json").write_text(json.dumps({"model": "opus", "env": {"TOKEN": "secret"}}))
-    (home / "plugins" / "synced" / "bucket" / "my-plugin").mkdir(parents=True)
+    (home / "plugins" / "synced" / "bucket" / "my-plugin" / "skills" / "report").mkdir(parents=True)
+    (home / "plugins" / "synced" / "bucket" / "my-plugin" / "skills" / "report" / "SKILL.md").write_text(
+        "---\nname: report\ndescription: Weekly report\n---\nSteps.\n")
     (home / "plugins" / "synced" / "bucket" / ".staging").mkdir()  # internal folders, not plugins
     (home / "plugins" / "synced" / "bucket" / "data").mkdir()
     (home / "plugins" / "synced" / "bucket" / "manifest.json").write_text(
