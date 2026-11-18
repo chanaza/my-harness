@@ -1,7 +1,7 @@
 """Session records: everything about one conversation, tied together by its id.
 
-In Git:      sessions/<profile>/<session-id>/{meta.yaml, summary.md, compactions/NNN.md}
-In storage:  <profile>/<session-id>/transcript.*   and   <profile>/<session-id>/live-log.md
+In Git:      sessions/<profile>/<session-id>/{meta.yaml, summary.md}
+In storage:  <profile>/<session-id>/transcript.*
 """
 
 from __future__ import annotations
@@ -43,25 +43,20 @@ class SessionRecord:
     def storage_key(self, name: str) -> str:
         return f"{self.profile}/{self.id}/{name}"
 
-    @property
-    def live_log_key(self) -> str:
-        return self.storage_key("live-log.md")
-
-    @property
-    def tail_key(self) -> str:
-        return self.storage_key("tail.md")
-
     def transcript_key(self, extension: str) -> str:
         return self.storage_key(f"transcript{extension}")
 
     def save_transcript(self, storage: Storage, source: Path) -> str | None:
-        """Copy the tool's transcript file into transcript storage; returns its key."""
+        """Copy the tool's transcript into transcript storage (skipped when unchanged)."""
         source = Path(source)
         if not source.is_file():
             return None
         key = self.transcript_key(source.suffix)
-        storage.write_text(key, source.read_text("utf-8"))
-        self.touch(transcript=key)
+        text = source.read_text("utf-8")
+        if not storage.exists(key) or storage.read_text(key) != text:
+            storage.write_text(key, text)
+        if self.meta().get("transcript") != key:
+            self.touch(transcript=key)
         return key
 
     # --- meta.yaml ------------------------------------------------------------
@@ -111,20 +106,3 @@ class SessionRecord:
         MarkdownDocument(meta, text.strip() + "\n").write(self.summary_path)
         self.touch()
         return number
-
-    @property
-    def compactions_dir(self) -> Path:
-        return self.folder / "compactions"
-
-    def add_compaction(self, text: str, source: str = "tool-compaction",
-                       context_percent: float | None = None) -> Path:
-        """Store a compaction summary as the next numbered file."""
-        self.compactions_dir.mkdir(parents=True, exist_ok=True)
-        index = len(list(self.compactions_dir.glob("*.md"))) + 1
-        meta: dict[str, Any] = {"session": self.id, "index": index, "at": now_iso(), "source": source}
-        if context_percent is not None:
-            meta["context_percent"] = round(context_percent, 1)
-        path = self.compactions_dir / f"{index:03d}.md"
-        MarkdownDocument(meta, text.strip() + "\n").write(path)
-        self.touch()
-        return path

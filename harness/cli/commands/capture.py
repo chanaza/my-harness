@@ -239,8 +239,6 @@ class SessionCheckpointCommand(Command):
         print(f"Checkpoint {result.number} saved for {recorder.session.id}.")
         for path in result.digested:
             print(f"  + {path}")
-        if result.transcript:
-            print(f"  + transcript: {result.transcript}")
         return 0
 
 

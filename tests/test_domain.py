@@ -69,14 +69,12 @@ def test_memory_conflict_between_profiles_keeps_both(repo: ContentRepo):
 
 # --- sessions ----------------------------------------------------------------------------
 
-def test_session_summary_and_compactions(repo: ContentRepo):
+def test_session_summary(repo: ContentRepo):
     session = SessionRecord(repo, PROFILE, "abc:123")
     assert session.id == "abc-123"
     assert session.write_summary("First", "test") == 1
     assert session.write_summary("Second", "test", 42.0, 7) == 2
     assert session.summary().body.strip() == "Second"
-    assert session.add_compaction("Compacted").name == "001.md"
-    assert session.add_compaction("Again").name == "002.md"
     assert session.meta()["native_id"] == "abc:123"
     assert validate(repo).ok
 
@@ -101,6 +99,14 @@ def test_checkpoint_triggers_can_be_turned_off():
     assert policy.due(CheckpointProgress(user_messages_since=99), 99.0) is None
     disabled = CheckpointPolicy(settings(enabled=False))
     assert disabled.due(CheckpointProgress(user_messages_since=99), None) is None
+
+
+def test_compaction_makes_a_checkpoint_due():
+    policy = CheckpointPolicy(settings())
+    assert "compacted" in policy.due(CheckpointProgress(compacted=True), 5.0)
+    assert policy.reset(CheckpointProgress(compacted=True), 5.0).compacted is False
+    ignoring = CheckpointPolicy(settings(on_compaction=False))
+    assert ignoring.due(CheckpointProgress(compacted=True), 5.0) is None
 
 
 def test_checkpoint_reset_marks_forced():

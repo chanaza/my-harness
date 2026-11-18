@@ -66,3 +66,21 @@ def _without_credentials(url: str) -> str:
     if parsed.username or parsed.password:
         return urlunparse(parsed._replace(netloc=parsed.hostname or ""))
     return url
+
+
+def merge_workspace(known: list[dict], found: list[dict]) -> list[dict]:
+    """Union of repositories seen during a session; the latest state of each wins.
+
+    A repository is identified by its remote (or its path when it has none), so
+    scanning from a different folder never drops repositories seen earlier.
+    """
+    def identity(repo: dict) -> str:
+        return repo.get("remote") or repo["path"]
+
+    merged = {identity(r): r for r in known}
+    for repo in found:
+        previous = merged.get(identity(repo))
+        if previous and repo["path"] == "." and previous["path"] != ".":
+            repo = {**repo, "path": previous["path"]}  # keep the more descriptive name
+        merged[identity(repo)] = repo
+    return sorted(merged.values(), key=lambda r: r["path"])

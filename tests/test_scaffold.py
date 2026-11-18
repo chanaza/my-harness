@@ -18,7 +18,7 @@ def test_init_applies_options(repo: ContentRepo):
     config = repo.config
     assert config.data["owner"] == "Test"
     assert config.working_language == "en"
-    assert config.live_log_threshold_percent == 80
+    assert config.checkpoints.force_at_context_percent == 80
     assert config.storage_settings("transcripts")["path"].endswith("transcripts")
 
 

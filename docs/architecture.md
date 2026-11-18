@@ -29,7 +29,7 @@ rewrite your rules.
 
 A session id ties everything about one conversation together:
 `sessions/<tool>/<id>/` in Git, and the same `<tool>/<id>/` key in
-transcript and live-log storage. Tools with a native conversation id keep
+transcript storage. Tools with a native conversation id keep
 it in `meta.yaml` as `native_id`; otherwise the adapter generates one
 (`YYYYMMDD-HHMM-<tool>-<topic>`) and keeps reusing it during the conversation.
 
@@ -48,29 +48,37 @@ Conversations have no reliable end, so the summary of a session is kept
 current instead: a checkpoint replaces `summary.md` (Git keeps every
 version) when any trigger under `checkpoints:` fires: every N user
 messages, every N points of context growth, once at a forced threshold,
-and on every tool compaction. The tail after the last checkpoint is covered
-by the live log and the transcript.
+and after every tool compaction. What happened after the last checkpoint
+is in the transcript, which is saved every turn.
 
 ## Continuity: picking up exactly where a session stopped
 
-What is kept for every session, so a new session (same tool, another
-account, or another tool) can continue from the same point:
+Each session keeps exactly three things:
 
 | Piece | Where | Written by |
 |---|---|---|
-| Structured summary: Goal, Decisions, Current state, **Open thread**, Standing instructions, Preferences learned, Connections in use | `sessions/<profile>/<id>/summary.md` | The model, when a checkpoint hook asks |
-| Standing instructions | `core/instructions/<profile>/standing-instructions.md` | Digested from the summary |
-| Preferences | `memory/<profile>-preferences-<id>.md` | Digested from the summary |
-| Connections the model can use | `core/connections.yaml` | Digested from the summary |
-| Tool compaction summaries | `sessions/.../compactions/` | Hook after compaction |
-| Last N exchanges, verbatim | live-log storage `tail.md` | Stop hook, every turn |
-| Live log past the threshold | live-log storage `live-log.md` | Stop hook |
-| Full transcript | transcript storage | At checkpoints, compaction, session end |
-| Workspace: repositories, branch, commit | `meta.yaml` `workspace` | Stop hook |
+| `meta.yaml`: ids, times, workspace (repositories, branch, commit) | Git | Hooks, every turn |
+| `summary.md`: Goal, Decisions, Current state, **Open thread** | Git (history keeps every version) | The model, when a checkpoint hook asks |
+| Full transcript | Transcript storage | Hooks, every turn |
+
+Anything else a later session needs (recent exchanges word for word, the
+tool's compaction summaries) is derived from the transcript at load time,
+not stored twice.
+
+A checkpoint also carries three cross-session sections that are written
+only where they belong, not into the summary: standing instructions
+(`core/instructions/<profile>/standing-instructions.md`), preferences
+(`memory/`) and connections in use (`core/connections.yaml`).
 
 Storage can differ per profile (`storage_by_profile`): a cloud profile that
 cannot reach a local synced folder uses a `git` backend (a branch of the
 content repository by default).
+
+## Upgrades
+
+`harness upgrade` adds new settings (with their comments), drops settings
+listed in `OBSOLETE_SETTINGS`, adds new folders, and runs the content
+migrations in `harness/migrations.py`. Migrations are idempotent.
 
 ## Provenance and conflicts
 

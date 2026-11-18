@@ -2,14 +2,17 @@
 
 Hook events and what they do:
 
-  SessionStart      register the session; harvest; after a compaction, save the
-                    tool's own compaction summary
+  SessionStart      register the session; harvest; after a compaction, make the
+                    next Stop ask for a checkpoint
   UserPromptSubmit  count the message toward the next checkpoint
-  Stop              harvest; refresh the rolling tail and workspace state; live-log
-                    the exchange past the threshold; when a checkpoint is due, ask
-                    the model to refresh the structured summary
-  PreCompact        copy the full transcript to transcript storage
-  SessionEnd        copy the transcript; commit and push
+  Stop              harvest; workspace state; save the transcript; commit; when a
+                    checkpoint is due, ask the model to refresh the summary
+  PreCompact        save the transcript
+  SessionEnd        save the transcript; commit and push
+
+Per session this keeps exactly three things: meta.yaml and summary.md in Git,
+and the full transcript in transcript storage. Everything else (recent
+exchanges, compaction summaries) is derived from the transcript when needed.
 """
 
 from __future__ import annotations
@@ -29,10 +32,10 @@ from ...git_sync import GitSync
 from ...harvest import Captured, HarvestReport, HarvestSync
 from ...local import LocalHome
 from ...profiles import ProfileRegistry
-from ...provenance import Origin, now_iso
+from ...provenance import Origin
 from ...repo import ContentRepo
 from ...sessions import SessionRecord
-from ...workspace import WorkspaceScanner
+from ...workspace import WorkspaceScanner, merge_workspace
 from ..base import Adapter, adapters
 from .constants import HOOK_EVENTS, HOOK_MARKER, SKILL_NAME, TOOL
 from .harvester import ClaudeCodeHarvester
@@ -169,32 +172,32 @@ class _HookContext:
         project = self.adapter.locations.project_dir
         self.session.touch(project=project.name if project else None)
         self._safely("harvest", lambda: self.adapter.run_harvest(self.session.id))
-        if self.event.get("source") == "compact" and self.config.checkpoints.on_compaction:
-            self._safely("compaction", self._save_compaction)
+        if self.event.get("source") == "compact":
+            self.recorder.mark_compacted()  # the next Stop asks for a checkpoint
         self._sync(f"session {self.session.id} started")
 
     def on_user_prompt_submit(self) -> None:
         self.recorder.count_user_message()
 
     def on_stop(self) -> dict[str, Any] | None:
+        """Every turn: harvest, workspace, transcript, commit. A checkpoint request when due."""
         if self.event.get("stop_hook_active"):
             return None  # the model is already answering our request; never loop
         report = self._safely("harvest", lambda: self.adapter.run_harvest(self.session.id))
         percent = self._percent()
-        self.recorder.record_turn(percent, self.transcript.path if self.transcript.path.is_file() else None)
+        self.recorder.record_turn(percent)
         self._safely("workspace", self._record_workspace)
-        self._safely("tail", self._write_tail)
-        self._safely("live log", lambda: self._live_log(percent))
-        if report and report.changed:
-            self._sync(f"harvest ({report.summary()})")
+        self._safely("transcript", self._save_transcript)
+        changes = report.summary() if report and report.changed else "activity"
+        self._sync(f"session {self.session.id} ({changes})")
         reason = self.policy.due(self.recorder.progress(), percent)
         return {"decision": "block", "reason": self._checkpoint_request(reason)} if reason else None
 
     def on_pre_compact(self) -> None:
-        self._safely("transcript copy", self._copy_transcript)
+        self._safely("transcript", self._save_transcript)
 
     def on_session_end(self) -> None:
-        self._safely("transcript copy", self._copy_transcript)
+        self._safely("transcript", self._save_transcript)
         self.session.touch()
         self._sync(f"session {self.session.id} ended", push=True)
 
@@ -213,52 +216,21 @@ class _HookContext:
         if result.message.startswith("git failed"):
             self.adapter.local.log(result.message)
 
-    def _save_compaction(self) -> None:
-        summary = self.transcript.latest_compact_summary()
-        if summary:
-            self.session.add_compaction(summary, "tool-compaction", self._percent())
-
     def _percent(self) -> float | None:
         meter = ContextMeter(self.config.capture.context_window_tokens)
         return meter.percent(self.transcript.context_tokens())
 
-    def _live_log(self, percent: float | None) -> None:
-        capture = self.config.capture
-        if percent is None or percent < capture.live_log_threshold_percent:
-            return
-        exchange = self.transcript.last_exchange()
-        if not exchange:
-            return
-        cut = capture.live_log_max_chars
-        entry = (f"\n## {now_iso()} · {percent:.0f}%\n\n**User:** {exchange.prompt[:cut]}\n\n"
-                 f"**Assistant:** {exchange.answer[:cut]}\n")
-        self.repo.storage("live_logs", self.profile).append_text(self.session.live_log_key, entry)
-        self.session.touch(live_log=self.session.live_log_key)
-
-    def _write_tail(self) -> None:
-        count = self.config.capture.tail_exchanges
-        if not count:
-            return
-        exchanges = self.transcript.exchanges(last=count)
-        if not exchanges:
-            return
-        blocks = [f"## {i}\n\n**User:**\n\n{e.prompt}\n\n**Assistant:**\n\n{e.answer}\n"
-                  for i, e in enumerate(exchanges, 1)]
-        text = (f"# Last {len(exchanges)} exchanges of {self.session.native_id} ({now_iso()})\n\n"
-                + "\n".join(blocks))
-        storage = self.repo.storage("live_logs", self.profile)
-        if not storage.exists(self.session.tail_key) or storage.read_text(self.session.tail_key) != text:
-            storage.write_text(self.session.tail_key, text)
-            self.session.touch(tail=self.session.tail_key)
-
     def _record_workspace(self) -> None:
+        """Merge the repositories found from this turn's folder into the session's list."""
         project = self.adapter.locations.project_dir
-        if project:
-            repos = [r.to_dict() for r in WorkspaceScanner(project).scan()]
-            if repos and self.session.meta().get("workspace") != repos:
-                self.session.touch(workspace=repos)
+        if not project:
+            return
+        found = [r.to_dict() for r in WorkspaceScanner(project).scan()]
+        merged = merge_workspace(self.session.meta().get("workspace") or [], found)
+        if merged != self.session.meta().get("workspace"):
+            self.session.touch(workspace=merged)
 
-    def _copy_transcript(self) -> None:
+    def _save_transcript(self) -> None:
         self.session.save_transcript(self.repo.storage("transcripts", self.profile), self.transcript.path)
 
     def _checkpoint_request(self, reason: str) -> str:

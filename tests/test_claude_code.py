@@ -1,6 +1,7 @@
 """The Claude Code adapter, run against a simulated Claude Code installation."""
 
 import json
+import subprocess
 from pathlib import Path
 
 from conftest import CC_PROFILE as PROFILE
@@ -99,19 +100,23 @@ def test_harvest_conflict_with_other_profile(adapter: ClaudeCodeAdapter, repo: C
 
 # --- hooks --------------------------------------------------------------------------------
 
-def test_hook_flow_checkpoints_and_live_log(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
-    repo.config_file.update({"checkpoints.every_user_messages": 3,
-                             "storage.live_logs.path": str(tmp_path / "live")})
+def test_hook_flow(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
+    """Every turn: transcript saved and committed; a checkpoint request when due."""
+    subprocess.run(["git", "init", "-q"], cwd=repo.root, check=True)
+    repo.config_file.update({"checkpoints.every_user_messages": 3})
     project = adapter.locations.project_dir
     transcript = write_transcript(tmp_path / "t.jsonl", 3, 20_000)
 
     adapter.handle_hook(event("SessionStart", transcript, project, source="startup"))
-    session = repo.path("sessions", PROFILE, "sess-1")
-    assert (session / "meta.yaml").is_file()
+    assert repo.path("sessions", PROFILE, "sess-1", "meta.yaml").is_file()
 
     for _ in range(2):
         adapter.handle_hook(event("UserPromptSubmit", transcript, project))
     assert adapter.handle_hook(event("Stop", transcript, project)) is None
+    saved = tmp_path / "transcripts" / PROFILE / "sess-1" / "transcript.jsonl"
+    assert saved.read_text() == transcript.read_text()
+    status = subprocess.run(["git", "status", "--porcelain"], cwd=repo.root, capture_output=True, text=True)
+    assert status.stdout == ""  # every turn is committed
 
     adapter.handle_hook(event("UserPromptSubmit", transcript, project))
     response = adapter.handle_hook(event("Stop", transcript, project))
@@ -119,21 +124,16 @@ def test_hook_flow_checkpoints_and_live_log(adapter: ClaudeCodeAdapter, repo: Co
     assert "harness session checkpoint" in response["reason"]
     assert adapter.handle_hook(event("Stop", transcript, project, stop_hook_active=True)) is None
 
-    # Over the live-log threshold: the exchange is logged to external storage.
-    write_transcript(transcript, 3, 170_000)
-    adapter.handle_hook(event("Stop", transcript, project))
-    assert "question 2" in (tmp_path / "live" / PROFILE / "sess-1" / "live-log.md").read_text()
 
-
-def test_compaction_is_saved(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
+def test_compaction_requests_a_checkpoint(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
     transcript = write_transcript(tmp_path / "t.jsonl", 1, 10_000, compact="What we did so far")
-    adapter.handle_hook(event("SessionStart", transcript, adapter.locations.project_dir, source="compact"))
-    saved = repo.path("sessions", PROFILE, "sess-1", "compactions", "001.md")
-    assert "What we did so far" in saved.read_text()
-    assert validate(repo).ok, validate(repo).problems
+    project = adapter.locations.project_dir
+    adapter.handle_hook(event("SessionStart", transcript, project, source="compact"))
+    response = adapter.handle_hook(event("Stop", transcript, project))
+    assert "compacted" in response["reason"]
 
 
-def test_transcript_copied_on_pre_compact(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
+def test_transcript_saved_on_pre_compact(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
     transcript = write_transcript(tmp_path / "t.jsonl", 1, 10_000)
     adapter.handle_hook(event("PreCompact", transcript, adapter.locations.project_dir))
     copied = tmp_path / "transcripts" / PROFILE / "sess-1" / "transcript.jsonl"
@@ -141,12 +141,11 @@ def test_transcript_copied_on_pre_compact(adapter: ClaudeCodeAdapter, repo: Cont
 
 
 def test_hook_survives_unusable_storage(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
-    repo.config_file.update({"storage.live_logs.path": "relative/not/allowed",
-                             "checkpoints.force_at_context_percent": 80})
+    repo.config_file.update({"storage.transcripts.path": "relative/not/allowed"})
     transcript = write_transcript(tmp_path / "t.jsonl", 1, 170_000)
     response = adapter.handle_hook(event("Stop", transcript, adapter.locations.project_dir))
-    assert response["decision"] == "block"  # the checkpoint still happens
-    assert "live log failed" in (adapter.local.root / "logs" / "harness.log").read_text()
+    assert response["decision"] == "block"  # the forced checkpoint still happens
+    assert "transcript failed" in (adapter.local.root / "logs" / "harness.log").read_text()
 
 
 def test_engine_artifacts_are_not_harvested(adapter: ClaudeCodeAdapter, repo: ContentRepo):

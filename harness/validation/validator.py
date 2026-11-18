@@ -35,7 +35,6 @@ class RepoValidator:
             SchemaCheck(f"{layout.assets_dir}/*/asset.yaml", "asset"),
             SchemaCheck("sessions/*/*/meta.yaml", "session_meta"),
             SchemaCheck("sessions/*/*/summary.md", "summary", frontmatter),
-            SchemaCheck("sessions/*/*/compactions/*.md", "compaction", frontmatter),
             AssetSizeCheck(),
             ProfileReferenceCheck(),
         ])

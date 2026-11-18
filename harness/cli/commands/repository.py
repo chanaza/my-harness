@@ -7,7 +7,9 @@ from pathlib import Path
 
 from ... import yaml_io
 from ...config import ConfigError
+from ...git_sync import GitSync
 from ...local import LocalHome
+from ...migrations import run_migrations
 from ...repo import ContentRepo
 from ...scaffold import SUPPORTED_TOOLS, InitOptions, Scaffolder, ScaffoldError
 from ...validation import RepoValidator
@@ -37,13 +39,11 @@ class InitCommand(Command):
         parser.add_argument("--tools", nargs="+", default=list(SUPPORTED_TOOLS),
                             help="Tool ids in use (default: all supported).")
         parser.add_argument("--transcripts-path", help="Folder for transcripts (e.g. a OneDrive folder).")
-        parser.add_argument("--live-logs-path", help="Folder for live logs.")
 
     def run(self, args: argparse.Namespace) -> int:
-        storage = {"transcripts": args.transcripts_path, "live_logs": args.live_logs_path}
         options = InitOptions(
             owner=args.owner, language=args.language, tools=args.tools,
-            storage_paths={area: path for area, path in storage.items() if path},
+            storage_paths={"transcripts": args.transcripts_path} if args.transcripts_path else {},
         )
         try:
             repo = Scaffolder().create(Path(args.path), options)
@@ -94,7 +94,7 @@ class ConfigSetCommand(Command):
     help = "Change a setting; the file is validated before it is written."
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("key", help="Dotted setting name, e.g. capture.live_log_threshold_percent.")
+        parser.add_argument("key", help="Dotted setting name, e.g. checkpoints.every_user_messages.")
         parser.add_argument("value", nargs="+", help="New value. Several values make a list.")
         parser.add_argument("--string", action="store_true",
                             help="Keep the value as text (no conversion to number/true/false).")
@@ -147,10 +147,16 @@ class UpgradeCommand(Command):
     def run(self, args: argparse.Namespace) -> int:
         repo = open_repo(args)
         try:
-            added = repo.config_file.upgrade()
+            added, removed = repo.config_file.upgrade()
         except ConfigError as exc:
             raise ErrorExit(str(exc)) from None
         created = Scaffolder(repo.layout).ensure_structure(repo)
         print(f"Added settings: {', '.join(added) or 'none'}")
+        print(f"Removed settings: {', '.join(removed) or 'none'}")
         print(f"Added files/folders: {', '.join(str(p.relative_to(repo.root)) for p in created) or 'none'}")
+        for migration, changes in run_migrations(repo).items():
+            print(f"Migration {migration}:")
+            for change in changes:
+                print(f"  ~ {change}")
+        GitSync(repo.root, repo.config.git).sync("harness upgrade", push=True)
         return 0

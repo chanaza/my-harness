@@ -57,10 +57,6 @@
       "type": "string",
       "description": "Key of the transcript in transcript storage."
     },
-    "live_log": {
-      "type": "string",
-      "description": "Key of the live log in live-log storage."
-    },
     "project": {
       "type": "string",
       "description": "Working folder or project the session ran in."
@@ -96,10 +92,6 @@
         },
         "additionalProperties": false
       }
-    },
-    "tail": {
-      "type": "string",
-      "description": "Key of the rolling tail in live-log storage."
     }
   },
   "additionalProperties": false

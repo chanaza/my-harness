@@ -1,11 +1,13 @@
-"""``SummaryDigest``: a checkpoint summary has fixed sections; some feed other areas.
+"""``SummaryDigest``: a checkpoint has fixed sections, in two groups.
 
+Session sections stay in sessions/<profile>/<id>/summary.md:
+  Goal, Decisions, Current state, Open thread
+
+Harness sections are written only where they belong (not repeated in the summary):
   Standing instructions  -> core/instructions/<profile>/standing-instructions.md
                             (one block per session; your own words, so no approval loop)
   Preferences learned    -> memory/<profile>-preferences-<session>.md
   Connections in use     -> core/connections.yaml (names and purpose only)
-
-Everything else stays in the session summary.
 """
 
 from __future__ import annotations
@@ -23,16 +25,10 @@ from .repo import ContentRepo
 from .sessions import SessionRecord
 from .text import slugify
 
-#: The sections a checkpoint summary is asked to contain, in order.
-SECTIONS = (
-    "Goal",
-    "Decisions",
-    "Current state",
-    "Open thread",
-    "Standing instructions",
-    "Preferences learned",
-    "Connections in use",
-)
+SESSION_SECTIONS = ("Goal", "Decisions", "Current state", "Open thread")
+HARNESS_SECTIONS = ("Standing instructions", "Preferences learned", "Connections in use")
+#: The sections a checkpoint is asked to contain, in order.
+SECTIONS = SESSION_SECTIONS + HARNESS_SECTIONS
 EMPTY = re.compile(r"^\s*(-\s*)?(none|n/a|—|-)?\s*\.?\s*$", re.IGNORECASE)
 
 
@@ -48,6 +44,15 @@ def split_sections(text: str) -> dict[str, str]:
         elif current:
             sections[current] += line + "\n"
     return {k: v.strip() for k, v in sections.items()}
+
+
+def session_part(text: str) -> str:
+    """The summary without the harness sections (those live in their own places)."""
+    sections = split_sections(text)
+    if not sections:
+        return text
+    kept = [f"## {name}\n\n{body}" for name, body in sections.items() if name not in HARNESS_SECTIONS]
+    return "\n\n".join(kept) + "\n"
 
 
 @dataclass

@@ -22,11 +22,11 @@ Skip items with `harvest.exclude` in `harness.config.yaml`, e.g.
 
 | Event | Action |
 |---|---|
-| SessionStart | Register the session, harvest, save the tool's compaction summary after a compaction |
+| SessionStart | Register the session, harvest; after a compaction, the next Stop requests a checkpoint |
 | UserPromptSubmit | Count the message toward the next checkpoint |
-| Stop | Harvest; rolling tail of the last exchanges; workspace state; live-log past `capture.live_log_threshold_percent`; request a structured checkpoint when due |
-| PreCompact | Copy the full transcript to transcript storage |
-| SessionEnd | Copy the transcript; commit and push |
+| Stop | Harvest; workspace state; save the transcript; commit; request a structured checkpoint when due |
+| PreCompact | Save the transcript |
+| SessionEnd | Save the transcript; commit and push |
 
 A checkpoint asks the model, in the same conversation, to refresh
 `sessions/<profile>/<id>/summary.md` through `harness session checkpoint`.

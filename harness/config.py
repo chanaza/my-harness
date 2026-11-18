@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,16 @@ from .yaml_io import YamlDocument, YAMLError
 
 CONFIG_TEMPLATE = "harness.config.yaml"
 
+#: Settings removed from the engine, as dotted-key patterns. `harness upgrade` drops them.
+OBSOLETE_SETTINGS: tuple[str, ...] = (
+    # v0.3: per-session records simplified to meta + summary + transcript.
+    "capture.live_log_*",
+    "capture.tail_exchanges",
+    "capture.transcript_on_checkpoint",
+    "storage.live_logs.*",
+    "storage_by_profile.*.live_logs.*",
+)
+
 
 class ConfigError(Exception):
     """The configuration file is missing or invalid."""
@@ -21,12 +32,7 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class CaptureSettings:
-    live_log_threshold_percent: int
-    live_log_fallback_messages: int
-    live_log_max_chars: int
     context_window_tokens: int
-    tail_exchanges: int = 10
-    transcript_on_checkpoint: bool = True
 
 
 @dataclass(frozen=True)
@@ -94,10 +100,6 @@ class HarnessConfig:
         return list(self.data["harvest"].get("exclude") or [])
 
     @property
-    def live_log_threshold_percent(self) -> int:
-        return self.capture.live_log_threshold_percent
-
-    @property
     def max_inline_asset_bytes(self) -> int:
         return int(self.data["assets"]["max_inline_size_mb"] * 1024 * 1024)
 
@@ -159,25 +161,31 @@ class ConfigFile:
         own = self._validated(self._open().to_plain())
         return HarnessConfig(_deep_merge(yaml_io.load(template_config_text()), own))
 
+    def obsolete_settings(self) -> list[str]:
+        """Settings in this file that the engine no longer has."""
+        return [key for key in _leaves(self._open().to_plain())
+                if any(fnmatch(key, pattern) for pattern in OBSOLETE_SETTINGS)]
+
     def missing_settings(self) -> list[str]:
         """Settings the engine template has and this file does not (fixed by ``upgrade``)."""
         own = _leaves(self._open().to_plain())
         return [key for key in _leaves(yaml_io.load(template_config_text())) if key not in own
                 and not any(key.startswith(f"{k}.") for k in own)]
 
-    def upgrade(self) -> list[str]:
+    def upgrade(self) -> tuple[list[str], list[str]]:
         """Rewrite the file from the current engine template, keeping every value already set.
 
-        New settings appear with their defaults and explanatory comments.
-        Returns the settings that were added.
+        New settings appear with their defaults and explanatory comments; obsolete
+        settings are dropped. Returns (added, removed).
         """
-        added = self.missing_settings()
+        added, removed = self.missing_settings(), self.obsolete_settings()
         document = YamlDocument.from_text(self.path, template_config_text())
         for key, value in _leaves(self._open().to_plain()).items():
-            document.set(key, value, create=True)
+            if key not in removed:
+                document.set(key, value, create=True)
         self._validated(document.to_plain())
         document.save()
-        return added
+        return added, removed
 
     def get(self, key: str) -> Any:
         try:

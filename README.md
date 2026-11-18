@@ -26,7 +26,7 @@ command or an adapter for it.
 | Kind | Examples | Where it lives |
 |---|---|---|
 | Knowledge | Instructions, skills, memory, summaries, app and table schemas | Content repo (Git) |
-| Logs | Full transcripts, live interaction logs | External storage (`storage:` in config) |
+| Transcripts | Full conversation transcripts | Transcript storage (`storage:` in config) |
 | App data | Rows of tables in Base44, Monday boards | Reserved: `apps/<app>/data.yaml` points to snapshots (later phase) |
 
 ## Provenance everywhere
@@ -43,7 +43,7 @@ when two tools learned different things. Memory entries also carry
 ```bash
 pip install -e ".[dev]"
 harness init ../my-content --owner "Your Name" --transcripts-path "C:\Users\you\OneDrive\Sessions\transcripts"
-harness config set capture.live_log_threshold_percent 80 --repo ../my-content
+harness config set checkpoints.every_user_messages 10 --repo ../my-content
 harness validate --repo ../my-content
 ```
 
@@ -64,14 +64,15 @@ are marked with ★.
 | `Profile`, `ProfileRegistry` | `harness/profiles.py` | Tool + account + environment (local/cloud) identities; rename |
 | `Origin`, `Provenance` | `harness/provenance.py` | Who created and changed each item |
 | `SessionRecord` | `harness/sessions.py` | One conversation: meta, rolling summary, compactions |
-| `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it (+ transcript) |
+| `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it |
 | `SummaryDigest` | `harness/digest.py` | Structured summary sections -> instructions, memory, connections |
 | `WorkspaceScanner` | `harness/workspace.py` | Repositories, branches and commits a session works in |
 | `MemoryStore` | `harness/memory.py` | Memory entries with conflict tracking |
 | `Captured`, `HarvestSync`, `ItemWriter` ★ | `harness/harvest/` | Turning what a tool holds into harness content |
 | `Adapter` ★, `AdapterRegistry` | `harness/adapters/` | One class per tool: harvest, hooks, install |
 | `ClaudeCodeAdapter` | `harness/adapters/claude_code/` | Claude Code ([docs](docs/adapters/claude-code.md)) |
-| `Storage` ★, `BackendRegistry` | `harness/storage/` | Storage for transcripts and live logs (per profile) |
+| `Storage` ★, `BackendRegistry` | `harness/storage/` | Transcript storage (per profile) |
+| `Migration` ★ | `harness/migrations.py` | Bring existing content to the current engine (`harness upgrade`) |
 | `FilesystemStorage`, `GitStorage` | `harness/storage/` | A (synced) folder, or a branch of a Git repository |
 | `GitSync` | `harness/git_sync.py` | Commit / push after captures |
 | `LocalHome` | `harness/local.py` | Per-machine settings and state (`~/.my-harness`) |

@@ -1,6 +1,5 @@
-# Transcripts and live logs belong in external storage, never in Git.
+# Transcripts belong in transcript storage, never in the main branch.
 transcripts/
-live-logs/
 *.jsonl
 # Secrets never belong here.
 .env
