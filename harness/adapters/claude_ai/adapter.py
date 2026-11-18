@@ -103,13 +103,18 @@ class ClaudeAiAdapter(AccountBoundAdapter):
         return target
 
     def after_setup(self, profiles: list[str]) -> list[str]:
-        """Put the export skill where the user will find it and open the page to upload it."""
+        """Put the export skill where the user will find it, open the upload page, and list the
+        steps for each account by its e-mail (the browser opens whichever account is signed in)."""
         target = self.deliver_skill()
-        accounts = "each of your claude.ai accounts" if len(profiles) > 1 else "your claude.ai account"
-        return [f"In {accounts}, upload the file {target} on the claude.ai page that just opened "
-                f"(sign in to each account in turn). "
-                f"Can't find the file later? Run: python -m harness skill claude-ai",
-                "Then, in Cowork (in each account), type: Set up my harness export"]
+        emails = [email for email, profile in self.bindings().items() if profile in profiles]
+        page = self._settings().skills_page
+        steps = []
+        for email in emails:
+            steps.append(f"In claude.ai, signed in as {email}: upload {target} on {page} "
+                         f"(the page opened for whichever account is signed in now).")
+            steps.append(f"In Cowork, signed in as {email}, type: Set up my harness export")
+        steps.append("Can't find the file later? Run: python -m harness skill claude-ai")
+        return steps
 
     def scheduled_tasks(self) -> list[tuple[str, str]]:
         """The two Cowork scheduled tasks that run the export skill: (when, what to type)."""

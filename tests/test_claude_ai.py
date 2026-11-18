@@ -167,9 +167,10 @@ def test_setup_prepares_the_skill_and_says_what_is_left(repo: ContentRepo, tmp_p
     repo.config_file.update({"claude_ai.watch_folder": str(tmp_path / "empty")})
     result = SetupWizard(Answers("me@example.com", "personal", str(tmp_path / "f"), False), LocalHome()).run(
         SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
-    target = result.next_steps[0].split("upload the file ")[1].split(" on the claude.ai page")[0]
+    target = result.next_steps[0].split(": upload ")[1].split(" on https")[0]
     assert Path(target).is_file() and target.endswith("harness-export.zip")
-    assert "Set up my harness export" in result.next_steps[-1]
+    assert "signed in as me@example.com" in result.next_steps[0]
+    assert "Set up my harness export" in result.next_steps[1]
 
 
 def test_claude_ai_can_be_skipped_and_is_not_asked_again(repo: ContentRepo, tmp_path: Path):
@@ -225,3 +226,20 @@ def test_named_accounts_count_as_connected_before_any_export(repo: ContentRepo, 
     SetupWizard(Answers("me@example.com", "personal", str(tmp_path / "f"), False), LocalHome()).run(
         SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
     assert ClaudeAiAdapter(LocalHome()).is_connected()   # the next installer run only updates
+
+
+def test_steps_are_listed_for_every_account(repo: ContentRepo, tmp_path: Path, monkeypatch):
+    class FakeScheduler:
+        def install(self, name, args, minutes):
+            return "scheduled"
+
+    monkeypatch.setattr("harness.scheduler.system_scheduler", FakeScheduler)
+    repo.config_file.update({"claude_ai.watch_folder": str(tmp_path / "empty")})
+    answers = Answers("a@example.com, b@example.com", "personal", "work", str(tmp_path / "f"), False)
+    options = SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local")
+    result = SetupWizard(answers, LocalHome()).run(options)
+    uploads = [s for s in result.next_steps if ": upload " in s]
+    assert len(uploads) == 2, result.next_steps
+    steps = " ".join(result.next_steps)
+    assert steps.count("Set up my harness export") == 2
+    assert "a@example.com" in steps and "b@example.com" in steps
