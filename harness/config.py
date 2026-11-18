@@ -64,6 +64,7 @@ class ClaudeAiSettings:
 class MondaySettings:
     endpoint: str = "https://api.monday.com/v2"
     api_version: str = "dev"
+    runs_per_agent: int = 50
 
 
 @dataclass(frozen=True)

@@ -4,8 +4,9 @@ from .base import Account, AccountBoundAdapter, Adapter, AdapterRegistry, Harnes
 from .claude_ai import ClaudeAiAdapter
 from .claude_code import ClaudeCodeAdapter
 from .cowork import CoworkAdapter
+from .monday import MondayAdapter
 
 __all__ = [
     "Account", "AccountBoundAdapter", "Adapter", "AdapterRegistry", "ClaudeAiAdapter",
-    "ClaudeCodeAdapter", "CoworkAdapter", "HarnessNotConfigured", "adapters",
+    "ClaudeCodeAdapter", "CoworkAdapter", "HarnessNotConfigured", "MondayAdapter", "adapters",
 ]

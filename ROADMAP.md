@@ -28,11 +28,11 @@ arrives and is imported; document any differences in the skill.
 
 ## Next
 
-1. Monday adapter. First what is locked when AI credits run out: agents (profile, goal,
-   plan, knowledge, triggers) and workflows. `harness monday probe` shows what an account's
-   API really exposes. Known gaps from monday's documentation: per-agent skills and agent
-   memory are not exposed; workflows can be created but no read query is documented;
-   board automations cannot be read. Boards (structure first) come next.
+1. Monday adapter - agents, agent jobs (workflows), workflow-builder workflows, MCP tools
+   and agent runs are captured. Still open: agent memory / board learnings (the API
+   answers "unauthorized"), knowledge file contents (references are kept), board
+   automations and boards (structure first) as the next step, a guided `harness setup
+   monday`, and a scheduled cloud capture.
 2. ChatGPT, Cursor, Genspark, Base44 adapters.
 3. Loading: build a "resume pack" and load the harness into a tool / account.
 4. Optional: package the Claude Code adapter as a Claude Code plugin.

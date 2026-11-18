@@ -107,33 +107,27 @@ class SkillWriter(ItemWriter):
 
 
 class AgentWriter(ItemWriter):
-    """A sub-agent (Markdown with frontmatter) -> core/agents/<name>.yaml"""
+    """An agent -> core/agents/<name>.yaml.
+
+    Two sources: a Markdown sub-agent file (Claude Code), or a structured
+    definition in ``item.meta['agent']`` (tools with an API, e.g. monday) using the
+    agent schema's fields (role, goal, identity, instructions, policies, knowledge,
+    skills, model); anything tool-specific goes in ``item.meta['native']``.
+    """
 
     kind = Kind.AGENT
 
     def write(self, item: Captured, origin: Origin) -> WriteResult:
-        source = MarkdownDocument.parse(item.text(next(iter(item.files))))
-        name = slugify(str(source.meta.get("name") or item.name))
+        agent, native = self._definition(item)
+        name = agent["name"]
         target = self.repo.path("core", "agents", f"{name}.yaml")
         existing = yaml_io.load(target.read_text("utf-8")) if target.is_file() else None
-        same_content = bool(existing) and existing.get("instructions") == source.body.strip()
+        same_content = bool(existing) and existing.get("instructions") == agent.get("instructions")
         conflict = bool(existing) and not same_content and \
             self._conflicting(existing.get("provenance"), origin)
         if conflict:
             target = self._conflict_path(target, origin)
-
-        tools = source.meta.get("tools")
-        if isinstance(tools, str):
-            tools = [t.strip() for t in tools.split(",") if t.strip()]
-        native = {k: v for k, v in source.meta.items() if k not in ("name", "description", "tools")}
-        agent: dict[str, Any] = {
-            "name": name,
-            "description": str(source.meta.get("description") or name),
-            "instructions": source.body.strip(),
-            "origin": item.origin,
-        }
-        if tools:
-            agent["requires"] = {"tools": list(dict.fromkeys(tools))}
+        agent["origin"] = item.origin
         if native:
             agent["native"] = {origin.profile: native}
         previous = None if conflict or not existing else existing.get("provenance")
@@ -141,6 +135,26 @@ class AgentWriter(ItemWriter):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(yaml_io.dump(agent), encoding="utf-8")
         return WriteResult("conflict" if conflict else ("updated" if existing else "created"), target)
+
+    @staticmethod
+    def _definition(item: Captured) -> tuple[dict[str, Any], dict[str, Any]]:
+        if "agent" in item.meta:
+            agent = {k: v for k, v in dict(item.meta["agent"]).items() if v not in (None, "", [], {})}
+            agent["name"] = slugify(str(agent.get("name") or item.name))
+            agent.setdefault("description", agent["name"])
+            agent.setdefault("instructions", "")
+            return agent, dict(item.meta.get("native") or {})
+        source = MarkdownDocument.parse(item.text(next(iter(item.files))))
+        name = slugify(str(source.meta.get("name") or item.name))
+        tools = source.meta.get("tools")
+        if isinstance(tools, str):
+            tools = [t.strip() for t in tools.split(",") if t.strip()]
+        agent: dict[str, Any] = {"name": name, "description": str(source.meta.get("description") or name),
+                                 "instructions": source.body.strip()}
+        if tools:
+            agent["requires"] = {"tools": list(dict.fromkeys(tools))}
+        native = {k: v for k, v in source.meta.items() if k not in ("name", "description", "tools")}
+        return agent, native
 
 
 class MemoryWriter(ItemWriter):
@@ -299,7 +313,8 @@ class WorkflowWriter(ItemWriter):
         workflow: dict[str, Any] = {
             "name": slugify(item.name),
             "description": str(item.meta.get("description") or item.name),
-            "steps": [{"name": "run", "description": str(item.meta.get("prompt") or item.name)}],
+            "steps": [{"name": "run", "description": str(item.meta.get("prompt") or item.name),
+                       **({"agent": slugify(str(item.meta["agent"]))} if item.meta.get("agent") else {})}],
             "origin": item.origin,
         }
         if item.meta.get("trigger"):

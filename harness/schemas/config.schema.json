@@ -328,6 +328,11 @@
         "api_version": {
           "type": "string",
           "description": "monday API version; agents are only in the preview ('dev') version today."
+        },
+        "runs_per_agent": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How many recent runs (conversations) of each agent to keep in sync."
         }
       },
       "additionalProperties": false

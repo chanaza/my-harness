@@ -25,6 +25,7 @@ class CredentialStore:
         return "HARNESS_" + "".join(c if c.isalnum() else "_" for c in name).upper() + "_TOKEN"
 
     def get(self, name: str) -> str | None:
+        """The secret for ``name`` (e.g. 'monday:proceed'), from its variable or the password store."""
         from_env = os.environ.get(self.env_name(name))
         if from_env:
             return from_env

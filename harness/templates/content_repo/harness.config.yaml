@@ -85,6 +85,8 @@ monday:
   endpoint: https://api.monday.com/v2
   # API version. Agents are only available in the preview version ("dev") today.
   api_version: dev
+  # How many recent runs (conversations) of each agent are kept in sync.
+  runs_per_agent: 50
 
 assets:
   # Larger files are stored outside Git and referenced from assets/<id>/asset.yaml.
