@@ -51,6 +51,7 @@ class CheckpointSettings:
 class GitSettings:
     auto_commit: bool
     auto_push: bool
+    push_every_turn: bool = True
 
 
 def _section(cls: type, values: Mapping[str, Any]) -> Any:

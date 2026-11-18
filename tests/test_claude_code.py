@@ -221,3 +221,17 @@ def test_backfill_since_days(adapter: ClaudeCodeAdapter):
     add_old_session(adapter, "ancient", "/x", "2020-01-01")
     add_old_session(adapter, "recent", "/x", datetime.now(UTC).strftime("%Y-%m-%d"))
     assert [e.session for e in adapter.backfill(since_days=7, dry_run=True)] == ["recent"]
+
+
+def test_stop_pushes_every_turn(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    for args in (["init", "-q", "-b", "main"], ["remote", "add", "origin", str(remote)],
+                 ["-c", "user.email=a@b", "-c", "user.name=a", "commit", "-q", "--allow-empty", "-m", "x"],
+                 ["push", "-q", "-u", "origin", "main"]):
+        subprocess.run(["git", *args], cwd=repo.root, check=True)
+    transcript = write_transcript(tmp_path / "t.jsonl", 1, 1000)
+    adapter.handle_hook(event("Stop", transcript, adapter.locations.project_dir))
+    local = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo.root, capture_output=True, text=True)
+    pushed = subprocess.run(["git", "rev-parse", "main"], cwd=remote, capture_output=True, text=True)
+    assert local.stdout == pushed.stdout

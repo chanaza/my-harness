@@ -34,8 +34,11 @@ checkpoints:
 git:
   # Commit to this repository after every capture.
   auto_commit: true
-  # Push at every checkpoint and when a session ends.
+  # Push to the remote (at every checkpoint and when a session ends).
   auto_push: true
+  # Also push after every turn, so nothing waits on this machine (needed in cloud sessions,
+  # which can disappear between checkpoints).
+  push_every_turn: true
 
 harvest:
   # Capture what you build inside tools (instructions, skills, agents, memory, connections).

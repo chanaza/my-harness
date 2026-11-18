@@ -5,7 +5,8 @@ Hook events and what they do:
   SessionStart      register the session; harvest; after a compaction, make the
                     next Stop ask for a checkpoint
   UserPromptSubmit  count the message toward the next checkpoint
-  Stop              harvest; workspace state; save the transcript; commit; when a
+  Stop              harvest; workspace state; save the transcript; commit (and push,
+                    with git.push_every_turn); when a
                     checkpoint is due, ask the model to refresh the summary
   PreCompact        save the transcript
   SessionEnd        save the transcript; commit and push
@@ -239,7 +240,7 @@ class _HookContext:
         self._safely("workspace", self._record_workspace)
         self._safely("transcript", self._save_transcript)
         changes = report.summary() if report and report.changed else "activity"
-        self._sync(f"session {self.session.id} ({changes})")
+        self._sync(f"session {self.session.id} ({changes})", push=self.config.git.push_every_turn)
         reason = self.policy.due(self.recorder.progress(), percent)
         return {"decision": "block", "reason": self._checkpoint_request(reason)} if reason else None
 

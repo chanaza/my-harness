@@ -205,7 +205,11 @@
         },
         "auto_push": {
           "type": "boolean",
-          "description": "Push at every checkpoint and session end."
+          "description": "Push to the remote at all (at checkpoints and session end)."
+        },
+        "push_every_turn": {
+          "type": "boolean",
+          "description": "Push after every turn, so nothing is lost if the machine disappears (e.g. a cloud session)."
         }
       },
       "additionalProperties": false
