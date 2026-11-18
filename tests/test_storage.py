@@ -33,3 +33,8 @@ def test_backend_registry_rejects_unnamed_backend():
 
     with pytest.raises(ValueError):
         backends.register(Unnamed)
+
+
+def test_filesystem_rejects_paths_not_absolute_here():
+    with pytest.raises(StorageError):
+        backends.create({"backend": "filesystem", "path": "relative/folder"})

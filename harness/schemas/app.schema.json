@@ -5,7 +5,7 @@
   "type": "object",
   "required": [
     "name",
-    "tool",
+    "profile",
     "purpose",
     "provenance"
   ],
@@ -14,9 +14,10 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]*$"
     },
-    "tool": {
+    "profile": {
       "type": "string",
-      "description": "Tool id, e.g. claude-code, chatgpt, base44, monday."
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Profile (tool + account) the app is built in."
     },
     "purpose": {
       "type": "string"

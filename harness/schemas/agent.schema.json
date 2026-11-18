@@ -63,6 +63,17 @@
     },
     "provenance": {
       "$ref": "provenance.schema.json"
+    },
+    "native": {
+      "type": "object",
+      "description": "Tool-specific fields kept verbatim, keyed by tool id.",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "origin": {
+      "type": "string",
+      "description": "Where the item lived in the source tool."
     }
   },
   "additionalProperties": false

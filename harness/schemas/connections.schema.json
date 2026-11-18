@@ -49,6 +49,14 @@
           },
           "provenance": {
             "$ref": "provenance.schema.json"
+          },
+          "kind": {
+            "enum": [
+              "mcp",
+              "plugin",
+              "api",
+              "native"
+            ]
           }
         },
         "additionalProperties": false

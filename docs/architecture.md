@@ -33,13 +33,33 @@ transcript and live-log storage. Tools with a native conversation id keep
 it in `meta.yaml` as `native_id`; otherwise the adapter generates one
 (`YYYYMMDD-HHMM-<tool>-<topic>`) and keeps reusing it during the conversation.
 
+## Profiles
+
+A profile is a tool + an account (`claude-code-personal`, `claude-code-work`,
+`chatgpt-work`). Profiles are registered once in `core/profiles.yaml`;
+provenance, session folders, instructions and native settings refer to the
+profile id. The tool is looked up from the profile, never repeated.
+Connections are the exception: `available_in` is keyed by tool, because it
+describes what a tool can connect to.
+
+## Rolling summaries instead of "end of session"
+
+Conversations have no reliable end, so the summary of a session is kept
+current instead: a checkpoint replaces `summary.md` (Git keeps every
+version) when any trigger under `checkpoints:` fires: every N user
+messages, every N points of context growth, once at a forced threshold,
+and on every tool compaction. The tail after the last checkpoint is covered
+by the live log and the transcript.
+
 ## Provenance and conflicts
 
 `schemas/provenance.schema.json` is shared by every cross-session item:
-`source` (tool, session, time) plus a list of `updates`. Memory entries add
+`source` (profile, session, time) plus a list of `updates`. Memory entries add
 `status: active | superseded | disputed`, `supersedes` and
-`conflicts_with`, so a fact learned in ChatGPT and a contradicting fact
-learned in Claude are both kept, linked, and surfaced for a decision.
+`conflicts_with`, so a fact learned in one profile and a contradicting fact learned in
+another are both kept, linked, and surfaced for a decision. Harvested
+files (skills, agents, instructions) last changed by another profile are
+not overwritten: the incoming version goes to `inbox/conflicts/<profile>/`.
 
 ## Language
 

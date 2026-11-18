@@ -1,0 +1,21 @@
+"""All built-in `harness` commands."""
+
+from ..base import Command
+from .capture import (
+    HarvestCommand,
+    HookCommand,
+    InstallCommand,
+    MemoryCommand,
+    ProfileCommand,
+    SessionCommand,
+)
+from .repository import ConfigCommand, InitCommand, UpgradeCommand, ValidateCommand
+
+#: Commands exposed by `harness`, in help order.
+DEFAULT_COMMANDS: tuple[type[Command], ...] = (
+    InitCommand, ValidateCommand, ConfigCommand, UpgradeCommand,
+    ProfileCommand, InstallCommand, HarvestCommand, HookCommand,
+    SessionCommand, MemoryCommand,
+)
+
+__all__ = ["DEFAULT_COMMANDS"]

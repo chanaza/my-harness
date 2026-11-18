@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/profiles.schema.json",
+  "title": "Profile registry (core/profiles.yaml): every tool account that feeds this harness",
+  "type": "object",
+  "required": [
+    "profiles"
+  ],
+  "properties": {
+    "profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "tool",
+          "label",
+          "added_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "Readable id used everywhere else, e.g. claude-code-personal."
+          },
+          "tool": {
+            "type": "string",
+            "description": "Tool id, e.g. claude-code, chatgpt."
+          },
+          "label": {
+            "type": "string",
+            "description": "Which account, in your words (no e-mail or credentials)."
+          },
+          "description": {
+            "type": "string"
+          },
+          "added_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

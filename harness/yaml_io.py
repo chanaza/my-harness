@@ -35,12 +35,17 @@ class YamlDocument:
     Keys are dotted paths, e.g. ``storage.transcripts.path``.
     """
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, text: str | None = None) -> None:
         self.path = Path(path)
         self._yaml = YAML()  # round-trip mode
         self._yaml.preserve_quotes = True
         self._yaml.indent(mapping=2, sequence=4, offset=2)
-        self.data = self._yaml.load(self.path.read_text("utf-8"))
+        self.data = self._yaml.load(self.path.read_text("utf-8") if text is None else text)
+
+    @classmethod
+    def from_text(cls, path: Path, text: str) -> YamlDocument:
+        """A document that will be saved to ``path`` but starts from ``text``."""
+        return cls(path, text)
 
     def get(self, key: str) -> Any:
         node = self.data
@@ -50,10 +55,13 @@ class YamlDocument:
             node = node[part]
         return node
 
-    def set(self, key: str, value: Any) -> None:
+    def set(self, key: str, value: Any, create: bool = False) -> None:
+        """Set a dotted key. With ``create``, missing sections are added."""
         *parents, leaf = key.split(".")
         node = self.data
         for part in parents:
+            if part not in node and create:
+                node[part] = {}
             if not isinstance(node.get(part), dict):
                 raise KeyError(f"{key}: '{part}' is not a section")
             node = node[part]

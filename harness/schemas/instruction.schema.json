@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/instruction.schema.json",
+  "title": "Instruction file frontmatter (core/instructions/**/*.md)",
+  "type": "object",
+  "required": [
+    "scope",
+    "provenance"
+  ],
+  "properties": {
+    "scope": {
+      "type": "string",
+      "description": "global, or project:<name>."
+    },
+    "origin": {
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "provenance.schema.json"
+    },
+    "lang": {
+      "type": "string"
+    },
+    "original": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

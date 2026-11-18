@@ -24,6 +24,7 @@ class RepoLayout:
     areas: tuple[Area, ...]
     config_file: str = "harness.config.yaml"
     connections_file: str = "core/connections.yaml"
+    profiles_file: str = "core/profiles.yaml"
     assets_dir: str = "assets"
 
     def area(self, path: str) -> Area:
@@ -44,7 +45,9 @@ DEFAULT_LAYOUT = RepoLayout(
                        "every entry records which tool and session it came from."),
         Area("apps", "Specs of apps built inside tools: app.yaml, table schemas, workflows."),
         Area("assets", "Reference files (examples, decks, designs), one folder per asset."),
-        Area("sessions", "Per-conversation records: sessions/<tool>/<session-id>/."),
-        Area("inbox", "Raw drops from tools that cannot write here directly."),
+        Area("sessions", "Per-conversation records: sessions/<profile>/<session-id>/."),
+        Area("native", "Tool-specific settings with no portable equivalent, per profile (secrets removed)."),
+        Area("inbox", "Raw drops from tools that cannot write here directly; inbox/conflicts/ holds "
+                      "incoming versions that clash with another profile's."),
     )
 )

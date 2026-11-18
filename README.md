@@ -33,8 +33,8 @@ command or an adapter for it.
 
 Every item that outlives a single conversation (memory entries, skills,
 agents, workflows, apps, tables, assets, connections) records a
-`provenance` block: which tool and session created it, and every later
-change. That is what makes it possible to detect and resolve conflicts
+`provenance` block: which **profile** (a tool + an account, registered in
+`core/profiles.yaml`) and session created it, and every later change. That is what makes it possible to detect and resolve conflicts
 when two tools learned different things. Memory entries also carry
 `status`, `supersedes` and `conflicts_with`.
 
@@ -59,24 +59,32 @@ are marked with ★.
 |---|---|---|
 | `RepoLayout` | `harness/layout.py` | Where everything lives in a content repo |
 | `ContentRepo` | `harness/repo.py` | Entry point: a content repo with its layout, config and storage |
-| `ConfigFile`, `HarnessConfig` | `harness/config.py` | Change / read harness.config.yaml (validated) |
+| `ConfigFile`, `HarnessConfig` | `harness/config.py` | Read / change / upgrade harness.config.yaml (validated) |
 | `SchemaRegistry` | `harness/schemas/registry.py` | All JSON Schemas, cross-references resolved |
-| `Storage` ★, `BackendRegistry` | `harness/storage/` | Interface + registry for transcript / log storage |
-| `FilesystemStorage` | `harness/storage/filesystem.py` | Folder storage (OneDrive / Drive synced folders) |
+| `Profile`, `ProfileRegistry` | `harness/profiles.py` | Tool + account identities every origin refers to |
+| `Origin`, `Provenance` | `harness/provenance.py` | Who created and changed each item |
+| `SessionRecord` | `harness/sessions.py` | One conversation: meta, rolling summary, compactions |
+| `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it |
+| `MemoryStore` | `harness/memory.py` | Memory entries with conflict tracking |
+| `Captured`, `HarvestSync`, `ItemWriter` ★ | `harness/harvest/` | Turning what a tool holds into harness content |
+| `Adapter` ★, `AdapterRegistry` | `harness/adapters/` | One class per tool: harvest, hooks, install |
+| `ClaudeCodeAdapter` | `harness/adapters/claude_code/` | Claude Code ([docs](docs/adapters/claude-code.md)) |
+| `Storage` ★, `BackendRegistry` | `harness/storage/` | Storage for transcripts and live logs |
+| `GitSync` | `harness/git_sync.py` | Commit / push after captures |
+| `LocalHome` | `harness/local.py` | Per-machine settings and state (`~/.my-harness`) |
 | `RepoValidator`, `Check` ★, `FileReader` ★ | `harness/validation/` | Configurable checks over a content repo |
-| `Scaffolder` | `harness/scaffold.py` | `harness init` |
+| `Scaffolder` | `harness/scaffold.py` | `harness init` and `harness upgrade` |
 | `HarnessCLI`, `Command` ★ | `harness/cli/` | The `harness` program; one class per command |
-| `YamlDocument` | `harness/yaml_io.py` | Comment-preserving YAML edits (the only YAML dependency) |
 
 Adding things:
 
+- **A tool**: subclass `Adapter`, decorate with `@adapters.register`, import it in `harness/adapters/__init__.py`.
 - **A storage backend**: subclass `Storage`, decorate with `@backends.register`, add its name to `config.schema.json`.
-- **A content type**: add a schema to `harness/schemas/` and a `SchemaCheck` in `RepoValidator.default`.
+- **A content type**: add a schema to `harness/schemas/`, an `ItemWriter` if tools produce it, and a `SchemaCheck`.
 - **A command**: subclass `Command` and add it to `DEFAULT_COMMANDS`.
 
 ```
-adapters/   per-tool capture and install (coming next)
-docs/       design notes
+docs/       design notes and per-tool adapter docs
 tests/      one test file per component
 ```
 

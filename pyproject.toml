@@ -28,7 +28,7 @@ include = ["harness*"]
 [tool.setuptools.package-data]
 # Schemas and the content-repo template ship inside the package so that
 # `harness init` works from any install location.
-harness = ["schemas/*.json", "templates/**/*", "templates/**/.*"]
+harness = ["schemas/*.json", "templates/**/*", "templates/**/.*", "adapters/*/skill/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

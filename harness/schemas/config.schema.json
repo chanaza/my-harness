@@ -54,6 +54,16 @@
           "type": "integer",
           "minimum": 1,
           "description": "For tools that cannot report token usage: start logging after this many messages."
+        },
+        "live_log_max_chars": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Length cap per side (prompt / answer) of a live-log entry."
+        },
+        "context_window_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Context window size used to compute usage percent."
         }
       },
       "additionalProperties": false
@@ -146,6 +156,107 @@
       },
       "uniqueItems": true,
       "description": "Tools this harness is used with."
+    },
+    "checkpoints": {
+      "description": "When the session summary is refreshed. A checkpoint is due when ANY enabled trigger fires.",
+      "type": "object",
+      "required": [
+        "every_user_messages",
+        "every_context_percent",
+        "force_at_context_percent",
+        "on_compaction"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "every_user_messages": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "const": 0
+            }
+          ],
+          "description": "Every N of your messages since the last checkpoint (0 = off)."
+        },
+        "every_context_percent": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            {
+              "const": 0
+            }
+          ],
+          "description": "Every time context usage grew by this many points (0 = off)."
+        },
+        "force_at_context_percent": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            {
+              "const": 0
+            }
+          ],
+          "description": "One forced checkpoint when usage reaches this level (0 = off)."
+        },
+        "on_compaction": {
+          "type": "boolean",
+          "description": "Save the tool's own compaction summary as a checkpoint."
+        },
+        "summary_max_words": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "git": {
+      "type": "object",
+      "required": [
+        "auto_commit",
+        "auto_push"
+      ],
+      "properties": {
+        "auto_commit": {
+          "type": "boolean",
+          "description": "Commit after every capture."
+        },
+        "auto_push": {
+          "type": "boolean",
+          "description": "Push at every checkpoint and session end."
+        }
+      },
+      "additionalProperties": false
+    },
+    "harvest": {
+      "type": "object",
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Capture skills, agents, instructions, memory, connections from the tool."
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Glob patterns (matched against '<kind>:<name>', e.g. 'skill:pdf' or 'skill:*') to skip."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

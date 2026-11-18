@@ -56,34 +56,48 @@ class Scaffolder:
         self._ensure_empty(target)
         target.mkdir(parents=True, exist_ok=True)
 
-        self._copy(self.template, target)
+        self._copy(self.template, target, overwrite=True)
         repo = ContentRepo(target, self.layout)
         repo.config_file.update(options.config_changes())
         self._create_areas(repo)
         repo.path("README.md").write_text(self._readme(options.owner), encoding="utf-8")
         return repo
 
+    def ensure_structure(self, repo: ContentRepo) -> list[Path]:
+        """Add template files and areas that a newer engine introduced. Never overwrites."""
+        created = self._copy(self.template, repo.root, overwrite=False)
+        created += self._create_areas(repo)
+        return created
+
     @staticmethod
     def _ensure_empty(target: Path) -> None:
         if target.exists() and any(p.name != ".git" for p in target.iterdir()):
             raise ScaffoldError(f"{target} is not empty. `harness init` only runs on an empty folder.")
 
-    def _copy(self, source: Traversable, target: Path) -> None:
+    def _copy(self, source: Traversable, target: Path, overwrite: bool) -> list[Path]:
+        """Copy the template tree; returns files written."""
+        written: list[Path] = []
         for entry in source.iterdir():
             destination = target / entry.name
             if entry.is_dir():
                 destination.mkdir(exist_ok=True)
-                self._copy(entry, destination)
-            else:
+                written += self._copy(entry, destination, overwrite)
+            elif overwrite or not destination.exists():
                 destination.write_bytes(entry.read_bytes())
+                written.append(destination)
+        return written
 
-    def _create_areas(self, repo: ContentRepo) -> None:
-        """Create every area; empty ones get a .gitkeep so Git tracks them."""
+    def _create_areas(self, repo: ContentRepo) -> list[Path]:
+        """Create missing areas; empty ones get a .gitkeep so Git tracks them."""
+        created: list[Path] = []
         for area in self.layout.areas:
             folder = repo.path(area.path)
-            folder.mkdir(parents=True, exist_ok=True)
+            if not folder.is_dir():
+                folder.mkdir(parents=True)
+                created.append(folder)
             if not any(folder.iterdir()):
                 (folder / ".gitkeep").touch()
+        return created
 
     def _readme(self, owner: str) -> str:
         rows = "\n".join(f"| `{a.path}/` | {a.purpose} |" for a in self.layout.areas)

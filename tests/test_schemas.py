@@ -11,5 +11,5 @@ def test_all_bundled_schemas_compile():
 
 def test_dates_are_checked():
     registry = SchemaRegistry.bundled()
-    assert registry.errors("provenance", {"source": {"tool": "chatgpt", "at": "yesterday"}})
+    assert registry.errors("provenance", {"source": {"profile": "chatgpt-work", "at": "yesterday"}})
     assert not registry.errors("provenance", PROVENANCE)

@@ -6,9 +6,11 @@ a ``Report``. New kinds of checks are new subclasses.
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from ..profiles import ProfileRegistry
 from ..repo import ContentRepo
 from .readers import FileReader, ReadError, YamlReader
 from .report import Report
@@ -66,3 +68,24 @@ class AssetSizeCheck(Check):
                     f"{size_mb:.1f} MB exceeds the inline limit; store it externally "
                     "and reference it from asset.yaml",
                 )
+
+
+class ProfileReferenceCheck(Check):
+    """Every profile referenced anywhere (provenance, session folders) must be registered."""
+
+    REFERENCE = re.compile(r"^\s*(?:-\s*)?profile:\s*([a-z0-9][a-z0-9-]*)\s*$", re.MULTILINE)
+    SCANNED = ("*.yaml", "*.md")
+
+    def run(self, repo: ContentRepo, report: Report) -> None:
+        known = ProfileRegistry(repo).ids()
+        sessions = repo.path("sessions")
+        for folder in sorted(sessions.iterdir()) if sessions.is_dir() else []:
+            if folder.is_dir() and folder.name not in known:
+                report.add(folder.relative_to(repo.root).as_posix(), f"unknown profile {folder.name!r}")
+        for pattern in self.SCANNED:
+            for path in sorted(repo.root.rglob(pattern)):
+                if ".git" in path.parts:
+                    continue
+                for profile in set(self.REFERENCE.findall(path.read_text("utf-8", errors="replace"))):
+                    if profile not in known:
+                        report.add(path.relative_to(repo.root).as_posix(), f"unknown profile {profile!r}")

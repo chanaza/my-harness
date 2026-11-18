@@ -15,6 +15,39 @@ capture:
   live_log_threshold_percent: 80
   # For tools that cannot report token usage: start logging after this many messages.
   live_log_fallback_messages: 40
+  # Each live-log entry keeps at most this many characters of your message and of the answer.
+  live_log_max_chars: 600
+  # Context window size used to turn token counts into a usage percent.
+  context_window_tokens: 200000
+
+checkpoints:
+  # A checkpoint refreshes the rolling session summary (sessions/<tool>/<id>/summary.md).
+  # There is no reliable "end of conversation", so the summary is kept current instead.
+  # A checkpoint is due when ANY trigger below fires. Set a trigger to 0 to turn it off.
+  enabled: true
+  # Every N of your messages since the last checkpoint (also covers running out of plan quota).
+  every_user_messages: 10
+  # Every time context usage grew by this many percentage points since the last checkpoint.
+  every_context_percent: 20
+  # One last forced checkpoint when context usage reaches this level, before tokens run out.
+  force_at_context_percent: 80
+  # Also save the tool's own compaction summary whenever it compacts the conversation.
+  on_compaction: true
+  # Upper bound the model is asked to keep the summary under.
+  summary_max_words: 400
+
+git:
+  # Commit to this repository after every capture.
+  auto_commit: true
+  # Push at every checkpoint and when a session ends.
+  auto_push: true
+
+harvest:
+  # Capture what you build inside tools (instructions, skills, agents, memory, connections).
+  enabled: true
+  # Items to skip, as '<kind>:<name>' patterns, e.g. 'skill:pdf' or 'connection:*'.
+  # Kinds: instruction, skill, agent, memory, connection, native.
+  exclude: []
 
 storage:
   # Transcripts and live logs never go into Git. They go to these backends.

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/summary.schema.json",
+  "title": "Rolling session summary frontmatter (sessions/<tool>/<id>/summary.md)",
+  "type": "object",
+  "required": [
+    "session",
+    "updated_at",
+    "checkpoint"
+  ],
+  "properties": {
+    "session": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "checkpoint": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reason": {
+      "type": "string"
+    },
+    "context_percent": {
+      "type": "number"
+    },
+    "user_messages": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false
+}

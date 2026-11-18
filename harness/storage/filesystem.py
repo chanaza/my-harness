@@ -26,7 +26,11 @@ class FilesystemStorage(Storage):
     def from_settings(cls, settings: dict[str, Any]) -> FilesystemStorage:
         if not settings.get("path"):
             raise StorageError("The filesystem backend needs a 'path' setting.")
-        return cls(Path(os.path.expandvars(os.path.expanduser(settings["path"]))))
+        root = Path(os.path.expandvars(os.path.expanduser(settings["path"])))
+        if not root.is_absolute():
+            raise StorageError(f"Storage path {settings['path']!r} is not an absolute path on this "
+                               "machine (e.g. a Windows path used on Linux).")
+        return cls(root)
 
     def _path(self, key: str) -> Path:
         parts = PurePosixPath(key).parts

@@ -1,20 +1,29 @@
-"""The built-in `harness` commands."""
+"""Commands that create, check and configure a content repository."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
 
-from .. import yaml_io
-from ..config import ConfigError
-from ..repo import ContentRepo
-from ..scaffold import SUPPORTED_TOOLS, InitOptions, Scaffolder, ScaffoldError
-from ..validation import RepoValidator
-from .base import Command, ErrorExit
+from ... import yaml_io
+from ...config import ConfigError
+from ...local import LocalHome
+from ...repo import ContentRepo
+from ...scaffold import SUPPORTED_TOOLS, InitOptions, Scaffolder, ScaffoldError
+from ...validation import RepoValidator
+from ..base import Command, ErrorExit
 
 
-def _repo_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--repo", default=".", help="Content repository (default: current folder).")
+def repo_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--repo", help="Content repository (default: the one configured on this "
+                                       "machine, else the current folder).")
+
+
+def open_repo(args: argparse.Namespace) -> ContentRepo:
+    """--repo, else the machine's configured content repository, else the current folder."""
+    if args.repo:
+        return ContentRepo(Path(args.repo))
+    return ContentRepo(LocalHome().content_repo() or Path("."))
 
 
 class InitCommand(Command):
@@ -49,10 +58,10 @@ class ValidateCommand(Command):
     help = "Check a content repository against the schemas."
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
-        _repo_argument(parser)
+        repo_argument(parser)
 
     def run(self, args: argparse.Namespace) -> int:
-        repo = ContentRepo(Path(args.repo))
+        repo = open_repo(args)
         report = RepoValidator.default(repo.layout).validate(repo)
         for problem in report.problems:
             print(f"  x {problem}")
@@ -69,11 +78,11 @@ class ConfigGetCommand(Command):
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument("key", help="Dotted setting name.")
-        _repo_argument(parser)
+        repo_argument(parser)
 
     def run(self, args: argparse.Namespace) -> int:
         try:
-            value = ContentRepo(Path(args.repo)).config_file.get(args.key)
+            value = open_repo(args).config_file.get(args.key)
         except ConfigError as exc:
             raise ErrorExit(str(exc)) from None
         print(yaml_io.dump(_plain(value)).strip() if isinstance(value, (dict, list)) else value)
@@ -89,13 +98,13 @@ class ConfigSetCommand(Command):
         parser.add_argument("value", nargs="+", help="New value. Several values make a list.")
         parser.add_argument("--string", action="store_true",
                             help="Keep the value as text (no conversion to number/true/false).")
-        _repo_argument(parser)
+        repo_argument(parser)
 
     def run(self, args: argparse.Namespace) -> int:
         values = [v if args.string else self._parse(v) for v in args.value]
         value = values[0] if len(values) == 1 else values
         try:
-            ContentRepo(Path(args.repo)).config_file.update({args.key: value})
+            open_repo(args).config_file.update({args.key: value})
         except ConfigError as exc:
             raise ErrorExit(str(exc)) from None
         print(f"{args.key} = {value}")
@@ -128,5 +137,20 @@ def _plain(value: object) -> object:
     return value
 
 
-#: Commands exposed by `harness`, in help order.
-DEFAULT_COMMANDS: tuple[type[Command], ...] = (InitCommand, ValidateCommand, ConfigCommand)
+class UpgradeCommand(Command):
+    name = "upgrade"
+    help = "Bring the configuration up to the current engine: add new settings, keep your values."
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        repo_argument(parser)
+
+    def run(self, args: argparse.Namespace) -> int:
+        repo = open_repo(args)
+        try:
+            added = repo.config_file.upgrade()
+        except ConfigError as exc:
+            raise ErrorExit(str(exc)) from None
+        created = Scaffolder(repo.layout).ensure_structure(repo)
+        print(f"Added settings: {', '.join(added) or 'none'}")
+        print(f"Added files/folders: {', '.join(str(p.relative_to(repo.root)) for p in created) or 'none'}")
+        return 0

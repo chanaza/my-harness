@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from ..config import ConfigError
 from ..layout import RepoLayout
 from ..repo import ContentRepo
-from .checks import AssetSizeCheck, Check, SchemaCheck
+from .checks import AssetSizeCheck, Check, ProfileReferenceCheck, SchemaCheck
 from .readers import FrontmatterReader
 from .report import Report
 
@@ -22,6 +22,8 @@ class RepoValidator:
         frontmatter = FrontmatterReader()
         return cls([
             SchemaCheck(layout.connections_file, "connections"),
+            SchemaCheck(layout.profiles_file, "profiles"),
+            SchemaCheck("core/instructions/**/*.md", "instruction", frontmatter),
             SchemaCheck("core/skills/*/SKILL.md", "skill", frontmatter),
             SchemaCheck("core/agents/*.yaml", "agent"),
             SchemaCheck("core/workflows/*.yaml", "workflow"),
@@ -32,7 +34,10 @@ class RepoValidator:
             SchemaCheck("apps/*/data.yaml", "data_pointer"),
             SchemaCheck(f"{layout.assets_dir}/*/asset.yaml", "asset"),
             SchemaCheck("sessions/*/*/meta.yaml", "session_meta"),
+            SchemaCheck("sessions/*/*/summary.md", "summary", frontmatter),
+            SchemaCheck("sessions/*/*/compactions/*.md", "compaction", frontmatter),
             AssetSizeCheck(),
+            ProfileReferenceCheck(),
         ])
 
     def validate(self, repo: ContentRepo) -> Report:

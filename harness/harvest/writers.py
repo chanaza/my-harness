@@ -1,0 +1,217 @@
+"""Writers turn ``Captured`` items into harness content, one writer per kind.
+
+Every writer stamps provenance. Before overwriting, it checks who changed
+the target last: if a *different* profile did, the incoming version goes to
+``inbox/conflicts/`` instead, and the conflict is reported.
+"""
+
+from __future__ import annotations
+
+import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from .. import yaml_io
+from ..documents import MarkdownDocument
+from ..memory import MemoryStore
+from ..provenance import Origin, Provenance
+from ..repo import ContentRepo
+from ..text import slugify
+from .item import Captured, Kind
+
+CONFLICTS_DIR = "inbox/conflicts"
+
+
+@dataclass(frozen=True)
+class WriteResult:
+    action: str  # created | updated | conflict
+    path: Path
+
+
+class ItemWriter(ABC):
+    kind: Kind
+
+    def __init__(self, repo: ContentRepo) -> None:
+        self.repo = repo
+
+    @abstractmethod
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        """Write ``item`` into the repository."""
+
+    # --- shared helpers -------------------------------------------------------
+
+    def _conflicting(self, existing: dict[str, Any] | None, origin: Origin) -> bool:
+        last = Provenance.last_profile(existing)
+        return last is not None and last != origin.profile
+
+    def _conflict_path(self, target: Path, origin: Origin) -> Path:
+        relative = target.relative_to(self.repo.root)
+        return self.repo.path(CONFLICTS_DIR, origin.profile, *relative.parts)
+
+
+class InstructionWriter(ItemWriter):
+    """CLAUDE.md-style files -> core/instructions/<profile>/<scope>-<name>.md"""
+
+    kind = Kind.INSTRUCTION
+
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        name = "global" if item.scope == "global" else slugify(item.scope.split(":", 1)[-1])
+        target = self.repo.path("core", "instructions", origin.profile, f"{name}-{item.name}.md")
+        return _write_markdown(self, target, item, origin, item.text(next(iter(item.files))),
+                               {"scope": item.scope, "origin": item.origin})
+
+
+class SkillWriter(ItemWriter):
+    """A skill folder (or single prompt file) -> core/skills/<name>/ with SKILL.md + supporting files."""
+
+    kind = Kind.SKILL
+    MAIN = "SKILL.md"
+
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        folder = self.repo.path("core", "skills", slugify(item.name))
+        main = MarkdownDocument.parse(item.text(self.MAIN))
+        native = {k: v for k, v in main.meta.items() if k not in ("name", "description")}
+        meta = {
+            "name": slugify(item.name),
+            "description": str(main.meta.get("description") or _first_line(main.body) or item.name),
+            "origin": item.origin,
+        }
+        if native:
+            meta["native"] = {origin.profile: native}
+        result = _write_markdown(self, folder / self.MAIN, item, origin, main.body, meta)
+        destination = result.path.parent
+        for relative, content in item.files.items():
+            if relative != self.MAIN:
+                path = destination.joinpath(*relative.split("/"))
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+        return result
+
+
+class AgentWriter(ItemWriter):
+    """A sub-agent (Markdown with frontmatter) -> core/agents/<name>.yaml"""
+
+    kind = Kind.AGENT
+
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        source = MarkdownDocument.parse(item.text(next(iter(item.files))))
+        name = slugify(str(source.meta.get("name") or item.name))
+        target = self.repo.path("core", "agents", f"{name}.yaml")
+        existing = yaml_io.load(target.read_text("utf-8")) if target.is_file() else None
+        conflict = bool(existing) and self._conflicting(existing.get("provenance"), origin)
+        if conflict:
+            target = self._conflict_path(target, origin)
+
+        tools = source.meta.get("tools")
+        if isinstance(tools, str):
+            tools = [t.strip() for t in tools.split(",") if t.strip()]
+        native = {k: v for k, v in source.meta.items() if k not in ("name", "description", "tools")}
+        agent: dict[str, Any] = {
+            "name": name,
+            "description": str(source.meta.get("description") or name),
+            "instructions": source.body.strip(),
+            "origin": item.origin,
+        }
+        if tools:
+            agent["requires"] = {"tools": list(dict.fromkeys(tools))}
+        if native:
+            agent["native"] = {origin.profile: native}
+        previous = None if conflict or not existing else existing.get("provenance")
+        agent["provenance"] = Provenance.updated(previous, origin)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(yaml_io.dump(agent), encoding="utf-8")
+        return WriteResult("conflict" if conflict else ("updated" if existing else "created"), target)
+
+
+class MemoryWriter(ItemWriter):
+    """A memory document -> memory/<profile>-<scope>-<name>.md (conflicts handled by MemoryStore)."""
+
+    kind = Kind.MEMORY
+
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        scope = "" if item.scope == "global" else item.scope.split(":", 1)[-1] + "-"
+        entry_id = slugify(f"{origin.profile}-{scope}{item.name}")
+        body = MarkdownDocument.parse(item.text(next(iter(item.files)))).body
+        result = MemoryStore(self.repo).put(entry_id, body, origin, kind="project-state",
+                                            subject=item.meta.get("subject"))
+        return WriteResult(result.action, result.path)
+
+
+class ConnectionWriter(ItemWriter):
+    """MCP servers / plugins -> one entry in core/connections.yaml.
+
+    Availability is recorded per *tool* (item.meta["tool"]), not per account:
+    it describes what the tool can connect to.
+    """
+
+    kind = Kind.CONNECTION
+
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        path = self.repo.path(self.repo.layout.connections_file)
+        document = yaml_io.load(path.read_text("utf-8")) if path.is_file() else None
+        connections: list[dict[str, Any]] = list((document or {}).get("connections") or [])
+        entry_id = slugify(item.name)
+        current = next((c for c in connections if c.get("id") == entry_id), None)
+
+        available = {"kind": item.meta["kind"]}
+        if item.meta.get("notes"):
+            available["notes"] = item.meta["notes"]
+        if current is None:
+            connections.append({
+                "id": entry_id, "kind": item.meta["kind"],
+                "description": item.meta.get("description", item.name),
+                "available_in": {item.meta["tool"]: available},
+                "provenance": Provenance.new(origin),
+            })
+            action = "created"
+        else:
+            current.setdefault("available_in", {})[item.meta["tool"]] = available
+            current["provenance"] = Provenance.updated(current.get("provenance"), origin)
+            action = "updated"
+        path.write_text(yaml_io.dump({"connections": connections}), encoding="utf-8")
+        return WriteResult(action, path)
+
+
+class NativeWriter(ItemWriter):
+    """Tool-specific files kept as-is (secrets already removed) -> native/<profile>/<scope>/..."""
+
+    kind = Kind.NATIVE
+
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        scope = "global" if item.scope == "global" else slugify(item.scope.split(":", 1)[-1])
+        folder = self.repo.path("native", origin.profile, scope)
+        existed = False
+        for relative, content in item.files.items():
+            path = folder.joinpath(*relative.split("/"))
+            existed = existed or path.exists()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        return WriteResult("updated" if existed else "created", folder)
+
+
+DEFAULT_WRITERS: tuple[type[ItemWriter], ...] = (
+    InstructionWriter, SkillWriter, AgentWriter, MemoryWriter, ConnectionWriter, NativeWriter,
+)
+
+
+def _write_markdown(writer: ItemWriter, target: Path, item: Captured, origin: Origin, body: str,
+                    meta: dict[str, Any]) -> WriteResult:
+    """Shared path for Markdown items: provenance, conflict diversion, write."""
+    existing = MarkdownDocument.read(target).meta if target.is_file() else None
+    conflict = bool(existing) and writer._conflicting(existing.get("provenance"), origin)
+    if conflict:
+        target = writer._conflict_path(target, origin)
+    previous = None if conflict or not existing else existing.get("provenance")
+    meta = {**meta, "provenance": Provenance.updated(previous, origin)}
+    MarkdownDocument(meta, body).write(target)
+    return WriteResult("conflict" if conflict else ("updated" if existing else "created"), target)
+
+
+def _first_line(text: str) -> str:
+    for line in text.splitlines():
+        line = re.sub(r"^#+\s*", "", line).strip()
+        if line:
+            return line[:200]
+    return ""

@@ -8,57 +8,13 @@
   ],
   "properties": {
     "source": {
-      "type": "object",
-      "required": [
-        "tool",
-        "at"
-      ],
-      "properties": {
-        "tool": {
-          "type": "string",
-          "description": "Tool id the change came from, e.g. claude-code, chatgpt, base44."
-        },
-        "session": {
-          "type": "string",
-          "description": "Session id (sessions/<tool>/<session-id>/), when known."
-        },
-        "at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "note": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "description": "The tool and session that first created this item."
+      "$ref": "#/$defs/event",
+      "description": "The profile and session that first created this item."
     },
     "updates": {
       "type": "array",
       "items": {
-        "type": "object",
-        "required": [
-          "tool",
-          "at"
-        ],
-        "properties": {
-          "tool": {
-            "type": "string",
-            "description": "Tool id the change came from, e.g. claude-code, chatgpt, base44."
-          },
-          "session": {
-            "type": "string",
-            "description": "Session id (sessions/<tool>/<session-id>/), when known."
-          },
-          "at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "note": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
+        "$ref": "#/$defs/event"
       },
       "description": "Later changes, oldest first."
     }
@@ -68,13 +24,14 @@
     "event": {
       "type": "object",
       "required": [
-        "tool",
+        "profile",
         "at"
       ],
       "properties": {
-        "tool": {
+        "profile": {
           "type": "string",
-          "description": "Tool id the change came from, e.g. claude-code, chatgpt, base44."
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "Profile id from core/profiles.yaml (a tool + account)."
         },
         "session": {
           "type": "string",
