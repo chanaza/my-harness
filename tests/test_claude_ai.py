@@ -365,3 +365,26 @@ def test_connector_inbox_is_saved_in_the_harness_form(connected: ClaudeAiAdapter
         "captured_at: 2026-11-20T06:00:00Z\npart: 2/2\nconnections:" + tail, encoding="utf-8")
     InboxProcessor(repo).run()
     assert not any(inbox.iterdir())                                            # both parts saved together
+
+
+def test_descriptions_saved_before_full_content_are_cleaned(repo: ContentRepo):
+    import json
+
+    from harness.migrations import DescribeBeforeFullContent
+    profile = "claude-ai-personal-cloud"
+    numbered = repo.path("memory", f"{profile}-memory-1.md")
+    numbered.write_text("x")
+    project = repo.path("core", "projects", "cto")
+    project.mkdir(parents=True)
+    bare = repo.path("inbox", "conflicts", profile, "core", "skills", "deck", "SKILL.md")
+    bare.parent.mkdir(parents=True)
+    bare.write_text("---\nname: deck\n---\n")
+    state = repo.path("inbox", ".state", f"{profile}-describe.json")
+    state.parent.mkdir(parents=True)
+    state.write_text(json.dumps({"written": {
+        "memory:global:memory-1": f"memory/{profile}-memory-1.md",
+        "project:global:פרוסיד CTO": "core/projects/cto"}}))
+    changes = DescribeBeforeFullContent().apply(repo)
+    assert not numbered.exists() and not project.exists() and not bare.parent.exists()
+    assert not state.exists() and changes
+    assert DescribeBeforeFullContent().apply(repo) == []                   # once

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import shutil
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from . import yaml_io
 from .digest import session_part
@@ -88,10 +89,56 @@ class RemoveEngineArtifacts(Migration):
             if kind == "skill" and folder.is_dir():
                 shutil.rmtree(folder)
                 changes.append(f"core/skills/{name}")
+            workflow = repo.path("core", "workflows", f"{name}.yaml")
+            if kind == "workflow" and workflow.is_file():
+                workflow.unlink()
+                changes.append(f"core/workflows/{name}.yaml")
         return changes
 
 
-MIGRATIONS: tuple[Migration, ...] = (SimplifySessionRecords(), RemoveEngineArtifacts())
+class DescribeBeforeFullContent(Migration):
+    """Descriptions before 0.17 named memory by number and sent skills without their files.
+    Their numbered memory copies (replaced by memory named by topic) and the conflict copies
+    a bare description caused are removed; their records are dropped so the next description
+    is saved in full."""
+
+    id = "describe-before-full-content"
+    description = "Remove numbered memory copies and bare-description conflicts of 0.16"
+
+    def apply(self, repo: ContentRepo) -> list[str]:
+        import json
+        import re
+        changes = []
+        for state in sorted(repo.path("inbox", ".state").glob("*-describe.json")):
+            data = json.loads(state.read_text("utf-8"))
+            written = data.get("written") or {}
+            if not any(re.match(r"^memory:global:memory-\d+$", key) for key in written):
+                continue
+            from .text import slugify
+            for key, path in sorted(written.items()):
+                kind, _, name = key.split(":", 2)
+                target = repo.path(path)
+                numbered = kind == "memory" and re.fullmatch(r"memory-\d+", name)
+                # a folder named before names kept their letters (e.g. a Hebrew name)
+                misnamed = kind in ("project", "plugin", "skill") and Path(path).name != slugify(name)
+                if numbered or misnamed:
+                    if target.is_dir():
+                        shutil.rmtree(target)
+                    elif target.is_file():
+                        target.unlink()
+                    changes.append(path)
+            profile = state.name.removesuffix("-describe.json")
+            for skill in sorted(repo.path("inbox", "conflicts", profile).glob("**/core/skills/*/SKILL.md")):
+                if not skill.read_text("utf-8").split("---", 2)[-1].strip():   # a bare description
+                    shutil.rmtree(skill.parent)
+                    changes.append(skill.parent.relative_to(repo.root).as_posix())
+            state.unlink()
+            changes.append(state.relative_to(repo.root).as_posix())
+        return changes
+
+
+MIGRATIONS: tuple[Migration, ...] = (SimplifySessionRecords(), RemoveEngineArtifacts(),
+                                     DescribeBeforeFullContent())
 
 
 def run_migrations(repo: ContentRepo) -> dict[str, list[str]]:
