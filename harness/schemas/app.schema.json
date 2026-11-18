@@ -12,7 +12,7 @@
   "properties": {
     "name": {
       "type": "string",
-      "pattern": "^[a-z0-9][a-z0-9-]*$"
+      "pattern": "^[^\\W_A-Z](?:[^\\W_A-Z]|-)*$"
     },
     "profile": {
       "type": "string",
@@ -55,7 +55,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^[^\\W_A-Z](?:[^\\W_A-Z]|-)*$"
           },
           "uniqueItems": true,
           "description": "Ids from core/connections.yaml."

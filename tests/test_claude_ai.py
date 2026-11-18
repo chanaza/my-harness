@@ -288,6 +288,7 @@ projects:
     description: Decks
     instructions: "Always Hebrew."
     knowledge: [{path: style.md, content: "Use the brand colours."}]
+  - {name: פרוסיד CTO, description: מצגת, instructions: "עברית."}
 workflows:
   - {name: Morning brief, schedule: every weekday 8:00, prompt: "Brief me."}
   - {name: Harness - describe account, schedule: every day, prompt: "Run the harness-account skill."}
@@ -350,6 +351,7 @@ def test_connector_inbox_is_saved_in_the_harness_form(connected: ClaudeAiAdapter
     knowledge = repo.path("core", "projects", "client-decks", "knowledge", "style.md")
     assert "brand colours" in knowledge.read_text()
     assert repo.path("apps", "budget-tracker", "index.html").is_file()
+    assert repo.path("core", "projects", "פרוסיד-cto", "project.yaml").is_file()   # Hebrew names kept
     assert repo.path("memory", f"{profile}-consultancy.md").is_file() or \
         any("consultancy" in p.name for p in repo.path("memory").iterdir())  # named by topic
     assert not any("describe-account" in p.name for p in repo.path("core", "workflows").iterdir())
