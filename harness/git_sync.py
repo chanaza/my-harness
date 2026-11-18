@@ -50,6 +50,19 @@ class GitSync:
         except (subprocess.SubprocessError, OSError) as exc:
             return SyncResult(False, False, f"git failed: {exc}")
 
+    def pull(self) -> bool:
+        """Bring in what other machines pushed (settings included) before working.
+
+        Safe at any time: local uncommitted work is kept (autostash); on a conflict
+        nothing changes. Returns False only when the remote could not be merged.
+        """
+        if not self.is_repository() or not self._has_remote():
+            return True
+        try:
+            return self._catch_up()
+        except (subprocess.SubprocessError, OSError):
+            return False
+
     def _catch_up(self) -> bool:
         """Put this machine's commits on top of what other machines pushed (rebase).
 

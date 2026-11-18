@@ -103,10 +103,7 @@ class ConfigSetCommand(Command):
     def run(self, args: argparse.Namespace) -> int:
         values = [v if args.string else self._parse(v) for v in args.value]
         value = values[0] if len(values) == 1 else values
-        try:
-            open_repo(args).config_file.update({args.key: value})
-        except ConfigError as exc:
-            raise ErrorExit(str(exc)) from None
+        _change_config(open_repo(args), args.key, value)
         print(f"{args.key} = {value}")
         return 0
 
@@ -120,10 +117,57 @@ class ConfigSetCommand(Command):
         return parsed if isinstance(parsed, (bool, int, float)) else text
 
 
+class ConfigListCommand(Command):
+    """Shared base of `config add` / `config remove`: edit a list setting item by item."""
+
+    adding = True
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("key", help="A list setting, e.g. harvest.exclude.")
+        parser.add_argument("values", nargs="+", help="Items to add / remove.")
+        repo_argument(parser)
+
+    def run(self, args: argparse.Namespace) -> int:
+        repo = open_repo(args)
+        try:
+            current = list(repo.config_file.get(args.key) or [])
+        except ConfigError as exc:
+            raise ErrorExit(str(exc)) from None
+        if self.adding:
+            updated = current + [v for v in args.values if v not in current]
+        else:
+            updated = [v for v in current if v not in args.values]
+        _change_config(repo, args.key, updated)
+        print(f"{args.key}: {len(updated)} item(s)")
+        return 0
+
+
+class ConfigAddCommand(ConfigListCommand):
+    name = "add"
+    help = "Add items to a list setting, e.g. `harness config add harvest.exclude skill:pdf`."
+
+
+class ConfigRemoveCommand(ConfigListCommand):
+    name = "remove"
+    help = "Remove items from a list setting."
+    adding = False
+
+
+def _change_config(repo: ContentRepo, key: str, value: object) -> None:
+    """Validate, write and share a setting change (other machines pick it up)."""
+    git = GitSync(repo.root, repo.config.git)
+    git.pull()
+    try:
+        repo.config_file.update({key: value})
+    except ConfigError as exc:
+        raise ErrorExit(str(exc)) from None
+    git.sync(f"config: {key}", push=True)
+
+
 class ConfigCommand(Command):
     name = "config"
     help = "Read or change harness.config.yaml."
-    subcommands = (ConfigGetCommand, ConfigSetCommand)
+    subcommands = (ConfigGetCommand, ConfigSetCommand, ConfigAddCommand, ConfigRemoveCommand)
 
     def run(self, args: argparse.Namespace) -> int:  # pragma: no cover - dispatch only
         raise NotImplementedError

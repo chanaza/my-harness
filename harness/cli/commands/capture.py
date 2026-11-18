@@ -280,8 +280,9 @@ class HarvestCommand(Command):
                 for line in adapter.preview(adapter.repo().config.harvest_exclude):
                     print(f"  {line}")
                 return 0
-            report = adapter.run_harvest()
             repo = adapter.repo()
+            GitSync(repo.root, repo.config.git).pull()  # settings changed elsewhere apply here too
+            report = adapter.run_harvest()
             for removed in adapter.prune_harvest() if args.prune else []:
                 print(f"  - removed {removed}")
         except HarnessNotConfigured as exc:
@@ -307,8 +308,9 @@ class BackfillCommand(Command):
     def run(self, args: argparse.Namespace) -> int:
         adapter = adapters.create(args.tool)
         try:
-            entries = adapter.backfill(args.since_days, args.dry_run)
             repo = adapter.repo()
+            GitSync(repo.root, repo.config.git).pull()
+            entries = adapter.backfill(args.since_days, args.dry_run)
         except (HarnessNotConfigured, StorageError) as exc:
             raise ErrorExit(str(exc)) from None
         for e in entries:

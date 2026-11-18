@@ -330,3 +330,23 @@ def test_plugins_are_kept_whole_unless_excluded(adapter: ClaudeCodeAdapter, repo
     repo.config_file.update({"harvest.exclude": ["plugin:my-plugin"]})
     assert adapter.prune_harvest() == ["core/plugins/my-plugin"]
     assert "my-plugin" in repo.path("core", "connections.yaml").read_text()  # still listed to install
+
+
+def test_pull_brings_in_another_machines_settings(tmp_path: Path):
+    from harness.config import GitSettings
+    from harness.git_sync import GitSync
+
+    def git(cwd, *args):
+        subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", *args], cwd=cwd,
+                       check=True, capture_output=True)
+
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
+    for name in ("cloud", "windows"):
+        git(tmp_path, "clone", "-q", str(remote), str(tmp_path / name))
+    (tmp_path / "cloud" / "harness.config.yaml").write_text("exclude: [skill:pdf]\n")
+    for args in (("add", "-A"), ("commit", "-q", "-m", "a"), ("push", "-q", "-u", "origin", "HEAD")):
+        git(tmp_path / "cloud", *args)
+    git(tmp_path / "windows", "commit", "-q", "--allow-empty", "-m", "local")
+    assert GitSync(tmp_path / "windows", GitSettings(True, True)).pull()
+    assert (tmp_path / "windows" / "harness.config.yaml").read_text() == "exclude: [skill:pdf]\n"

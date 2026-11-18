@@ -217,6 +217,7 @@ class SetupWizard:
             "Save them to your harness now? (you can exclude items first with "
             "`harness config set harvest.exclude ...`)")
         if wanted:
+            GitSync(repo.root, repo.config.git).pull()
             result.done.append(f"captured: {adapter.capture()}")
 
 

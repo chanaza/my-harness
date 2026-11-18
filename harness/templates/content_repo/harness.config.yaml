@@ -48,6 +48,7 @@ harvest:
   # Capture what you build inside tools (instructions, skills, agents, memory, connections).
   enabled: true
   # Items to skip, as '<kind>:<name>' patterns, e.g. 'skill:pdf' or 'plugin:data'.
+  # Add one with: harness config add harvest.exclude skill:pdf
   # Kinds: instruction, skill, agent, memory, connection, plugin, native.
   # Skip what you did not build (e.g. Anthropic's skills and plugins): it is reinstalled, not copied.
   # A skipped plugin is still listed under connections, so you know to install it elsewhere.

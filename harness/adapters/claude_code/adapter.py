@@ -292,6 +292,7 @@ class _HookContext:
         with self._sync_lock() as lock:
             if not lock.acquired:
                 return  # another background sync is running; the next turn catches up
+            self.git.pull()  # settings changed on another machine apply before capturing
             report = self._safely("harvest", lambda: self.adapter.run_harvest(self.session.id))
             self._safely("workspace", self._record_workspace)
             self._safely("transcript", self._save_transcript)

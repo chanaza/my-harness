@@ -70,3 +70,12 @@ def test_cli_hook_never_fails(monkeypatch, tmp_path):
     monkeypatch.setattr("sys.stdin", io.StringIO('{"hook_event_name": "Stop"}'))
     assert main(["hook", "claude-code"]) == 0
     assert "not configured" in (tmp_path / "home" / "logs" / "harness.log").read_text()
+
+
+def test_cli_config_add_and_remove_list_items(repo):
+    root = str(repo.root)
+    assert main(["config", "add", "harvest.exclude", "skill:a", "skill:b", "--repo", root]) == 0
+    assert main(["config", "add", "harvest.exclude", "skill:b", "skill:c", "--repo", root]) == 0
+    assert repo.config.harvest_exclude == ["skill:a", "skill:b", "skill:c"]
+    assert main(["config", "remove", "harvest.exclude", "skill:b", "--repo", root]) == 0
+    assert repo.config.harvest_exclude == ["skill:a", "skill:c"]
