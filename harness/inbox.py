@@ -34,6 +34,7 @@ from jsonschema import Draft202012Validator
 
 from . import yaml_io
 from .checkpoints import CheckpointRecorder
+from .conversation_log import ConversationLog, Reply
 from .documents import MarkdownDocument
 from .harvest import Captured, HarvestReport, HarvestSync, Kind
 from .local import LocalHome, StateFile
@@ -210,28 +211,12 @@ class InboxProcessor:
         return moved
 
     def _exchange(self, file: InboxFile, report: HarvestReport) -> None:
-        """Keep one exchange as exchanges/<n>.md and rebuild log.md from all of them in reply
-        order: an exchange that arrives late still lands in its place, one sent twice is kept
-        once (the newest), and missing replies are marked so a gap is never silent."""
+        """One exchange into the conversation's log (the engine's ConversationLog)."""
         data = file.data
         record = SessionRecord(self.repo, file.profile, data["conversation"])
-        number = int(data["number"])
-        when = f" · {data['at']}" if data.get("at") else ""
-        entry = record.folder / "exchanges" / f"{number:05d}.md"
-        entry.parent.mkdir(parents=True, exist_ok=True)
-        entry.write_text(f"### Reply {number}{when}\n\n{file.body.strip()}\n", encoding="utf-8")
-        numbers = sorted(int(p.stem) for p in entry.parent.glob("*.md"))
-        parts = [f"# {data.get('title') or data['conversation']}\n\n"
-                 "Word for word, reply by reply (as sent by the tool's harness skill).\n"]
-        expected = 1
-        for n in numbers:
-            if n > expected:
-                parts.append(f"\n> Replies {expected}-{n - 1} were not received.\n" if n - 1 > expected
-                             else f"\n> Reply {expected} was not received.\n")
-            parts.append("\n---\n\n" + (entry.parent / f"{n:05d}.md").read_text("utf-8"))
-            expected = n + 1
-        (record.folder / "log.md").write_text("".join(parts), encoding="utf-8")
-        record.touch(activity_at=to_iso(data.get("at")), log_last=numbers[-1],
+        reply = Reply.from_exchange(int(data["number"]), to_iso(data.get("at")) or "", file.body)
+        last = ConversationLog(record).add(data.get("title") or data["conversation"], reply)
+        record.touch(activity_at=to_iso(data.get("at")), log_last=last,
                      **{k: v for k, v in (("topic", data.get("title")), ("surface", data.get("surface")),
                                          ("project", data.get("project") or None)) if v})
         report.counts["exchanges saved"] += 1

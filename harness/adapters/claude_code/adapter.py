@@ -35,6 +35,7 @@ from typing import Any, TypeVar
 from ...background import ProcessLock, spawn_detached
 from ...checkpoints import CheckpointPolicy, CheckpointRecorder
 from ...config import HarnessConfig
+from ...conversation_log import ConversationLog
 from ...digest import summary_request
 from ...git_sync import GitSync
 from ...harvest import Captured, HarvestReport, HarvestSync
@@ -49,6 +50,7 @@ from .constants import HOOK_EVENTS, HOOK_MARKER, SKILL_NAME, TOOL
 from .harvester import ClaudeCodeHarvester
 from .locations import ClaudeCodeLocations
 from .transcript import ContextMeter, TranscriptReader
+from .transcript_replies import transcript_replies
 
 T = TypeVar("T")
 
@@ -346,6 +348,10 @@ class _HookContext:
 
     def _save_transcript(self) -> None:
         self.session.save_transcript(self.repo.storage("transcripts", self.profile), self.transcript.path)
+        # The same readable log every tool has (summary.md + log.md = continue anywhere).
+        meta = self.session.meta()
+        title = meta.get("topic") or meta.get("project") or self.session.native_id
+        ConversationLog(self.session).write(str(title), transcript_replies(Path(self.transcript.path)))
 
     def _checkpoint_request(self, reason: str) -> str:
         words = self.config.checkpoints.summary_max_words

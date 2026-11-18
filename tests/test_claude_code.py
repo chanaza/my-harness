@@ -364,3 +364,31 @@ def test_engine_skills_are_never_saved_by_any_adapter(repo: ContentRepo, tmp_pat
     old.mkdir(parents=True)
     (old / "SKILL.md").write_text("x")
     assert run_migrations(repo)["remove-engine-artifacts"] == ["core/skills/harness-save"]
+
+
+def test_claude_code_transcript_becomes_the_engines_log(tmp_path):
+    """The adapter only reads Claude Code's transcript; the log's form is the engine's."""
+    import json as _json
+
+    from harness.adapters.claude_code.transcript_replies import transcript_replies
+    from harness.conversation_log import ConversationLog
+    lines = [
+        {"type": "user", "timestamp": "2026-11-18T05:43:16.8Z", "message": {"content": "שלום"}},
+        {"type": "assistant", "message": {"content": [{"type": "thinking", "thinking": "x"},
+                                                      {"type": "text", "text": "Hello"},
+                                                      {"type": "tool_use", "name": "Bash",
+                                                       "input": {"description": "List files"}}]}},
+        {"type": "user", "message": {"content": [{"type": "tool_result", "content": "ok"}]}},
+        {"type": "user", "isMeta": True, "message": {"content": "injected"}},
+        {"type": "attachment", "attachment": {"type": "queued_command", "prompt": "also this",
+                                              "origin": {"kind": "human"}}},
+        {"type": "user", "message": {"content": [{"type": "image"}, {"type": "text", "text": "see"}]}},
+        {"type": "assistant", "message": {"content": [{"type": "text", "text": "Seen"}]}},
+    ]
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("\n".join(_json.dumps(line, ensure_ascii=False) for line in lines))
+    replies = transcript_replies(transcript)
+    assert [r.number for r in replies] == [1, 2]
+    text = ConversationLog.render("Plan", replies)
+    assert "שלום" in text and "Hello" in text and "- *Bash: List files*" in text
+    assert "also this" in text and "[image]" in text and "injected" not in text and "thinking" not in text
