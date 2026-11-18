@@ -27,14 +27,17 @@ On macOS / Linux:
 curl -fsSL https://raw.githubusercontent.com/chanaza/my-harness/main/scripts/install.sh | bash
 ```
 
-It asks a few short questions (where your repository is, a name for each of
-your accounts, whether you use claude.ai) and shows what it found before
-saving anything.
+It asks a few short questions (where your repository is, a short name for this
+computer such as `office` or `home`, a name for each of your accounts, whether
+you use claude.ai) and shows what it found before saving anything. On a second
+computer run the same command and give it another name.
 
-**2. If you use claude.ai or Cowork,** the installer puts one skill file per
-account in your Downloads folder: upload it on claude.ai, then in Cowork type
-`Set up harness-account`. It saves through your own small connector
-([docs/connector.md](docs/connector.md), set up once).
+**2. If you use claude.ai or Cowork,** set up your own small **harness
+connector** once (about 15 minutes, free, no command line:
+[docs/connector.md](docs/connector.md)) and add it to each Claude account. Then
+upload the skill file the installer put in your Downloads folder (one per
+account) and, in Cowork, type `Set up harness-account`. The skill updates
+itself: improvements arrive without uploading it again.
 (Can't find the file? Run `python -m harness skill claude-ai`.)
 
 From then on, everything is saved by itself. Nothing is shown while it runs.
@@ -47,9 +50,24 @@ From then on, everything is saved by itself. Nothing is shown while it runs.
 
 | Tool | What | How |
 |---|---|---|
-| Claude Code (computer and cloud) | Instructions, skills, agents, memory, connections, every conversation | Every turn, in the background |
-| claude.ai and Cowork (your Claude account) | Instructions, memory, skills, projects, scheduled tasks, apps, conversation summaries | The account skill, through your connector: after every reply, and a daily description |
-| Cowork sessions kept on this computer | Every conversation and its files | When you ask: `python -m harness harvest cowork` |
+| Claude Code (computer and cloud) | Instructions, skills, agents, memory, connections; every conversation in full (raw transcript + readable log) and its summary | Every turn, in the background |
+| claude.ai and Cowork (your Claude account) | Profile, instructions, memory, your skills and plugins with their files, projects (from inside each project), scheduled tasks, apps, connections | The account skill: a full description every day; a project when you work in it |
+| — conversations there | Every exchange word for word, and a summary every 10 replies | The account skill, after every reply |
+| — history from before | Every chat with its attachments | Once, from claude.ai's data export (Settings > Privacy > Export data) |
+| Cowork sessions kept on a computer | Every conversation and its files | When you ask: `python -m harness harvest cowork` |
+| monday.com | Your AI agents (with skills, knowledge, jobs), workflows, recent agent runs | When you ask: `python -m harness harvest monday` |
+
+How each tool is captured is one setting per tool (`capture_modes` in your
+harness settings); `python -m harness sources` shows it.
+
+### Continue anywhere
+
+Every conversation, from any tool, ends up in the same form in
+`sessions/<profile>/<conversation>/`: **`summary.md`** (goal, decisions, current
+state, open thread, standing instructions, preferences, connections) and
+**`log.md`** (word for word, reply by reply). If you run out of tokens, give a
+new tool the latest summary and the log after it, and continue from exactly
+where you stopped.
 
 Saving only: nothing from the harness is loaded back into your tools yet.
 What is finished and what is not: [ROADMAP.md](ROADMAP.md).
@@ -79,7 +97,8 @@ command or an adapter for it.
 | Kind | Examples | Where it lives |
 |---|---|---|
 | Knowledge | Instructions, skills, memory, summaries, app and table schemas | Content repo (Git) |
-| Transcripts | Full conversation transcripts | Transcript storage (`storage:` in config) |
+| Conversations | `summary.md` + readable `log.md` per conversation | Content repo, `sessions/` |
+| Transcripts | Raw transcripts, exactly as the tool keeps them | Transcript storage (`storage:` in config) |
 | App data | Rows of tables in Base44, Monday boards | Reserved: `apps/<app>/data.yaml` points to snapshots (later phase) |
 
 ## Provenance everywhere
@@ -96,8 +115,12 @@ when two tools learned different things. Memory entries also carry
 ```bash
 pip install -e ".[dev]"
 python -m pytest
+node --test connector/test/worker.test.mjs
 harness --help
 ```
+
+Every change keeps this README, `docs/` and `ROADMAP.md` up to date. Nothing is
+pushed unless every test passes.
 
 ## Code map
 
@@ -114,14 +137,18 @@ are marked with ★.
 | `Origin`, `Provenance` | `harness/provenance.py` | Who created and changed each item |
 | `SessionRecord` | `harness/sessions.py` | One conversation: meta, rolling summary, compactions |
 | `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it |
-| `SummaryDigest` | `harness/digest.py` | Structured summary sections -> instructions, memory, connections |
+| `SummaryDigest`, `summary_request` | `harness/digest.py` | The one summary language for every tool; its sections -> instructions, memory, connections |
+| `ConversationLog`, `Reply` | `harness/conversation_log.py` | The one readable `log.md` per conversation, for every tool |
+| `InboxProcessor` | `harness/inbox.py` | Saves what the harness connector dropped into `inbox/connector/` (`harness inbox`) |
 | `WorkspaceScanner` | `harness/workspace.py` | Repositories, branches and commits a session works in |
 | `MemoryStore` | `harness/memory.py` | Memory entries with conflict tracking |
 | `Captured`, `HarvestSync`, `ItemWriter` ★ | `harness/harvest/` | Turning what a tool holds into harness content |
 | `Adapter` ★, `AdapterRegistry` | `harness/adapters/` | One class per tool: harvest, hooks, install |
 | `ClaudeCodeAdapter` | `harness/adapters/claude_code/` | Claude Code ([docs](docs/adapters/claude-code.md)) |
 | `CoworkAdapter` | `harness/adapters/cowork/` | Cowork in the Claude desktop app ([docs](docs/adapters/cowork.md)) |
-| `ClaudeAiAdapter` | `harness/adapters/claude_ai/` | claude.ai chats, projects, memory via its export ([docs](docs/adapters/claude-ai.md)) |
+| `ClaudeAiAdapter` | `harness/adapters/claude_ai/` | The Claude account (claude.ai, Desktop, Cowork): the self-updating skill, and one-off exports ([docs](docs/adapters/claude-ai.md)) |
+| `MondayAdapter` | `harness/adapters/monday/` | monday.com agents, workflows and runs through its API |
+| harness connector | `connector/worker.js` | Your own tiny MCP server: tools without direct access save into the inbox ([docs](docs/connector.md)) |
 | `AccountBoundAdapter` | `harness/adapters/base.py` | Shared base for tools with several accounts, captured on a schedule |
 | `StructuredMerge` | `harness/merge.py` | Merges the harness's YAML files by content across machines |
 | `Scheduler` | `harness/scheduler.py` | Periodic capture for tools without hooks (Task Scheduler / cron) |
@@ -134,7 +161,8 @@ are marked with ★.
 | `Scaffolder` | `harness/scaffold.py` | `harness init` and `harness upgrade` |
 | `HarnessCLI`, `Command` ★ | `harness/cli/` | The `harness` program; one class per command |
 
-Adding things:
+Adding things. The rule: **the engine holds every piece of logic once; an adapter only
+translates its tool's own format** (e.g. Claude Code's transcript into `Reply` objects).
 
 - **A tool**: subclass `Adapter`, decorate with `@adapters.register`, import it in `harness/adapters/__init__.py`.
 - **A storage backend**: subclass `Storage`, decorate with `@backends.register`, add its name to `config.schema.json`.
