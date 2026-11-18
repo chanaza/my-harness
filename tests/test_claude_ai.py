@@ -183,3 +183,30 @@ def test_skill_name_avoids_reserved_words(connected: ClaudeAiAdapter):
     front = files[f"{name}/SKILL.md"].decode().split("---")[1]
     skill_name = next(line for line in front.splitlines() if line.startswith("name:")).split(":", 1)[1]
     assert "claude" not in skill_name.lower() and "anthropic" not in skill_name.lower()
+
+
+def test_typed_accounts_are_named_by_their_e_mail_without_a_found_list(repo: ContentRepo, tmp_path: Path,
+                                                                       monkeypatch):
+    class FakeScheduler:
+        def install(self, name, args, minutes):
+            return "scheduled"
+
+    class Recording(Answers):
+        def __init__(self, *answers):
+            super().__init__(*answers)
+            self.questions, self.said = [], []
+
+        def ask(self, question, default=None):
+            self.questions.append(question)
+            return super().ask(question, default)
+
+        def say(self, text):
+            self.said.append(text)
+
+    monkeypatch.setattr("harness.scheduler.system_scheduler", FakeScheduler)
+    repo.config_file.update({"claude_ai.watch_folder": str(tmp_path / "empty")})
+    prompter = Recording("me@example.com, work@example.com", "personal", "work", str(tmp_path / "f"), False)
+    SetupWizard(prompter, LocalHome()).run(SetupOptions(tool="claude-ai", repo=str(repo.root),
+                                                        environment="local"))
+    assert not any(s.startswith("Found") for s in prompter.said)
+    assert any("Name for me@example.com" in q for q in prompter.questions)

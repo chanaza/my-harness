@@ -45,8 +45,8 @@ SKILL_NAME = "harness-export"
 class ClaudeAiAdapter(AccountBoundAdapter):
     tool = TOOL
     environment = "cloud"  # an account service, not a machine
-    account_question = ("Do you also use claude.ai (chats, projects)? "
-                        "Its account e-mail(s), separated by commas")
+    account_question = ("The e-mail address of your claude.ai account (several: separate them with "
+                        "commas). If you don't use claude.ai, just press Enter")
     offered_everywhere = True
 
     def __init__(self, local: LocalHome | None = None, watch_folder: Path | None = None) -> None:

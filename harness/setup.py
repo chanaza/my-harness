@@ -129,33 +129,37 @@ class SetupWizard:
 
     def _choose_accounts(self, accounts: list[Account], options: SetupOptions,
                          adapter_question: str | None = None) -> list[tuple[Account, str]]:
-        """One account: ask its name. Several: list them and name each (or skip it)."""
+        """Name each account. Accounts found on the machine are listed first; accounts the user
+        typed (e.g. e-mail addresses) are simply named, one by one."""
+        typed = False
         if not accounts and adapter_question:
-            # Nothing captured yet (e.g. no export downloaded): name the accounts up front.
-            answer = self.prompter.ask(f"{adapter_question} (leave empty to skip)", "")
+            # Nothing captured yet (e.g. no export downloaded): the user names the accounts.
+            answer = self.prompter.ask(adapter_question, "")
             accounts = [Account(key.strip(), key.strip()) for key in answer.split(",") if key.strip()]
+            typed = True
             if not accounts:
                 raise SetupSkipped(options.tool)
         if not accounts:
             raise SetupError(f"Nothing from {options.tool} was found on this machine.")
-        if len(accounts) == 1:
+        if len(accounts) == 1 and not typed:
             plain = options.account if options.account and "=" not in options.account else None
             label = plain or self.prompter.ask(
                 "Which account is this? (a short name, e.g. personal or work)", "personal")
             return [(accounts[0], label)]
         given = dict(part.split("=", 1) for part in (options.account or "").split(",") if "=" in part)
-        self.prompter.say(f"Found {len(accounts)} accounts:")
-        for number, account in enumerate(accounts, 1):
-            self.prompter.say(f"  {number}. {account.summary}")
+        if not typed:
+            self.prompter.say(f"Found {len(accounts)} accounts:")
+            for number, account in enumerate(accounts, 1):
+                self.prompter.say(f"  {number}. {account.summary}")
         chosen = []
         for number, account in enumerate(accounts, 1):
-            short = (account.key or "")[:8]
+            subject = account.key if typed else f"account {number}"
             label = next((v for k, v in given.items() if k in (account.key or "")), None) or \
-                self.prompter.ask(f"Name for account {number} (e.g. personal or work; 'skip' leaves it out)")
+                self.prompter.ask(f"Name for {subject} (e.g. personal or work; 'skip' leaves it out)")
             if label.strip().lower() != "skip":
                 chosen.append((account, label.strip()))
             else:
-                self.prompter.say(f"  account {short}… left out")
+                self.prompter.say(f"  {subject} left out")
         if not chosen:
             raise SetupError("No account was chosen.")
         return chosen
@@ -228,6 +232,8 @@ class SetupWizard:
     def _offer_capture(self, adapter: Adapter, repo: ContentRepo, options: SetupOptions,
                        result: SetupResult) -> None:
         lines = adapter.preview(repo.config.harvest_exclude)
+        if not lines:
+            return  # nothing to save yet (e.g. no export downloaded); it will be saved when it arrives
         self.prompter.say(f"Found in {options.tool}:")
         for line in lines:
             self.prompter.say(f"  {line}")
