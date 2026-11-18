@@ -101,7 +101,7 @@ class GitSync:
         """Let Git merge the harness's YAML files by content (this clone only, nothing committed)."""
         # Git runs drivers through a POSIX shell, also on Windows: a path with backslashes would
         # lose them, so the interpreter is given with forward slashes, quoted for that shell.
-        command = f"{shlex.quote(Path(sys.executable).as_posix())} -m harness merge-file"
+        command = f"{shlex.quote(sys.executable.replace(chr(92), '/'))} -m harness merge-file"
         self._git("config", f"merge.{self.MERGE_DRIVER}.name", "harness YAML merge", check=False)
         self._git("config", f"merge.{self.MERGE_DRIVER}.driver", f"{command} %O %A %B %P", check=False)
         attributes = self.root / ".git" / "info" / "attributes"
