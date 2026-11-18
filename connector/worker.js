@@ -1,9 +1,11 @@
-// The harness connector: a tiny MCP server with ONE tool, save_to_harness.
+// The harness connector: a tiny MCP server with two tools: save_to_harness (write one file
+// into the inbox) and harness_instructions (what a tool's harness skill should do, kept up
+// to date by the engine in connector/instructions/<tool>.md, so skills never need re-uploading).
 //
 // Tools that cannot write to the harness directly (claude.ai, Cowork, ...) call it from
 // their harness skill. It checks the file at the door, writes it to inbox/connector/ in
 // the harness repository, and starts the "harness inbox" GitHub Actions run at most every
-// connector.run_every_minutes (read from harness.config.yaml); a Cron Trigger checks every few
+// connector.run_every_minutes (read from harness.config.yaml); a Cron Trigger checks every 30
 // minutes for files still waiting. Nothing is stored here.
 //
 // Standard web code (a fetch handler): runs on Cloudflare Workers, Deno Deploy, Vercel
@@ -16,6 +18,23 @@
 const NAME = /^(describe|conversation)-[A-Za-z0-9._-]{1,120}\.(yaml|md)$/;
 const MAX_BYTES = 1_000_000;
 const WORKFLOW = "harness-inbox.yml";
+
+const SLUG = /^[a-z0-9][a-z0-9-]{0,80}$/;
+
+const INSTRUCTIONS_TOOL = {
+  name: "harness_instructions",
+  description:
+    "The current instructions of the user's harness skill for this tool: when and how to save " +
+    "to the harness. Call it once per conversation before saving, and follow it exactly.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      tool: { type: "string", description: "The tool, as the skill names it, e.g. claude-ai" },
+      profile: { type: "string", description: "The profile, as the skill names it" },
+    },
+    required: ["tool", "profile"],
+  },
+};
 
 const TOOL = {
   name: "save_to_harness",
@@ -34,7 +53,7 @@ const TOOL = {
 };
 
 export default {
-  // Every few minutes (a Cron Trigger, e.g. */5 * * * *): files waiting in the inbox are
+  // Every 30 minutes (a Cron Trigger: */30 * * * *): files waiting in the inbox are
   // saved into place once connector.run_every_minutes has passed since the last run.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(startInboxRunIfWaiting(env, env.BRANCH || "main"));
@@ -63,9 +82,14 @@ export default {
       case "ping":
         return rpcResult(message.id, {});
       case "tools/list":
-        return rpcResult(message.id, { tools: [TOOL] });
-      case "tools/call":
-        return rpcResult(message.id, await save(message.params?.arguments || {}, env));
+        return rpcResult(message.id, { tools: [TOOL, INSTRUCTIONS_TOOL] });
+      case "tools/call": {
+        const args = message.params?.arguments || {};
+        const result = message.params?.name === INSTRUCTIONS_TOOL.name
+          ? await instructions(args, env)
+          : await save(args, env);
+        return rpcResult(message.id, result);
+      }
       default:
         return rpcError(message.id, -32601, `Unknown method ${message.method}`);
     }
@@ -84,6 +108,16 @@ async function save({ file_name: name, content }, env) {
   if (!written.ok) return answer(`Not saved: GitHub answered ${written.status}.`, true);
   await startInboxRun(env, branch);
   return answer(`Saved ${name}.`, false);
+}
+
+async function instructions({ tool, profile }, env) {
+  if (!SLUG.test(tool || "") || !SLUG.test(profile || "")) {
+    return answer("tool and profile are needed, exactly as the harness skill names them.", true);
+  }
+  const branch = env.BRANCH || "main";
+  const file = await github(env, "GET", `contents/connector/instructions/${tool}.md?ref=${branch}`, null, "raw");
+  if (!file.ok) return answer(`No harness instructions for ${tool} yet (run \`harness upgrade\`).`, true);
+  return answer((await file.text()).replaceAll("${PROFILE}", profile), false);
 }
 
 // The full form is checked by the engine; here only what makes a file unusable.

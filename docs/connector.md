@@ -2,9 +2,15 @@
 
 Tools that cannot write to your harness themselves (claude.ai, Claude Desktop,
 Cowork, and later any tool that supports connectors) save through **one small
-connector of your own**. It can do exactly one thing: put a file into the
-`inbox/connector/` folder of your harness repository. It cannot read, change or
-delete anything else, and nothing is stored on it.
+connector of your own**. It can do exactly two things: put a file into the
+`inbox/connector/` folder of your harness repository, and hand a tool's skill its
+current instructions (`connector/instructions/<tool>.md`, written by the engine). It
+cannot read, change or delete anything else, and nothing is stored on it.
+
+**Skills update themselves:** the skill you upload is a few lines that ask the
+connector for its instructions. When the engine improves, `harness inbox` (GitHub
+Actions) and `harness upgrade` rewrite the instructions in your repository, and every
+account follows them from its next conversation. No new upload.
 
 ```
 your skill in claude.ai / Cowork  ->  harness connector  ->  inbox/connector/ in your repository
@@ -17,8 +23,8 @@ your skill in claude.ai / Cowork  ->  harness connector  ->  inbox/connector/ in
   file is checked against its full form and saved like any other capture. A file
   that does not match goes to `inbox/rejected/` with the reason next to it.
 - **How often:** at most every `connector.run_every_minutes` (default 30). Files that
-  arrive meanwhile wait; the connector checks every 5 minutes and starts the next run
-  as soon as it is allowed.
+  arrive meanwhile wait; the connector checks every 30 minutes and starts the next run
+  as soon as it is allowed (a file waits about an hour at most).
 
 ## Set it up (once, about 15 minutes)
 
@@ -43,7 +49,7 @@ On github.com: your picture > **Settings** > **Developer settings** >
    - `GITHUB_TOKEN` (Secret): the key from step 1
    - `SECRET_PATH` (Secret): a long random text, e.g. 40 letters and digits
      typed at random. It is part of the connector's address: keep it private.
-5. **Settings** > **Triggers** > **Cron Triggers** > **Add**: `*/5 * * * *` (every 5
+5. **Settings** > **Triggers** > **Cron Triggers** > **Add**: `*/30 * * * *` (every 30
    minutes it checks whether files wait in the inbox; free).
 6. The connector's address is `https://harness-connector.<your-name>.workers.dev/mcp/<SECRET_PATH>`
    (the first part is shown on the Worker's page).

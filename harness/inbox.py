@@ -18,6 +18,7 @@ records live in the repository (inbox/.state/), so it works from any machine.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from dataclasses import dataclass
 from importlib import resources
@@ -38,6 +39,8 @@ from .sessions import SessionRecord
 from .text import slugify
 
 DESCRIBE_PATTERN = "describe-*.yaml"
+#: describe-<time>-2of3.yaml: one part of a description that was too large for one file.
+PART = re.compile(r"^(describe-.+)-(\d+)of(\d+)\.yaml$")
 CONVERSATION_PATTERN = "conversation-*.md"
 
 
@@ -77,20 +80,57 @@ class InboxProcessor:
     def run(self) -> HarvestReport:
         report = HarvestReport()
         known = {p.id: p for p in ProfileRegistry(self.repo).all()}
-        for path in self.pending():
+        for paths in self._units():
+            path = paths[0]
             try:
-                file = self._read(path)
+                file = self._merged([self._read(p) for p in paths])
                 if file.profile not in known:
                     raise ValueError(f"profile {file.profile!r} is not registered in core/profiles.yaml")
                 if path.name.startswith("describe-"):
                     self._describe(file, known[file.profile].tool, report)
                 else:
                     self._conversation(file, report)
-                path.unlink()
+                for done in paths:
+                    done.unlink()
             except (ValueError, ProfileError) as exc:
-                self._reject(path, str(exc))
+                for bad in paths:
+                    self._reject(bad, str(exc))
                 report.errors.append(f"{path.name}: {exc}")
         return report
+
+    def _units(self) -> list[list[Path]]:
+        """Files to save together: a single file, or every part of a split description
+        (a description whose parts have not all arrived yet waits for the next run)."""
+        units: list[list[Path]] = []
+        parts: dict[str, list[Path]] = {}
+        for path in self.pending():
+            match = PART.match(path.name)
+            if match:
+                parts.setdefault(match.group(1), []).append(path)
+            else:
+                units.append([path])
+        for paths in parts.values():
+            total = int(PART.match(paths[0].name).group(3))
+            if len(paths) == total:
+                units.append(sorted(paths, key=lambda p: int(PART.match(p.name).group(2))))
+        return units
+
+    @staticmethod
+    def _merged(files: list[InboxFile]) -> InboxFile:
+        """The parts of one description as one: lists joined, everything else from part 1."""
+        if len(files) == 1:
+            return files[0]
+        data = dict(files[0].data)
+        for file in files[1:]:
+            if file.profile != files[0].profile:
+                raise ValueError("the parts of one description name different profiles")
+            for key, value in file.data.items():
+                if isinstance(value, list):
+                    data[key] = list(data.get(key) or []) + value
+                else:
+                    data.setdefault(key, value)
+        data.pop("part", None)
+        return InboxFile(files[0].path, data)
 
     def _read(self, path: Path) -> InboxFile:
         if path.match(DESCRIBE_PATTERN):
@@ -140,44 +180,94 @@ class InboxProcessor:
         (self.rejected / f"{path.name}.problem.txt").write_text(reason + "\n", encoding="utf-8")
 
 
+INSTRUCTIONS_FOLDER = ("connector", "instructions")
+
+
+def write_connector_instructions(repo: ContentRepo) -> list[str]:
+    """connector/instructions/<tool>.md for every tool with a skill: what the connector serves,
+    so a skill in a tool account always follows this engine's current instructions."""
+    from .adapters import adapters
+    written = []
+    for tool in adapters.names():
+        text = adapters.create(tool).connector_instructions(repo.config)
+        if text is None:
+            continue
+        path = repo.path(*INSTRUCTIONS_FOLDER, f"{tool}.md")
+        if not path.is_file() or path.read_text("utf-8") != text:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+            written.append(path.relative_to(repo.root).as_posix())
+    return written
+
+
+def _files(entries: list[dict[str, Any]] | None, folder: str = "") -> dict[str, bytes]:
+    return {f"{folder}{e['path'].lstrip('/')}": e["content"].encode("utf-8") for e in entries or []}
+
+
+def _memory_name(entry: dict[str, Any]) -> str:
+    """By topic (stable when the tool lists memory in another order)."""
+    topic = entry.get("name") or entry["text"].strip().splitlines()[0][:60]
+    return slugify(Path(topic).stem if topic.startswith("/") else topic) or "memory"
+
+
 def describe_items(describe: InboxFile, tool: str) -> list[Captured]:
-    """A describe file -> harness items, each kind in its own place."""
+    """A describe file -> harness items, each kind in its own place, with full content.
+    Things that are not the user's (e.g. Anthropic's skills), or whose content could not be
+    read, are only recorded in the account's native file, never saved as empty copies."""
     data, origin = describe.data, describe.path.name
     items: list[Captured] = []
+    unreadable: list[str] = []
     for entry in data.get("instructions") or []:
         name = slugify(entry["name"])
         items.append(Captured(Kind.INSTRUCTION, name, origin, {f"{name}.md": entry["text"].encode()}))
-    for number, entry in enumerate(data.get("memory") or [], 1):
-        items.append(Captured(Kind.MEMORY, f"memory-{number}", origin,
-                              {f"memory-{number}.md": entry["text"].encode()}))
-    for entry in data.get("skills") or []:
-        if entry.get("origin") == "mine":
-            text = f"---\nname: {entry['name']}\ndescription: {entry.get('description', '')}\n---\n"
-            items.append(Captured(Kind.SKILL, entry["name"], origin, {"SKILL.md": text.encode()},
-                                  meta={"description": entry.get("description")}))
-    for entry in data.get("agents") or []:
-        items.append(Captured(Kind.AGENT, entry["name"], origin, meta={"agent": {
-            "name": slugify(entry["name"]), "description": entry.get("description") or entry["name"]}}))
-    for entry in data.get("plugins") or []:
-        if entry.get("origin") == "mine":
-            items.append(Captured(Kind.PLUGIN, entry["name"], origin,
-                                  {"README.md": (entry.get("description") or "").encode()},
+    for entry in data.get("memory") or []:
+        name = _memory_name(entry)
+        items.append(Captured(Kind.MEMORY, name, origin, {f"{name}.md": entry["text"].encode()}))
+    for kind, key in ((Kind.SKILL, "skills"), (Kind.PLUGIN, "plugins")):
+        for entry in data.get(key) or []:
+            if entry.get("origin") != "mine":
+                continue
+            if not entry.get("files"):
+                why = entry.get("not_readable") or "no content sent"
+                unreadable.append(f"{key}: {entry['name']} ({why})")
+                continue
+            items.append(Captured(kind, entry["name"], origin, _files(entry["files"]),
                                   meta={"description": entry.get("description") or entry["name"]}))
+    for entry in data.get("agents") or []:
+        if entry.get("files"):
+            items.append(Captured(Kind.AGENT, entry["name"], origin, _files(entry["files"])))
+        else:
+            items.append(Captured(Kind.AGENT, entry["name"], origin, meta={"agent": {
+                "name": slugify(entry["name"]), "description": entry.get("description") or entry["name"]}}))
     for entry in data.get("connections") or []:
         items.append(Captured(Kind.CONNECTION, entry["name"], origin, meta={
             "tool": tool, "kind": entry.get("kind", "connector"),
             "description": entry.get("purpose") or entry["name"]}))
     for entry in data.get("projects") or []:
-        items.append(Captured(Kind.PROJECT, entry["name"], origin,
-                              {"instructions.md": (entry.get("instructions") or "").encode()},
+        files = {"instructions.md": (entry.get("instructions") or "").encode(),
+                 **_files(entry.get("knowledge"), "knowledge/")}
+        if entry.get("not_readable"):
+            unreadable.append(f"projects: {entry['name']} ({entry['not_readable']})")
+        items.append(Captured(Kind.PROJECT, entry["name"], origin, files,
                               meta={"description": entry.get("description") or entry["name"],
-                                    "fields": {"title": entry["name"],
-                                               "knowledge_files": entry.get("files") or []}}))
+                                    "fields": {"title": entry["name"]}}))
     for entry in data.get("workflows") or []:
         items.append(Captured(Kind.WORKFLOW, entry["name"], origin, meta={
             "description": entry["name"], "prompt": entry.get("prompt"), "trigger": entry.get("schedule")}))
-    rest = {key: data[key] for key in ("user_profile", "apps", "native", "cannot_see", "surface")
-            if data.get(key)}
+    for entry in data.get("apps") or []:
+        if not entry.get("files"):
+            unreadable.append(f"apps: {entry['name']} ({entry.get('not_readable') or 'no content sent'})")
+            continue
+        items.append(Captured(Kind.APP, entry["name"], origin, _files(entry["files"]),
+                              meta={"description": entry.get("description") or entry["name"],
+                                    "fields": {"link": entry.get("link")} if entry.get("link") else {}}))
+    rest = {key: data[key] for key in ("user_profile", "native", "cannot_see", "surface") if data.get(key)}
+    others = {key: [{"name": e["name"], "description": e.get("description"), "origin": e.get("origin")}
+                    for e in data.get(key) or [] if e.get("origin") not in (None, "mine")]
+              for key in ("skills", "plugins")}
+    rest.update({f"available_{key}": value for key, value in others.items() if value})
+    if unreadable:
+        rest["not_saved"] = unreadable
     items.append(Captured(Kind.NATIVE, "account", origin,
                           {"account/account.yaml": yaml_io.dump(rest).encode()}))
     return items

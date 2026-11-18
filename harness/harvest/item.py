@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from ..text import slugify
+
 
 class Kind(StrEnum):
     INSTRUCTION = "instruction"   # always-on instructions (e.g. CLAUDE.md)
@@ -17,6 +19,7 @@ class Kind(StrEnum):
     PLUGIN = "plugin"             # a whole plugin the user built (its skills, agents, commands)
     PROJECT = "project"           # a project: its instructions and knowledge files
     WORKFLOW = "workflow"         # a scheduled / repeatable task
+    APP = "app"                   # an app or page built inside a tool (e.g. a claude.ai artifact)
     NATIVE = "native"             # tool-specific settings with no portable equivalent
 
 
@@ -26,6 +29,9 @@ ENGINE_OWNED: frozenset[str] = frozenset({
     "skill:harness-save",     # Claude Code: save on request
     "skill:harness-export",   # claude.ai: export automation (before v0.15)
     "skill:harness-account",  # the Claude account skill
+    "workflow:harness-describe-account",              # its daily scheduled task
+    "workflow:harness-request-claude-ai-export",      # export automation (before v0.15)
+    "workflow:harness-download-claude-ai-export",
 })
 
 
@@ -47,7 +53,7 @@ class Captured:
 
     @property
     def engine_owned(self) -> bool:
-        return f"{self.kind.value}:{self.name}" in ENGINE_OWNED
+        return f"{self.kind.value}:{slugify(self.name)}" in ENGINE_OWNED
 
     @property
     def key(self) -> str:

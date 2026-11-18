@@ -210,6 +210,8 @@ class UpgradeCommand(Command):
         except ConfigError as exc:
             raise ErrorExit(str(exc)) from None
         created = Scaffolder(repo.layout).ensure_structure(repo)
+        from ...inbox import write_connector_instructions
+        created += [repo.path(p) for p in write_connector_instructions(repo)]
         print(f"Added settings: {', '.join(added) or 'none'}")
         print(f"Removed settings: {', '.join(removed) or 'none'}")
         print(f"Added files/folders: {', '.join(str(p.relative_to(repo.root)) for p in created) or 'none'}")

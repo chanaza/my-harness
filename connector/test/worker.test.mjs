@@ -7,6 +7,7 @@ const env = { GITHUB_TOKEN: "t", REPO: "me/harness", BRANCH: "main", SECRET_PATH
 const calls = [];
 globalThis.fetch = async (url, init = {}) => {
   calls.push({ url, method: init.method, body: init.body && JSON.parse(init.body) });
+  if (url.includes("connector/instructions/claude-ai.md")) return new Response("Profile: ${PROFILE}. Save after every reply.");
   if (url.includes("harness.config.yaml")) return new Response("connector:\n  save_every: reply\n  run_every_minutes: 45\n");
   if (url.includes("/runs?")) return Response.json({ workflow_runs: [] });
   if (url.includes("contents/inbox/connector?")) return Response.json(globalThis.inbox || []);
@@ -28,7 +29,7 @@ test("without the secret address there is nothing", async () => {
 
 test("lists one tool", async () => {
   const tools = (await (await call({ jsonrpc: "2.0", id: 1, method: "tools/list" })).json()).result.tools;
-  assert.deepEqual(tools.map((t) => t.name), ["save_to_harness"]);
+  assert.deepEqual(tools.map((t) => t.name), ["save_to_harness", "harness_instructions"]);
 });
 
 test("a good file is written to the inbox and starts a run", async () => {
@@ -59,4 +60,12 @@ test("the cron trigger starts a run only when files wait", async () => {
   assert.equal(await run(), false);
   globalThis.inbox = [{ type: "file", name: "describe-1.yaml" }];
   assert.equal(await run(), true);
+});
+
+test("instructions come from the repository, for the asking profile", async () => {
+  const ask = (args) => call({ jsonrpc: "2.0", id: 1, method: "tools/call",
+    params: { name: "harness_instructions", arguments: args } }).then((r) => r.json()).then((j) => j.result);
+  const result = await ask({ tool: "claude-ai", profile: "claude-ai-work-cloud" });
+  assert.equal(result.content[0].text, "Profile: claude-ai-work-cloud. Save after every reply.");
+  assert.equal((await ask({ tool: "../secrets", profile: "x" })).isError, true);
 });

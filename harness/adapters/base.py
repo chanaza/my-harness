@@ -77,6 +77,10 @@ class Adapter(ABC):
         """Write the adapter's skill (if any) where the user can upload it; return its path."""
         return None
 
+    def connector_instructions(self, config: Any) -> str | None:
+        """Instructions the harness connector serves to this tool's skill (None: no skill)."""
+        return None
+
     def skill_package(self) -> tuple[str, dict[str, bytes]] | None:
         """A skill to install in the tool's account (name, files), when the adapter offers one."""
         return None

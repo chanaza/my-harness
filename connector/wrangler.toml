@@ -8,7 +8,7 @@ compatibility_date = "2026-10-01"
 REPO = "your-github-name/your-harness-repository"
 BRANCH = "main"
 
-# Every 5 minutes: start saving files still waiting in the inbox (at most every
+# Every 30 minutes: start saving files still waiting in the inbox (at most every
 # connector.run_every_minutes, read from harness.config.yaml).
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/30 * * * *"]

@@ -43,7 +43,7 @@ class HarvestSync:
     WRITTEN_KEY = "written"
     #: Kinds whose written path can be removed on its own (connections share one file).
     PRUNABLE = (Kind.SKILL, Kind.AGENT, Kind.INSTRUCTION, Kind.NATIVE, Kind.MEMORY, Kind.PLUGIN,
-                Kind.PROJECT, Kind.WORKFLOW)
+                Kind.PROJECT, Kind.WORKFLOW, Kind.APP)
     #: Kinds that mirror the tool: when the tool no longer has the item, neither does the harness.
     #: (Knowledge such as skills and memory is never deleted just because the tool dropped it.)
     MIRRORED = (Kind.NATIVE, Kind.CONNECTION)

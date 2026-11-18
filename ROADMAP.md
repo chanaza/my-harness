@@ -21,6 +21,8 @@ summary sections as Claude Code). Not yet run for real:
 - How reliably a model saves after every reply without a hook.
 - GitHub Actions run in the content repository (started by the connector, daily sweep).
 Fallback for history: the data export, downloaded once into the watch folder.
+- Full content in descriptions (skills, plugins, agents, projects' knowledge, apps):
+  whether Claude can read every file (`not_readable` / `cannot_see` in the first runs).
 Next: OAuth sign-in for the connector, together with reading (loading).
 
 ### Known limits

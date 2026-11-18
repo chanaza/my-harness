@@ -246,10 +246,11 @@ class InboxCommand(Command):
         repo_argument(parser)
 
     def run(self, args: argparse.Namespace) -> int:
-        from ...inbox import InboxProcessor
+        from ...inbox import InboxProcessor, write_connector_instructions
         repo = open_repo(args)
         git = GitSync(repo.root, repo.config.git)
         git.pull()
+        write_connector_instructions(repo)  # the skills' instructions follow this engine
         report = InboxProcessor(repo).run()
         for problem in report.errors:
             print(f"  x {problem}")

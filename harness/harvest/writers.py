@@ -291,6 +291,14 @@ class PluginWriter(FolderWriter):
     DESCRIPTOR = "plugin.yaml"
 
 
+class AppWriter(FolderWriter):
+    """An app or page built inside a tool -> apps/<name>/ (its code as-is) + app.yaml."""
+
+    kind = Kind.APP
+    AREA = ("apps",)
+    DESCRIPTOR = "app.yaml"
+
+
 class ProjectWriter(FolderWriter):
     """A project -> core/projects/<name>/ with its knowledge files + project.yaml (instructions)."""
 
@@ -364,7 +372,7 @@ class NativeWriter(ItemWriter):
 
 DEFAULT_WRITERS: tuple[type[ItemWriter], ...] = (
     InstructionWriter, SkillWriter, AgentWriter, MemoryWriter, ConnectionWriter, PluginWriter,
-    ProjectWriter, WorkflowWriter, NativeWriter,
+    ProjectWriter, WorkflowWriter, NativeWriter, AppWriter,
 )
 
 

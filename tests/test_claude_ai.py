@@ -137,10 +137,15 @@ def test_account_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: 
     with zipfile.ZipFile(target) as archive:
         text = archive.read("harness-account/SKILL.md").decode()
     assert "profile: claude-ai-personal-cloud" in text and "${" not in text
-    assert "a decision, a result, or a wrap-up" in text                     # connector.save_every
-    assert "Not for Claude Code" in text                     # Claude Code saves itself: no double saving
+    assert "harness_instructions" in text and "Not for Claude Code" in text   # thin: fetches the rest
+    from harness.inbox import write_connector_instructions
+    assert write_connector_instructions(repo) == ["connector/instructions/claude-ai.md"]
+    full = repo.path("connector", "instructions", "claude-ai.md").read_text()
+    assert "a decision, a result, or a wrap-up" in full                     # connector.save_every
     for section in ("## Goal", "## Open thread", "## Connections in use"):   # the one summary language
-        assert section in text
+        assert section in full
+    assert "${PROFILE}" in full and "${SAVE_WHEN}" not in full              # profile: by the connector
+    assert write_connector_instructions(repo) == []                         # unchanged: not rewritten
     assert "Set up harness-account" in capsys.readouterr().out
 
 
@@ -258,18 +263,37 @@ user_profile: {text: "Consultant, writes in Hebrew."}
 instructions:
   - {name: personal-preferences, text: "Answer in Hebrew."}
 memory:
-  - {text: "Works at a consultancy."}
+  - {name: /areas/consultancy.md, text: "Works at a consultancy."}
 skills:
-  - {name: deck-review, description: Review client decks, origin: mine}
+  - name: deck-review
+    description: Review client decks
+    origin: mine
+    files:
+      - path: SKILL.md
+        content: |
+          ---
+          name: deck-review
+          description: Review client decks
+          ---
+          Check sources.
+      - {path: references/style.md, content: "Hebrew, right to left."}
+  - {name: drafts, description: Old drafts, origin: mine, not_readable: "files not visible"}
   - {name: pdf, description: PDFs, origin: anthropic}
 connections:
   - {name: Gmail, kind: connector, purpose: e-mail}
 projects:
-  - {name: Client Decks, description: Decks, instructions: "Always Hebrew.", files: [style.md]}
+  - name: Client Decks
+    description: Decks
+    instructions: "Always Hebrew."
+    knowledge: [{path: style.md, content: "Use the brand colours."}]
 workflows:
   - {name: Morning brief, schedule: every weekday 8:00, prompt: "Brief me."}
+  - {name: Harness - describe account, schedule: every day, prompt: "Run the harness-account skill."}
 apps:
-  - {name: Budget tracker, description: A page, link: https://claude.ai/artifact/x}
+  - name: Budget tracker
+    description: A page
+    link: https://claude.ai/artifact/x
+    files: [{path: index.html, content: "<h1>Budget</h1>"}]
 cannot_see: [agents, plugins]
 """
 
@@ -309,20 +333,35 @@ def test_connector_inbox_is_saved_in_the_harness_form(connected: ClaudeAiAdapter
     (inbox / "describe-20261119-0602.yaml").write_text(DESCRIBE.replace("claude-ai-personal-cloud", "nobody"))
     report = InboxProcessor(repo).run()
     assert any("describe-20261119-0601.yaml: does not match the form" in e for e in report.errors)
-    assert any("'nobody' is not registered" in e for e in report.errors)
+    assert any("'nobody' is not registered" in e for e in report.errors), report.errors
     rejected = repo.path("inbox", "rejected")
     assert (rejected / "describe-20261119-0601.yaml.problem.txt").is_file()
     assert not any(inbox.iterdir())                                            # the inbox is emptied
     profile = "claude-ai-personal-cloud"
-    assert repo.path("core", "skills", "deck-review", "SKILL.md").is_file()
+    assert "Check sources." in repo.path("core", "skills", "deck-review", "SKILL.md").read_text()
+    assert repo.path("core", "skills", "deck-review", "references", "style.md").is_file()   # every file
     assert not repo.path("core", "skills", "pdf").exists()                    # not the user's
-    assert repo.path("core", "projects", "client-decks").is_dir()
+    assert not repo.path("core", "skills", "drafts").exists()                 # no empty copies
+    knowledge = repo.path("core", "projects", "client-decks", "knowledge", "style.md")
+    assert "brand colours" in knowledge.read_text()
+    assert repo.path("apps", "budget-tracker", "index.html").is_file()
+    assert repo.path("memory", f"{profile}-consultancy.md").is_file() or \
+        any("consultancy" in p.name for p in repo.path("memory").iterdir())  # named by topic
+    assert not any("describe-account" in p.name for p in repo.path("core", "workflows").iterdir())
     assert "id: gmail" in repo.path("core", "connections.yaml").read_text()
-    native = next(repo.path("native", profile).rglob("account.yaml"))
-    assert "Budget tracker" in native.read_text()
+    native = next(repo.path("native", profile).rglob("account.yaml")).read_text()
+    assert "drafts" in native and "not_saved" in native and "available_skills" in native
     summary = repo.path("sessions", profile, "conversation-20261119-0700-planning", "summary.md")
     assert "Plan it." in summary.read_text()
     standing = repo.path("core", "instructions", profile, "standing-instructions.md").read_text()
     assert "Always answer in Hebrew." in standing                              # same digest as Claude Code
     (inbox / "describe-20261119-0700.yaml").write_text(DESCRIBE, encoding="utf-8")
     assert InboxProcessor(repo).run().counts["unchanged"] >= 1                 # its records are in the repo
+    head, tail = DESCRIBE.split("connections:", 1)
+    (inbox / "describe-20261120-0600-1of2.yaml").write_text(head + "part: 1/2\n", encoding="utf-8")
+    assert not InboxProcessor(repo).run().counts                               # waits for part 2
+    (inbox / "describe-20261120-0600-2of2.yaml").write_text(
+        "schema: harness-describe/1\nprofile: claude-ai-personal-cloud\ntool: claude-ai\n"
+        "captured_at: 2026-11-20T06:00:00Z\npart: 2/2\nconnections:" + tail, encoding="utf-8")
+    InboxProcessor(repo).run()
+    assert not any(inbox.iterdir())                                            # both parts saved together

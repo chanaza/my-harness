@@ -136,19 +136,22 @@ class ClaudeAiAdapter(AccountBoundAdapter):
         return [("every day", f"Run the {SKILL_NAME} skill in describe mode.")]
 
     def skill_package(self, account: str = "") -> tuple[str, dict[str, bytes]]:
-        """The account skill, filled in from this harness's settings and summary language."""
-        from ...digest import summary_request
-        root = self.local.content_repo()
-        config = ContentRepo(root).config if root and ContentRepo(root).config_file.path.is_file() else None
-        words = config.checkpoints.summary_max_words if config else 400
-        language = config.working_language if config else "en"
+        """The thin account skill: it fetches its instructions from the harness connector, so
+        improvements reach every account without uploading it again."""
         template = resources.files(__package__).joinpath("skill", "SKILL.md").read_text("utf-8")
-        connector = config.connector if config else None
-        save_every = connector.save_every if connector else "reply"
         text = Template(template).safe_substitute(
-            PROFILE=self.bindings().get(account, "<the profile id>"), TOOL=self.tool,
-            SAVE_WHEN=SAVE_WHEN[save_every], SUMMARY_REQUEST=summary_request(words, language))
+            PROFILE=self.bindings().get(account, "<the profile id>"), TOOL=self.tool)
         return SKILL_NAME, {f"{SKILL_NAME}/SKILL.md": text.encode("utf-8")}
+
+    def connector_instructions(self, config) -> str:
+        """The skill's full instructions, from this engine and the harness's settings
+        (${PROFILE} is filled in by the connector for each account)."""
+        from ... import __version__
+        from ...digest import summary_request
+        template = resources.files(__package__).joinpath("skill", "INSTRUCTIONS.md").read_text("utf-8")
+        return Template(template).safe_substitute(
+            VERSION=__version__, TOOL=self.tool, SAVE_WHEN=SAVE_WHEN[config.connector.save_every],
+            SUMMARY_REQUEST=summary_request(config.checkpoints.summary_max_words, config.working_language))
 
     # --- what an export holds ----------------------------------------------------------------
 
