@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/skill.schema.json",
+  "title": "Skill frontmatter (core/skills/<name>/SKILL.md)",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "provenance"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requires": {
+      "type": "object",
+      "description": "What must exist in a tool for this to work. Names only, never secrets.",
+      "properties": {
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "uniqueItems": true,
+          "description": "Ids from core/connections.yaml."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "Built-in capabilities, e.g. web-search, code-execution."
+        }
+      },
+      "additionalProperties": false
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+      "description": "Language this file is written in."
+    },
+    "original": {
+      "type": "string",
+      "description": "Relative path to the original-language version, when this file is a translation."
+    },
+    "provenance": {
+      "$ref": "provenance.schema.json"
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/data_pointer.schema.json",
+  "title": "Data snapshot pointer (apps/<app>/data.yaml) - reserved for a later phase",
+  "type": "object",
+  "required": [
+    "status"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "not-captured",
+        "snapshot"
+      ]
+    },
+    "storage": {
+      "type": "object",
+      "required": [
+        "backend"
+      ],
+      "properties": {
+        "backend": {
+          "enum": [
+            "filesystem"
+          ],
+          "description": "Storage implementation. New backends are added in harness/storage/."
+        },
+        "path": {
+          "type": "string",
+          "description": "Root folder. '~' and $VARS are expanded."
+        }
+      },
+      "additionalProperties": true
+    },
+    "last_snapshot": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

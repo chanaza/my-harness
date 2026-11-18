@@ -1,0 +1,33 @@
+# harness.config.yaml - settings for this content repository.
+# Created by `harness init`. Checked against my-harness/harness/schemas/config.schema.json.
+schema_version: 1
+owner: ${owner}
+
+language:
+  # Language the harness writes in.
+  working: ${language}
+  # Keep content in the language you originally wrote it, next to the working-language copy.
+  preserve_original: true
+
+capture:
+  # From this context usage, every interaction is logged briefly (tools that report usage).
+  live_log_threshold_percent: 80
+  # For tools that cannot report token usage: start logging after this many messages.
+  live_log_fallback_messages: 40
+
+storage:
+  # Transcripts and live logs never go into Git. They go to these backends.
+  # 'filesystem' + a Google Drive for desktop folder = stored in Drive, no API keys.
+  transcripts:
+    backend: filesystem
+    path: "${transcripts_path}"
+  live_logs:
+    backend: filesystem
+    path: "${live_logs_path}"
+
+assets:
+  # Larger files are stored outside Git and referenced from assets/<id>/asset.yaml.
+  max_inline_size_mb: 10
+
+tools:
+${tools}

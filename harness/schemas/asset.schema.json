@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/asset.schema.json",
+  "title": "Asset descriptor (assets/<id>/asset.yaml)",
+  "type": "object",
+  "required": [
+    "id",
+    "description",
+    "kind",
+    "location",
+    "provenance"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "file",
+        "link"
+      ]
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "File name inside this asset folder (small files)."
+        },
+        "url": {
+          "type": "string",
+          "description": "External location (large files, Figma, Drive)."
+        }
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "used_by": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Paths of skills, agents, apps or sessions that use this asset."
+    },
+    "preview": {
+      "type": "string",
+      "description": "Optional screenshot file for link assets."
+    },
+    "provenance": {
+      "$ref": "provenance.schema.json"
+    }
+  },
+  "additionalProperties": false
+}

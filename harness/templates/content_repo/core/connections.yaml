@@ -1,0 +1,3 @@
+# Connections (MCP servers, plugins, APIs) that skills, agents and apps need.
+# Names and descriptions only - never credentials.
+connections: []

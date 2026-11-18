@@ -1,0 +1,23 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+.venv/
+
+# --- Guard: this is the PUBLIC engine. Personal content never lives here. ---
+# A content repository's top-level folders are blocked at the repo root
+# (the leading slash keeps harness/templates/ unaffected).
+/harness.config.yaml
+/core/
+/memory/
+/apps/
+/assets/
+/sessions/
+/inbox/
+/transcripts/
+/live-logs/
+*.jsonl
+.env

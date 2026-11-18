@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/provenance.schema.json",
+  "title": "Provenance: where an item came from and every tool that changed it",
+  "type": "object",
+  "required": [
+    "source"
+  ],
+  "properties": {
+    "source": {
+      "type": "object",
+      "required": [
+        "tool",
+        "at"
+      ],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Tool id the change came from, e.g. claude-code, chatgpt, base44."
+        },
+        "session": {
+          "type": "string",
+          "description": "Session id (sessions/<tool>/<session-id>/), when known."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "description": "The tool and session that first created this item."
+    },
+    "updates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tool",
+          "at"
+        ],
+        "properties": {
+          "tool": {
+            "type": "string",
+            "description": "Tool id the change came from, e.g. claude-code, chatgpt, base44."
+          },
+          "session": {
+            "type": "string",
+            "description": "Session id (sessions/<tool>/<session-id>/), when known."
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Later changes, oldest first."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "event": {
+      "type": "object",
+      "required": [
+        "tool",
+        "at"
+      ],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Tool id the change came from, e.g. claude-code, chatgpt, base44."
+        },
+        "session": {
+          "type": "string",
+          "description": "Session id (sessions/<tool>/<session-id>/), when known."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

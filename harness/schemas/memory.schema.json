@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/memory.schema.json",
+  "title": "Memory entry frontmatter (memory/**/*.md)",
+  "type": "object",
+  "required": [
+    "id",
+    "kind",
+    "status",
+    "provenance"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "kind": {
+      "enum": [
+        "fact",
+        "decision",
+        "preference",
+        "project-state"
+      ]
+    },
+    "status": {
+      "enum": [
+        "active",
+        "superseded",
+        "disputed"
+      ],
+      "description": "disputed = conflicts with another entry and needs your decision."
+    },
+    "subject": {
+      "type": "string",
+      "description": "What this is about, used to spot conflicts."
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "description": "Entries this one replaces."
+    },
+    "conflicts_with": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "description": "Entries this one contradicts."
+    },
+    "provenance": {
+      "$ref": "provenance.schema.json"
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+    },
+    "original": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

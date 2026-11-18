@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "my-harness"
+version = "0.1.0"
+description = "A tool-agnostic engine for keeping your AI harness (instructions, skills, memory, sessions) portable across AI tools."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "PyYAML>=6.0",
+    "jsonschema>=4.18",
+    "referencing>=0.30",
+    "rfc3339-validator>=0.1.4",  # enables "format: date-time" checks
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+harness = "harness.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["harness*"]
+
+[tool.setuptools.package-data]
+# Schemas and the content-repo template ship inside the package so that
+# `harness init` works from any install location.
+harness = ["schemas/*.json", "templates/**/*", "templates/**/.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.exclude-package-data]
+harness = ["**/__pycache__/*"]

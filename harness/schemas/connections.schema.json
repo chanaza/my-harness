@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/connections.schema.json",
+  "title": "Connection registry (core/connections.yaml)",
+  "type": "object",
+  "required": [
+    "connections"
+  ],
+  "properties": {
+    "connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "available_in": {
+            "type": "object",
+            "description": "Per tool: how to get this connection there (mcp, plugin, native, api).",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "kind"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "mcp",
+                    "plugin",
+                    "native",
+                    "api",
+                    "manual"
+                  ]
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "$ref": "provenance.schema.json"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

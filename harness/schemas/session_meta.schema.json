@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/session_meta.schema.json",
+  "title": "Session metadata (sessions/<tool>/<session-id>/meta.yaml)",
+  "type": "object",
+  "required": [
+    "id",
+    "tool",
+    "started_at"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "tool": {
+      "type": "string",
+      "description": "Tool id, e.g. claude-code, chatgpt, base44, monday."
+    },
+    "topic": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "native_id": {
+      "type": "string",
+      "description": "The tool's own conversation id, when it has one."
+    },
+    "used": {
+      "type": "object",
+      "description": "What must exist in a tool for this to work. Names only, never secrets.",
+      "properties": {
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "uniqueItems": true,
+          "description": "Ids from core/connections.yaml."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "Built-in capabilities, e.g. web-search, code-execution."
+        }
+      },
+      "additionalProperties": false
+    },
+    "transcript": {
+      "type": "string",
+      "description": "Key of the transcript in transcript storage."
+    },
+    "live_log": {
+      "type": "string",
+      "description": "Key of the live log in live-log storage."
+    }
+  },
+  "additionalProperties": false
+}

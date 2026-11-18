@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/config.schema.json",
+  "title": "Harness configuration (harness.config.yaml)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "language",
+    "capture",
+    "storage",
+    "assets",
+    "tools"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "owner": {
+      "type": "string"
+    },
+    "language": {
+      "type": "object",
+      "required": [
+        "working",
+        "preserve_original"
+      ],
+      "properties": {
+        "working": {
+          "type": "string",
+          "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+          "description": "Language the harness writes in."
+        },
+        "preserve_original": {
+          "type": "boolean",
+          "description": "Keep content in the language the user defined it, next to the working-language copy."
+        }
+      },
+      "additionalProperties": false
+    },
+    "capture": {
+      "type": "object",
+      "required": [
+        "live_log_threshold_percent",
+        "live_log_fallback_messages"
+      ],
+      "properties": {
+        "live_log_threshold_percent": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Context usage at which every interaction starts being logged."
+        },
+        "live_log_fallback_messages": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "For tools that cannot report token usage: start logging after this many messages."
+        }
+      },
+      "additionalProperties": false
+    },
+    "storage": {
+      "type": "object",
+      "required": [
+        "transcripts",
+        "live_logs"
+      ],
+      "properties": {
+        "transcripts": {
+          "type": "object",
+          "required": [
+            "backend"
+          ],
+          "properties": {
+            "backend": {
+              "enum": [
+                "filesystem"
+              ],
+              "description": "Storage implementation. New backends are added in harness/storage/."
+            },
+            "path": {
+              "type": "string",
+              "description": "Root folder. '~' and $VARS are expanded."
+            }
+          },
+          "additionalProperties": true
+        },
+        "live_logs": {
+          "type": "object",
+          "required": [
+            "backend"
+          ],
+          "properties": {
+            "backend": {
+              "enum": [
+                "filesystem"
+              ],
+              "description": "Storage implementation. New backends are added in harness/storage/."
+            },
+            "path": {
+              "type": "string",
+              "description": "Root folder. '~' and $VARS are expanded."
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "backend"
+        ],
+        "properties": {
+          "backend": {
+            "enum": [
+              "filesystem"
+            ],
+            "description": "Storage implementation. New backends are added in harness/storage/."
+          },
+          "path": {
+            "type": "string",
+            "description": "Root folder. '~' and $VARS are expanded."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "assets": {
+      "type": "object",
+      "required": [
+        "max_inline_size_mb"
+      ],
+      "properties": {
+        "max_inline_size_mb": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Larger files are stored externally and referenced from asset.yaml."
+        }
+      },
+      "additionalProperties": false
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "description": "Tool id, e.g. claude-code, chatgpt, base44, monday."
+      },
+      "uniqueItems": true,
+      "description": "Tools this harness is used with."
+    }
+  },
+  "additionalProperties": false
+}

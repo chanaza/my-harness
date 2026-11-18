@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/app.schema.json",
+  "title": "App spec (apps/<app>/app.yaml)",
+  "type": "object",
+  "required": [
+    "name",
+    "tool",
+    "purpose",
+    "provenance"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "tool": {
+      "type": "string",
+      "description": "Tool id, e.g. claude-code, chatgpt, base44, monday."
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "screens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "logic": {
+      "type": "string",
+      "description": "Business rules in plain words."
+    },
+    "requires": {
+      "type": "object",
+      "description": "What must exist in a tool for this to work. Names only, never secrets.",
+      "properties": {
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "uniqueItems": true,
+          "description": "Ids from core/connections.yaml."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "Built-in capabilities, e.g. web-search, code-execution."
+        }
+      },
+      "additionalProperties": false
+    },
+    "lang": {
+      "type": "string",
+      "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+      "description": "Language this file is written in."
+    },
+    "original": {
+      "type": "string",
+      "description": "Relative path to the original-language version, when this file is a translation."
+    },
+    "provenance": {
+      "$ref": "provenance.schema.json"
+    }
+  },
+  "additionalProperties": false
+}
