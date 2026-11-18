@@ -7,7 +7,8 @@ knows or cares where the bytes actually live.
 
 To add a backend (e.g. Google Drive API, Postgres, S3):
   1. Subclass ``Storage`` in a new module under harness/storage/.
-  2. Register it in ``harness/storage/__init__.py``.
+  2. Decorate it with ``@backends.register`` and import it in
+     ``harness/storage/__init__.py``.
   3. Add its name to the ``backend`` enum in schemas/config.schema.json.
 """
 
@@ -32,7 +33,7 @@ class Storage(ABC):
 
     @classmethod
     @abstractmethod
-    def from_settings(cls, settings: dict[str, Any]) -> "Storage":
+    def from_settings(cls, settings: dict[str, Any]) -> Storage:
         """Build an instance from a storage block of harness.config.yaml."""
 
     @abstractmethod

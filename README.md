@@ -41,26 +41,43 @@ when two tools learned different things. Memory entries also carry
 ## Quick start
 
 ```bash
-pip install -e .
-harness init ../my-content --owner "Your Name" --transcripts-path "~/Google Drive/My Drive/harness-storage/transcripts"
-harness validate ../my-content
+pip install -e ".[dev]"
+harness init ../my-content --owner "Your Name" --transcripts-path "C:\Users\you\OneDrive\Sessions\transcripts"
+harness config set capture.live_log_threshold_percent 80 --repo ../my-content
+harness validate --repo ../my-content
 ```
 
-## Layout
+Every change to a content repository goes through a command like these;
+settings are validated before they are written, and comments are kept.
+
+## Code map
+
+The engine is a small set of classes, each with one job. Extension points
+are marked with ★.
+
+| Class | Module | Job |
+|---|---|---|
+| `RepoLayout` | `harness/layout.py` | Where everything lives in a content repo |
+| `ContentRepo` | `harness/repo.py` | Entry point: a content repo with its layout, config and storage |
+| `ConfigFile`, `HarnessConfig` | `harness/config.py` | Change / read harness.config.yaml (validated) |
+| `SchemaRegistry` | `harness/schemas/registry.py` | All JSON Schemas, cross-references resolved |
+| `Storage` ★, `BackendRegistry` | `harness/storage/` | Interface + registry for transcript / log storage |
+| `FilesystemStorage` | `harness/storage/filesystem.py` | Folder storage (OneDrive / Drive synced folders) |
+| `RepoValidator`, `Check` ★, `FileReader` ★ | `harness/validation/` | Configurable checks over a content repo |
+| `Scaffolder` | `harness/scaffold.py` | `harness init` |
+| `HarnessCLI`, `Command` ★ | `harness/cli/` | The `harness` program; one class per command |
+| `YamlDocument` | `harness/yaml_io.py` | Comment-preserving YAML edits (the only YAML dependency) |
+
+Adding things:
+
+- **A storage backend**: subclass `Storage`, decorate with `@backends.register`, add its name to `config.schema.json`.
+- **A content type**: add a schema to `harness/schemas/` and a `SchemaCheck` in `RepoValidator.default`.
+- **A command**: subclass `Command` and add it to `DEFAULT_COMMANDS`.
 
 ```
-harness/
-  layout.py          the content-repo layout (single source of truth for paths)
-  config.py          harness.config.yaml loading and typed access
-  schema_loader.py   JSON Schema registry
-  schemas/           one schema per content type
-  storage/           storage interface + backends (filesystem today)
-  validate/          checks a content repo against the schemas
-  scaffold.py        `harness init`
-  templates/         files a new content repo starts with
-adapters/            per-tool capture and install (coming next)
-docs/                design notes
-tests/
+adapters/   per-tool capture and install (coming next)
+docs/       design notes
+tests/      one test file per component
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the design.

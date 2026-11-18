@@ -1,15 +1,14 @@
-"""Read and validate a content repository's harness.config.yaml."""
+"""harness.config.yaml: reading it (``HarnessConfig``) and changing it (``ConfigFile``)."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from .layout import CONFIG_FILENAME
-from .schema_loader import schema_errors
+from .schemas import SchemaRegistry
+from .yaml_io import YamlDocument, YAMLError
 
 
 class ConfigError(Exception):
@@ -18,57 +17,85 @@ class ConfigError(Exception):
 
 @dataclass(frozen=True)
 class HarnessConfig:
-    """Typed view over harness.config.yaml.
+    """A validated, read-only view of harness.config.yaml.
 
-    ``raw`` keeps the full parsed file so that new settings can be read
-    before a typed attribute is added for them.
+    ``data`` keeps the full file, so a new setting can be read before a
+    typed property is added for it.
     """
 
-    root: Path
-    raw: dict[str, Any]
+    data: Mapping[str, Any]
 
     @property
     def working_language(self) -> str:
-        return self.raw["language"]["working"]
+        return self.data["language"]["working"]
 
     @property
     def preserve_original(self) -> bool:
-        return self.raw["language"]["preserve_original"]
+        return self.data["language"]["preserve_original"]
 
     @property
     def live_log_threshold_percent(self) -> int:
-        return self.raw["capture"]["live_log_threshold_percent"]
+        return self.data["capture"]["live_log_threshold_percent"]
 
     @property
     def live_log_fallback_messages(self) -> int:
-        return self.raw["capture"]["live_log_fallback_messages"]
+        return self.data["capture"]["live_log_fallback_messages"]
 
     @property
     def max_inline_asset_bytes(self) -> int:
-        return int(self.raw["assets"]["max_inline_size_mb"] * 1024 * 1024)
+        return int(self.data["assets"]["max_inline_size_mb"] * 1024 * 1024)
 
     @property
     def tools(self) -> list[str]:
-        return list(self.raw["tools"])
+        return list(self.data["tools"])
 
     def storage_settings(self, name: str) -> dict[str, Any]:
-        """Settings of a named storage area (e.g. 'transcripts')."""
+        """Settings of a named storage area, e.g. 'transcripts'."""
         try:
-            return dict(self.raw["storage"][name])
-        except KeyError as exc:
-            raise ConfigError(f"No storage area named '{name}' in {CONFIG_FILENAME}") from exc
+            return dict(self.data["storage"][name])
+        except KeyError:
+            raise ConfigError(f"No storage area named {name!r} in the configuration") from None
 
 
-def load_config(root: Path) -> HarnessConfig:
-    """Load the configuration of the content repository at ``root``."""
-    path = Path(root) / CONFIG_FILENAME
-    if not path.is_file():
-        raise ConfigError(f"{path} not found. Is this a harness content repository?")
-    try:
-        data = yaml.safe_load(path.read_text("utf-8"))
-    except yaml.YAMLError as exc:
-        raise ConfigError(f"{path} is not valid YAML: {exc}") from exc
-    errors = schema_errors("config", data)
-    if errors:
-        raise ConfigError(f"{path} is invalid:\n  " + "\n  ".join(errors))
-    return HarnessConfig(root=Path(root), raw=data)
+class ConfigFile:
+    """The configuration file on disk. Every write is validated first."""
+
+    SCHEMA = "config"
+
+    def __init__(self, path: Path, schemas: SchemaRegistry | None = None) -> None:
+        self.path = Path(path)
+        self.schemas = schemas or SchemaRegistry.bundled()
+
+    def load(self) -> HarnessConfig:
+        return HarnessConfig(self._validated(self._open().to_plain()))
+
+    def get(self, key: str) -> Any:
+        try:
+            return self._open().get(key)
+        except KeyError:
+            raise ConfigError(f"No setting {key!r}") from None
+
+    def update(self, changes: Mapping[str, Any]) -> None:
+        """Apply ``{dotted.key: value}`` changes; nothing is written if the result is invalid."""
+        document = self._open()
+        for key, value in changes.items():
+            try:
+                document.set(key, value)
+            except KeyError as exc:
+                raise ConfigError(f"Cannot set {key!r}: {exc}") from None
+        self._validated(document.to_plain())
+        document.save()
+
+    def _open(self) -> YamlDocument:
+        if not self.path.is_file():
+            raise ConfigError(f"{self.path} not found. Is this a harness content repository?")
+        try:
+            return YamlDocument(self.path)
+        except YAMLError as exc:
+            raise ConfigError(f"{self.path} is not valid YAML: {exc}") from None
+
+    def _validated(self, data: Any) -> Mapping[str, Any]:
+        errors = self.schemas.errors(self.SCHEMA, data)
+        if errors:
+            raise ConfigError(f"{self.path.name} would be invalid:\n  " + "\n  ".join(errors))
+        return data

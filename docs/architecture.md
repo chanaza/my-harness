@@ -53,8 +53,10 @@ their own `lang:`.
 Logs do not belong in Git: they are large, append-only and should be
 deletable. `harness/storage/` defines one interface (`Storage`) with
 interchangeable backends selected in `harness.config.yaml`. Today:
-`filesystem`, which with a Google Drive for desktop folder means Drive
-storage without API keys. A database backend is a new class plus one
+`filesystem`, which with a OneDrive or Google Drive synced folder means
+cloud storage without API keys. Such a folder is only reachable from the
+machine that syncs it; sessions running in the cloud will need an API-based
+backend (planned). A database backend is a new class plus one
 config line.
 
 ## Capture tiers (next phase)

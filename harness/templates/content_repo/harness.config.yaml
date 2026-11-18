@@ -1,11 +1,12 @@
 # harness.config.yaml - settings for this content repository.
-# Created by `harness init`. Checked against my-harness/harness/schemas/config.schema.json.
+# Created by `harness init`; change it with `harness config set <key> <value>`.
+# Checked against my-harness/harness/schemas/config.schema.json.
 schema_version: 1
-owner: ${owner}
+owner: owner
 
 language:
   # Language the harness writes in.
-  working: ${language}
+  working: en
   # Keep content in the language you originally wrote it, next to the working-language copy.
   preserve_original: true
 
@@ -17,17 +18,17 @@ capture:
 
 storage:
   # Transcripts and live logs never go into Git. They go to these backends.
-  # 'filesystem' + a Google Drive for desktop folder = stored in Drive, no API keys.
+  # 'filesystem' + a cloud-synced folder (OneDrive, Google Drive) = cloud storage, no API keys.
   transcripts:
     backend: filesystem
-    path: "${transcripts_path}"
+    path: ~/harness-storage/transcripts
   live_logs:
     backend: filesystem
-    path: "${live_logs_path}"
+    path: ~/harness-storage/live-logs
 
 assets:
   # Larger files are stored outside Git and referenced from assets/<id>/asset.yaml.
   max_inline_size_mb: 10
 
 tools:
-${tools}
+  - claude-code

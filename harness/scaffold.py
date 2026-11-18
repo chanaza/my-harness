@@ -1,4 +1,4 @@
-"""`harness init`: create a new content repository from the bundled template.
+"""``Scaffolder``: creates a new content repository (`harness init`).
 
 The content repository is only ever created and changed through the engine,
 so everything it contains on day one comes from here.
@@ -10,17 +10,14 @@ from dataclasses import dataclass, field
 from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
-from string import Template
 
 from . import __version__
-from .layout import AREAS
+from .layout import DEFAULT_LAYOUT, RepoLayout
+from .repo import ContentRepo
 
-DEFAULT_TOOLS: tuple[str, ...] = (
+SUPPORTED_TOOLS: tuple[str, ...] = (
     "claude-code", "claude", "chatgpt", "cursor", "genspark", "base44", "monday",
 )
-
-# Files whose ${placeholders} are filled in at init time.
-_TEMPLATED = {"harness.config.yaml"}
 
 
 class ScaffoldError(Exception):
@@ -29,62 +26,68 @@ class ScaffoldError(Exception):
 
 @dataclass
 class InitOptions:
+    """Choices made at init time. ``storage_paths`` maps storage area -> folder."""
+
     owner: str
     language: str = "en"
-    transcripts_path: str = "~/Google Drive/My Drive/harness-storage/transcripts"
-    live_logs_path: str = "~/Google Drive/My Drive/harness-storage/live-logs"
-    tools: list[str] = field(default_factory=lambda: list(DEFAULT_TOOLS))
+    tools: list[str] = field(default_factory=lambda: list(SUPPORTED_TOOLS))
+    storage_paths: dict[str, str] = field(default_factory=dict)
+
+    def config_changes(self) -> dict[str, object]:
+        changes: dict[str, object] = {
+            "owner": self.owner,
+            "language.working": self.language,
+            "tools": list(self.tools),
+        }
+        for area, path in self.storage_paths.items():
+            changes[f"storage.{area}.path"] = path
+        return changes
 
 
-def init_repo(target: Path, options: InitOptions) -> list[Path]:
-    """Create the content-repository layout in ``target``. Returns files written."""
-    target = Path(target)
-    if target.exists() and any(p.name != ".git" for p in target.iterdir()):
-        raise ScaffoldError(f"{target} is not empty. `harness init` only runs on an empty folder.")
-    target.mkdir(parents=True, exist_ok=True)
+class Scaffolder:
+    """Builds a content repository from a template folder and a layout."""
 
-    values = {
-        "owner": options.owner,
-        "language": options.language,
-        "transcripts_path": options.transcripts_path,
-        "live_logs_path": options.live_logs_path,
-        "tools": "\n".join(f"  - {t}" for t in options.tools),
-    }
-    written = _copy_template(resources.files("harness.templates").joinpath("content_repo"), target, values)
+    def __init__(self, layout: RepoLayout = DEFAULT_LAYOUT, template: Traversable | None = None) -> None:
+        self.layout = layout
+        self.template = template or resources.files("harness.templates").joinpath("content_repo")
 
-    for area in AREAS:
-        folder = target / area.path
-        folder.mkdir(parents=True, exist_ok=True)
-        if not any(folder.iterdir()):
-            keep = folder / ".gitkeep"
-            keep.touch()
-            written.append(keep)
+    def create(self, target: Path, options: InitOptions) -> ContentRepo:
+        target = Path(target)
+        self._ensure_empty(target)
+        target.mkdir(parents=True, exist_ok=True)
 
-    readme = target / "README.md"
-    readme.write_text(_render_readme(options.owner), encoding="utf-8")
-    written.append(readme)
-    return sorted(written)
+        self._copy(self.template, target)
+        repo = ContentRepo(target, self.layout)
+        repo.config_file.update(options.config_changes())
+        self._create_areas(repo)
+        repo.path("README.md").write_text(self._readme(options.owner), encoding="utf-8")
+        return repo
 
+    @staticmethod
+    def _ensure_empty(target: Path) -> None:
+        if target.exists() and any(p.name != ".git" for p in target.iterdir()):
+            raise ScaffoldError(f"{target} is not empty. `harness init` only runs on an empty folder.")
 
-def _copy_template(source: Traversable, target: Path, values: dict[str, str]) -> list[Path]:
-    written: list[Path] = []
-    for entry in source.iterdir():
-        dest = target / entry.name
-        if entry.is_dir():
-            dest.mkdir(exist_ok=True)
-            written += _copy_template(entry, dest, values)
-            continue
-        text = entry.read_text("utf-8")
-        if entry.name in _TEMPLATED:
-            text = Template(text).substitute(values)
-        dest.write_text(text, encoding="utf-8")
-        written.append(dest)
-    return written
+    def _copy(self, source: Traversable, target: Path) -> None:
+        for entry in source.iterdir():
+            destination = target / entry.name
+            if entry.is_dir():
+                destination.mkdir(exist_ok=True)
+                self._copy(entry, destination)
+            else:
+                destination.write_bytes(entry.read_bytes())
 
+    def _create_areas(self, repo: ContentRepo) -> None:
+        """Create every area; empty ones get a .gitkeep so Git tracks them."""
+        for area in self.layout.areas:
+            folder = repo.path(area.path)
+            folder.mkdir(parents=True, exist_ok=True)
+            if not any(folder.iterdir()):
+                (folder / ".gitkeep").touch()
 
-def _render_readme(owner: str) -> str:
-    rows = "\n".join(f"| `{a.path}/` | {a.purpose} |" for a in AREAS)
-    return f"""# {owner}'s harness
+    def _readme(self, owner: str) -> str:
+        rows = "\n".join(f"| `{a.path}/` | {a.purpose} |" for a in self.layout.areas)
+        return f"""# {owner}'s harness
 
 This repository holds a personal AI harness: instructions, skills, agents,
 memory, app specs and session records, kept outside any single AI tool so
@@ -100,5 +103,5 @@ content through the engine and its tool adapters, then run
 {rows}
 
 Transcripts and live logs are not stored here. Their location is set in
-`harness.config.yaml` under `storage`.
+`{self.layout.config_file}` under `storage`.
 """

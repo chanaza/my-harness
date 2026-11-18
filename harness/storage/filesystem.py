@@ -12,8 +12,10 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .base import Storage, StorageError
+from .registry import backends
 
 
+@backends.register
 class FilesystemStorage(Storage):
     backend_name = "filesystem"
 
@@ -21,7 +23,7 @@ class FilesystemStorage(Storage):
         self.root = Path(root)
 
     @classmethod
-    def from_settings(cls, settings: dict[str, Any]) -> "FilesystemStorage":
+    def from_settings(cls, settings: dict[str, Any]) -> FilesystemStorage:
         if not settings.get("path"):
             raise StorageError("The filesystem backend needs a 'path' setting.")
         return cls(Path(os.path.expandvars(os.path.expanduser(settings["path"]))))
