@@ -34,6 +34,7 @@ class ConfigError(Exception):
 class CaptureSettings:
     context_window_tokens: int
     background: bool = True
+    poll_minutes: int = 30
 
 
 @dataclass(frozen=True)

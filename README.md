@@ -73,6 +73,8 @@ are marked with ★.
 | `Captured`, `HarvestSync`, `ItemWriter` ★ | `harness/harvest/` | Turning what a tool holds into harness content |
 | `Adapter` ★, `AdapterRegistry` | `harness/adapters/` | One class per tool: harvest, hooks, install |
 | `ClaudeCodeAdapter` | `harness/adapters/claude_code/` | Claude Code ([docs](docs/adapters/claude-code.md)) |
+| `CoworkAdapter` | `harness/adapters/cowork/` | Cowork in the Claude desktop app ([docs](docs/adapters/cowork.md)) |
+| `Scheduler` | `harness/scheduler.py` | Periodic capture for tools without hooks (Task Scheduler / cron) |
 | `Storage` ★, `BackendRegistry` | `harness/storage/` | Transcript storage (per profile) |
 | `Migration` ★ | `harness/migrations.py` | Bring existing content to the current engine (`harness upgrade`) |
 | `FilesystemStorage`, `GitStorage` | `harness/storage/` | A (synced) folder, or a branch of a Git repository |

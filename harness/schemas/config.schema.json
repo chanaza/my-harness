@@ -51,6 +51,11 @@
         "background": {
           "type": "boolean",
           "description": "Do slow capture work (harvest, transcript, commit, push) after the hook returns."
+        },
+        "poll_minutes": {
+          "type": "integer",
+          "minimum": 5,
+          "description": "For tools without hooks (e.g. Cowork): capture every N minutes."
         }
       },
       "additionalProperties": false

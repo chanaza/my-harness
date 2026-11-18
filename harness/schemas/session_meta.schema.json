@@ -97,6 +97,25 @@
       "type": "string",
       "format": "date-time",
       "description": "Set when the session was imported after the fact (no checkpoints were written live)."
+    },
+    "files": {
+      "type": "array",
+      "description": "Files uploaded to / produced by the conversation (kept in transcript storage).",
+      "items": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false

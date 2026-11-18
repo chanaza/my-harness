@@ -116,7 +116,9 @@ class AgentWriter(ItemWriter):
         name = slugify(str(source.meta.get("name") or item.name))
         target = self.repo.path("core", "agents", f"{name}.yaml")
         existing = yaml_io.load(target.read_text("utf-8")) if target.is_file() else None
-        conflict = bool(existing) and self._conflicting(existing.get("provenance"), origin)
+        same_content = bool(existing) and existing.get("instructions") == source.body.strip()
+        conflict = bool(existing) and not same_content and \
+            self._conflicting(existing.get("provenance"), origin)
         if conflict:
             target = self._conflict_path(target, origin)
 
@@ -240,7 +242,9 @@ class PluginWriter(ItemWriter):
         folder = self.location(item.name, item.scope, origin.profile)
         descriptor = folder / self.DESCRIPTOR
         existing = yaml_io.load(descriptor.read_text("utf-8")) if descriptor.is_file() else None
-        conflict = bool(existing) and self._conflicting(existing.get("provenance"), origin)
+        same_content = bool(existing) and _folder_matches(folder, item.files)
+        conflict = bool(existing) and not same_content and \
+            self._conflicting(existing.get("provenance"), origin)
         if conflict:
             folder = self._conflict_path(folder, origin)
             descriptor = folder / self.DESCRIPTOR
@@ -297,14 +301,23 @@ DEFAULT_WRITERS: tuple[type[ItemWriter], ...] = (
 def _write_markdown(writer: ItemWriter, target: Path, item: Captured, origin: Origin, body: str,
                     meta: dict[str, Any]) -> WriteResult:
     """Shared path for Markdown items: provenance, conflict diversion, write."""
-    existing = MarkdownDocument.read(target).meta if target.is_file() else None
-    conflict = bool(existing) and writer._conflicting(existing.get("provenance"), origin)
+    current = MarkdownDocument.read(target) if target.is_file() else None
+    existing = current.meta if current else None
+    same_content = current is not None and current.body.strip() == body.strip()
+    conflict = bool(existing) and not same_content and writer._conflicting(existing.get("provenance"), origin)
     if conflict:
         target = writer._conflict_path(target, origin)
     previous = None if conflict or not existing else existing.get("provenance")
     meta = {**meta, "provenance": Provenance.updated(previous, origin)}
     MarkdownDocument(meta, body).write(target)
     return WriteResult("conflict" if conflict else ("updated" if existing else "created"), target)
+
+
+def _folder_matches(folder: Path, files: dict[str, bytes]) -> bool:
+    """Whether ``folder`` already holds exactly ``files`` (besides plugin.yaml)."""
+    present = {p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()} - {"plugin.yaml"}
+    return present == set(files) and all(
+        folder.joinpath(*k.split("/")).read_bytes() == v for k, v in files.items())
 
 
 def _first_line(text: str) -> str:

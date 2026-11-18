@@ -47,11 +47,13 @@ class Updater:
                        ENGINE_URL)
         self._step(report, "harness repository upgraded", "-m", "harness", "upgrade", "--repo", str(repo))
         for tool, bindings in (self.local.settings().get("profiles") or {}).items():
-            for config_dir, profile in bindings.items():
-                env = {**os.environ, "CLAUDE_CONFIG_DIR": config_dir} if tool == "claude-code" else None
+            for key, profile in bindings.items():
+                # Claude Code accounts are told apart by their config folder; others by an account key.
+                env = {**os.environ, "CLAUDE_CONFIG_DIR": key} if tool == "claude-code" else None
+                account = [] if tool == "claude-code" else ["--account-key", key]
                 self._step(report, f"{profile}: connection refreshed", "-m", "harness", "install", tool,
-                           "--profile", profile, "--repo", str(repo), env=env)
-                self._step(report, f"{profile}: captured", "-m", "harness", "harvest", tool, env=env)
+                           "--profile", profile, "--repo", str(repo), *account, env=env)
+            self._step(report, f"{tool}: captured", "-m", "harness", "harvest", tool)
         return report
 
     def _step(self, report: UpdateReport, label: str | None, *args: str,

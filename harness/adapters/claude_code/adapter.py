@@ -44,17 +44,13 @@ from ...provenance import Origin, now_iso
 from ...repo import ContentRepo
 from ...sessions import SessionRecord
 from ...workspace import WorkspaceScanner, merge_workspace
-from ..base import Adapter, adapters
+from ..base import Account, Adapter, HarnessNotConfigured, adapters
 from .constants import HOOK_EVENTS, HOOK_MARKER, SKILL_NAME, TOOL
 from .harvester import ClaudeCodeHarvester
 from .locations import ClaudeCodeLocations
 from .transcript import ContextMeter, TranscriptReader
 
 T = TypeVar("T")
-
-
-class HarnessNotConfigured(Exception):
-    pass
 
 
 @dataclass(frozen=True)
@@ -174,8 +170,22 @@ class ClaudeCodeAdapter(Adapter):
 
     # --- installation ------------------------------------------------------------------
 
+    def is_present(self) -> bool:
+        return self.locations.config_dir.is_dir()
+
+    def accounts(self) -> list[Account]:
+        return [Account(self.locations.key, f"Claude Code ({self.locations.config_dir})")]
+
+    def preview(self, exclude: list[str]) -> list[str]:
+        return super().preview(exclude) + [f"conversations: {len(self.transcripts())}"]
+
+    def capture(self) -> str:
+        report = self.run_harvest()
+        return f"{report.summary()}; conversations: {len(self.backfill())}"
+
     def install(self, profile_id: str, label: str, repo_root: Path | None = None,
-                hooks: bool = True, environment: str | None = None) -> list[str]:
+                hooks: bool = True, environment: str | None = None,
+                account_key: str | None = None) -> list[str]:
         done: list[str] = []
         if repo_root:
             self.local.save_settings(content_repo=str(Path(repo_root).resolve()))

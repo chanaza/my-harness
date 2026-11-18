@@ -9,8 +9,7 @@ import traceback
 from collections import Counter
 from pathlib import Path
 
-from ...adapters import adapters
-from ...adapters.claude_code import HarnessNotConfigured
+from ...adapters import HarnessNotConfigured, adapters
 from ...checkpoints import CheckpointRecorder
 from ...git_sync import GitSync
 from ...local import LocalHome
@@ -134,47 +133,57 @@ class ProfileCommand(Command):
 
 class SetupCommand(Command):
     name = "setup"
-    help = "Guided setup: connect a tool on this machine to your harness (capture only, nothing is loaded)."
+    help = ("Guided setup: connect the AI tools on this machine to your harness (capture only, "
+            "nothing is loaded). Without a tool name, every tool found here is set up.")
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("tool", nargs="?", default="claude-code", choices=adapters.names())
+        parser.add_argument("tool", nargs="?", choices=adapters.names(),
+                            help="One tool only (default: every tool found on this machine).")
         parser.add_argument("--repo", help="Your harness repository: a folder or a GitHub address.")
-        parser.add_argument("--account", help="Which account this is, e.g. personal or work.")
+        parser.add_argument("--account", help="Account name, e.g. personal (several: abcd1234=personal,...).")
         parser.add_argument("--environment", choices=ENVIRONMENTS, help="local or cloud (detected).")
-        parser.add_argument("--transcripts", help="Folder for transcripts (local only).")
+        parser.add_argument("--transcripts", help="Folder for transcripts and files (local only).")
         parser.add_argument("--owner", help="Your name, when a new harness is created.")
         parser.add_argument("--yes", action="store_true", help="Use defaults; ask nothing (scripts).")
         parser.add_argument("--no-capture", action="store_true", help="Install only; capture later.")
 
     def run(self, args: argparse.Namespace) -> int:
-        if self._already_connected(args):
+        tools = [args.tool] if args.tool else self._present_tools()
+        explicit = any((args.repo, args.account, args.environment, args.transcripts, args.owner))
+        missing = [t for t in tools if explicit or not self._connected(t)]
+        if tools and not missing:
             # Running the installer again on a connected machine means "bring me up to date".
             print(f"This machine is already connected to {LocalHome().content_repo()}. Updating...")
             return UpdateCommand().run(argparse.Namespace(no_engine=True))
+        if not tools:
+            raise ErrorExit("No supported AI tool was found on this machine.")
         prompter = DefaultsPrompter() if args.yes else ConsolePrompter()
-        options = SetupOptions(tool=args.tool, repo=args.repo, account=args.account,
-                               environment=args.environment, transcripts=args.transcripts,
-                               owner=args.owner, capture_now=False if args.no_capture else None)
-        try:
-            result = SetupWizard(prompter).run(options)
-        except (SetupError, HarnessNotConfigured, ProfileError, StorageError) as exc:
-            raise ErrorExit(str(exc)) from None
-        print(f"Ready. This {args.tool} account is profile '{result.profile}', saving to {result.repo}.")
-        for line in result.done:
-            print(f"  + {line}")
-        print("From now on conversations are saved automatically, in the background.")
+        environment = args.environment
+        for tool in missing:
+            print(f"--- {tool} ---")
+            options = SetupOptions(tool=tool, repo=args.repo, account=args.account,
+                                   environment=environment, transcripts=args.transcripts,
+                                   owner=args.owner, capture_now=False if args.no_capture else None)
+            try:
+                result = SetupWizard(prompter).run(options)
+            except (SetupError, HarnessNotConfigured, ProfileError, StorageError) as exc:
+                raise ErrorExit(str(exc)) from None
+            environment = environment or ProfileRegistry(ContentRepo(result.repo)).get(
+                result.profiles[0]).environment
+            print(f"Ready: {tool} -> {result.profile}, saving to {result.repo}.")
+            for line in result.done:
+                print(f"  + {line}")
+        print("From now on your work is saved automatically, in the background.")
         return 0
 
     @staticmethod
-    def _already_connected(args: argparse.Namespace) -> bool:
-        """No options given, and this machine's tool account is already bound to a profile."""
-        if any((args.repo, args.account, args.environment, args.transcripts, args.owner)):
-            return False
-        try:
-            adapter = adapters.create(args.tool)
-            return bool(adapter.local.content_repo()) and bool(adapter.profile_id())
-        except HarnessNotConfigured:
-            return False
+    def _present_tools() -> list[str]:
+        return [name for name in adapters.names() if adapters.create(name).is_present()]
+
+    @staticmethod
+    def _connected(tool: str) -> bool:
+        adapter = adapters.create(tool)
+        return bool(adapter.local.content_repo()) and adapter.is_connected()
 
 
 class StatusCommand(Command):
@@ -231,6 +240,7 @@ class InstallCommand(Command):
         parser.add_argument("--profile", required=True, help="Profile id, e.g. claude-code-personal.")
         parser.add_argument("--label", help="Account label if the profile is new (default: from the id).")
         parser.add_argument("--repo", help="Content repository on this machine (remembered).")
+        parser.add_argument("--account-key", help="Which of the tool's accounts (tools with several).")
         parser.add_argument("--environment", choices=ENVIRONMENTS,
                             help="Where this account's tool runs (recorded on a new profile).")
         parser.add_argument("--no-hooks", action="store_true",
@@ -241,7 +251,8 @@ class InstallCommand(Command):
         label = args.label or args.profile.removeprefix(f"{args.tool}-")
         try:
             done = adapter.install(args.profile, label, Path(args.repo) if args.repo else None,
-                                   hooks=not args.no_hooks, environment=args.environment)
+                                   hooks=not args.no_hooks, environment=args.environment,
+                                   account_key=args.account_key)
         except (HarnessNotConfigured, ProfileError) as exc:
             raise ErrorExit(str(exc)) from None
         for line in done:
@@ -266,9 +277,8 @@ class HarvestCommand(Command):
             adapter.locations = adapter.locations.for_project(Path(args.project))
         try:
             if args.dry_run:
-                repo = adapter.repo()
-                for item in adapter.harvest(repo.config.harvest_exclude):
-                    print(f"  {item.kind.value:12} {item.scope:24} {item.name}")
+                for line in adapter.preview(adapter.repo().config.harvest_exclude):
+                    print(f"  {line}")
                 return 0
             report = adapter.run_harvest()
             repo = adapter.repo()
@@ -280,8 +290,7 @@ class HarvestCommand(Command):
             print(f"  x {problem}")
         for path in report.conflicts:
             print(f"  ! conflict: {path.relative_to(repo.root)}")
-        GitSync(repo.root, repo.config.git).sync(f"{adapter.profile_id()}: harvest ({report.summary()})",
-                                                 push=True)
+        GitSync(repo.root, repo.config.git).sync(f"{args.tool}: harvest ({report.summary()})", push=True)
         print(f"Harvest: {report.summary()}")
         return 1 if report.errors else 0
 

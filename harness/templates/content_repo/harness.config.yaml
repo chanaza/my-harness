@@ -16,6 +16,8 @@ capture:
   context_window_tokens: 200000
   # Do the slow work (capture, transcript, commit, push) in the background, so you never wait.
   background: true
+  # Tools without hooks (e.g. Cowork) are captured on a schedule: every N minutes.
+  poll_minutes: 30
 
 checkpoints:
   # A checkpoint refreshes the rolling session summary (sessions/<tool>/<id>/summary.md).

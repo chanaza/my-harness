@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .adapters import Adapter, adapters
+from .adapters import Account, Adapter, adapters
 from .git_sync import GitSync
 from .local import LocalHome
 from .profiles import Profile
@@ -74,7 +74,7 @@ class DefaultsPrompter(Prompter):
 class SetupOptions:
     tool: str = "claude-code"
     repo: str | None = None            # a local folder or a Git URL
-    account: str | None = None         # e.g. "personal", "work"
+    account: str | None = None         # "personal", or for several accounts "abcd1234=personal,..."
     environment: str | None = None     # "local" | "cloud" (detected when omitted)
     transcripts: str | None = None     # local transcript folder
     owner: str | None = None           # only when creating a new harness
@@ -86,6 +86,7 @@ class SetupResult:
     profile: str
     repo: Path
     done: list[str] = field(default_factory=list)
+    profiles: list[str] = field(default_factory=list)
 
 
 class SetupWizard:
@@ -96,18 +97,50 @@ class SetupWizard:
     def run(self, options: SetupOptions) -> SetupResult:
         environment = options.environment or self._detect_environment()
         repo = self._content_repo(options)
-        account = options.account or self.prompter.ask(
-            "Which account is this? (a short name, e.g. personal or work)", "personal")
-        profile = Profile.make_id(options.tool, account, environment)
-
-        repo.config_file.update(self._storage_for(profile, environment, options))
         adapter = adapters.create(options.tool, self.local)
-        done = adapter.install(profile, account, repo.root, hooks=True, environment=environment)
-        result = SetupResult(profile, repo.root, done)
+        chosen = self._choose_accounts(adapter.accounts(), options)
+
+        result = SetupResult("", repo.root)
+        storage_folder: str | None = None
+        for account, label in chosen:
+            profile = Profile.make_id(options.tool, label, environment)
+            if environment == "local" and storage_folder is None:
+                storage_folder = options.transcripts or self._ask_transcripts_folder()
+            repo.config_file.update(self._storage_for(profile, environment, storage_folder))
+            result.done += adapter.install(profile, label, repo.root, hooks=True,
+                                           environment=environment, account_key=account.key)
+            result.profiles.append(profile)
+        result.profile = ", ".join(result.profiles)
 
         self._offer_capture(adapter, repo, options, result)
-        GitSync(repo.root, repo.config.git).sync(f"{profile}: setup", push=True)
+        GitSync(repo.root, repo.config.git).sync(f"{options.tool}: setup {result.profile}", push=True)
         return result
+
+    def _choose_accounts(self, accounts: list[Account], options: SetupOptions) -> list[tuple[Account, str]]:
+        """One account: ask its name. Several: list them and name each (or skip it)."""
+        if not accounts:
+            raise SetupError(f"Nothing from {options.tool} was found on this machine.")
+        if len(accounts) == 1:
+            plain = options.account if options.account and "=" not in options.account else None
+            label = plain or self.prompter.ask(
+                "Which account is this? (a short name, e.g. personal or work)", "personal")
+            return [(accounts[0], label)]
+        given = dict(part.split("=", 1) for part in (options.account or "").split(",") if "=" in part)
+        self.prompter.say(f"Found {len(accounts)} accounts:")
+        for number, account in enumerate(accounts, 1):
+            self.prompter.say(f"  {number}. {account.summary}")
+        chosen = []
+        for number, account in enumerate(accounts, 1):
+            short = (account.key or "")[:8]
+            label = next((v for k, v in given.items() if k in (account.key or "")), None) or \
+                self.prompter.ask(f"Name for account {number} (e.g. personal or work; 'skip' leaves it out)")
+            if label.strip().lower() != "skip":
+                chosen.append((account, label.strip()))
+            else:
+                self.prompter.say(f"  account {short}… left out")
+        if not chosen:
+            raise SetupError("No account was chosen.")
+        return chosen
 
     # --- steps --------------------------------------------------------------------------
 
@@ -160,32 +193,31 @@ class SetupWizard:
                 raise SetupError(f"Could not download {url}: {result.stderr.strip()}{hint}")
         return target
 
-    def _storage_for(self, profile: str, environment: str, options: SetupOptions) -> dict[str, object]:
+    def _ask_transcripts_folder(self) -> str:
+        return self.prompter.ask(
+            "Folder for full conversation transcripts and files (a OneDrive/Drive folder keeps them "
+            "in the cloud)", str(_default_transcripts_folder()))
+
+    @staticmethod
+    def _storage_for(profile: str, environment: str, folder: str | None) -> dict[str, object]:
         """Where this profile's transcripts go: a local folder, or (cloud) a Git branch."""
         prefix = f"storage_by_profile.{profile}.transcripts"
         if environment == "cloud":
             return {f"{prefix}.backend": "git", f"{prefix}.remote": "origin",
                     f"{prefix}.branch": "transcripts"}
-        folder = options.transcripts or self.prompter.ask(
-            "Folder for full conversation transcripts (a OneDrive/Drive folder keeps them in the cloud)",
-            str(_default_transcripts_folder()))
         return {f"{prefix}.backend": "filesystem", f"{prefix}.path": folder}
 
     def _offer_capture(self, adapter: Adapter, repo: ContentRepo, options: SetupOptions,
                        result: SetupResult) -> None:
-        items = adapter.harvest(repo.config.harvest_exclude)
-        sessions = adapter.backfill(dry_run=True)
-        self.prompter.say(f"Found {len(items)} things built in {options.tool} "
-                          f"and {len(sessions)} past conversations.")
-        for item in items:
-            self.prompter.say(f"  {item.kind.value:11} {item.name}")
+        lines = adapter.preview(repo.config.harvest_exclude)
+        self.prompter.say(f"Found in {options.tool}:")
+        for line in lines:
+            self.prompter.say(f"  {line}")
         wanted = options.capture_now if options.capture_now is not None else self.prompter.confirm(
             "Save them to your harness now? (you can exclude items first with "
             "`harness config set harvest.exclude ...`)")
         if wanted:
-            report = adapter.run_harvest()
-            imported = adapter.backfill()
-            result.done.append(f"captured: {report.summary()}; conversations: {len(imported)}")
+            result.done.append(f"captured: {adapter.capture()}")
 
 
 def _is_url(source: str) -> bool:

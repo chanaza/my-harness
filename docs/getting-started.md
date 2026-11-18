@@ -46,8 +46,11 @@ guided setup that asks:
 3. Where to keep full transcripts. A OneDrive or Google Drive folder keeps
    them in the cloud; they never go into the repository's main branch.
 
-It then shows what it found (skills, agents, instructions, past
-conversations) and asks before saving anything. Exclude items first if you
+Setup connects every supported tool it finds on the computer (today:
+Claude Code, and Cowork in the Claude desktop app). If a tool has several
+signed-in accounts (e.g. personal and work), it lists them and asks a name
+for each. It then shows what it found (skills, plugins, instructions,
+memory, past conversations) and asks before saving anything. Exclude items first if you
 like, e.g. `harness config set harvest.exclude "skill:pdf"`.
 
 That's all. Use your tool as usual.
