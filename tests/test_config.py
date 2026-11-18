@@ -24,3 +24,11 @@ def test_invalid_config_update_is_not_written(repo: ContentRepo):
 def test_missing_config(tmp_path: Path):
     with pytest.raises(ConfigError):
         ContentRepo(tmp_path).config_file.load()
+
+
+def test_settings_a_newer_engine_removed_do_not_stop_it(repo):
+    """A computer whose harness copy is older than its engine keeps working."""
+    path = repo.config_file.path
+    path.write_text(path.read_text().replace("claude_ai:\n", "claude_ai:\n  inbox_folder: ~/old\n", 1))
+    assert repo.config_file.load().claude_ai.skill_folder            # loads; the old setting is ignored
+    assert "claude_ai.inbox_folder" in repo.config_file.obsolete_settings()

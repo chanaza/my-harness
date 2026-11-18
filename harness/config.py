@@ -213,7 +213,9 @@ class ConfigFile:
         self.schemas = schemas or SchemaRegistry.bundled()
 
     def load(self) -> HarnessConfig:
-        own = self._validated(self._open().to_plain())
+        # Settings a newer engine removed are ignored (another computer may still have them,
+        # or `harness upgrade` has not run yet); `upgrade` deletes them from the file.
+        own = self._validated(_without(self._open().to_plain(), OBSOLETE_SETTINGS))
         return HarnessConfig(_deep_merge(yaml_io.load(template_config_text()), own))
 
     def obsolete_settings(self) -> list[str]:
@@ -272,3 +274,16 @@ class ConfigFile:
         if errors:
             raise ConfigError(f"{self.path.name} would be invalid:\n  " + "\n  ".join(errors))
         return data
+
+
+def _without(data: Any, patterns: tuple[str, ...], prefix: str = "") -> Any:
+    """``data`` without the leaves (or whole sections) whose dotted key matches a pattern."""
+    if not isinstance(data, dict):
+        return data
+    kept = {}
+    for key, value in data.items():
+        dotted = f"{prefix}{key}"
+        if any(fnmatch(dotted, pattern) for pattern in patterns):
+            continue
+        kept[key] = _without(value, patterns, f"{dotted}.")
+    return kept
