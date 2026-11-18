@@ -30,6 +30,9 @@ class MondayAgent:
 
 
 class MondayReader:
+    #: Agent kinds looked up by agent user (monday's AgentKind values).
+    AGENT_KINDS = ("PERSONAL", "ACCOUNT_LEVEL")
+
     def __init__(self, client: MondayClient, runs_per_agent: int = 50) -> None:
         self.client = client
         self.schema = SchemaSelector(client)
@@ -41,15 +44,38 @@ class MondayReader:
         return {"email": me.get("email"), **(me.get("account") or {})}
 
     def agents(self) -> list[MondayAgent]:
-        selection = self.schema.selection("CustomAgent")
-        found = self.client.query(f"query {{ custom_agents(limit: 100) {{ {selection} }} }}")
-        agents = [MondayAgent(a) for a in found.get("custom_agents") or []]
+        agents = [MondayAgent(a) for a in self._custom_agents()]
         for agent in agents:
             agent.skills = [s.get("name") for s in self._each("agent_skill_names", "AgentSkillCatalogEntry",
                                                                agent.id) or [] if s.get("name")]
             agent.knowledge = self._each("agent_knowledge", "AgentKnowledge", agent.id) or {}
             agent.jobs = self._each("agent_jobs", "AgentJob", agent.id) or []
         return agents
+
+    def _custom_agents(self) -> list[dict[str, Any]]:
+        """Every agent this user can read. The plain listing leaves some of the user's own agents
+        out, so each agent user in the account is also looked up by id, for every kind."""
+        selection = self.schema.selection("CustomAgent")
+        found = {a["id"]: a for a in self.client.query(
+            f"query {{ custom_agents(limit: 100) {{ {selection} }} }}").get("custom_agents") or []}
+        try:
+            users = [a["id"] for a in self.client.query("query { agents(limit: 100) { id } }")
+                     .get("agents") or []]
+        except MondayError as exc:
+            self.problems.append(f"agent users: {exc}")
+            users = []
+        if users:
+            ids = ", ".join(f'"{u}"' for u in users)
+            for kind in self.AGENT_KINDS:
+                try:
+                    more = self.client.query(f"query {{ custom_agents(limit: 100, kinds: [{kind}], "
+                                             f"agent_user_ids: [{ids}]) {{ {selection} }} }}")
+                except MondayError as exc:
+                    self.problems.append(f"{kind.lower()} agents: {exc}")
+                    continue
+                for agent in more.get("custom_agents") or []:
+                    found.setdefault(agent["id"], agent)
+        return list(found.values())
 
     def workflows(self) -> list[dict[str, Any]]:
         try:

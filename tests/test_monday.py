@@ -123,3 +123,26 @@ def test_agents_jobs_workflows_and_runs_land_in_the_right_places(monday, repo: C
 
     again = monday.run_harvest()
     assert not again.changed and not again.counts.get("conversations imported")   # nothing new
+
+
+def test_agents_hidden_from_the_plain_listing_are_found_by_agent_user():
+    """monday's plain agent listing can leave out some of the user's own agents (it did for
+    one with many conversations); they are found through the account's agent users."""
+    from harness.adapters.monday.reader import MondayReader
+
+    class Client:
+        def query(self, text):
+            if "agents(limit: 100) { id }" in text:
+                return {"agents": [{"id": "u1"}, {"id": "u2"}]}
+            if "kinds: [PERSONAL]" in text:
+                return {"custom_agents": [{"id": "1"}, {"id": "2"}]}
+            if "kinds: [ACCOUNT_LEVEL]" in text:
+                return {"custom_agents": []}
+            if "custom_agents(limit: 100)" in text:
+                return {"custom_agents": [{"id": "1"}]}
+            return {}
+
+    reader = MondayReader(Client())
+    reader.schema.selection = lambda type_name: "id"
+    reader._each = lambda *args: []
+    assert sorted(agent.definition["id"] for agent in reader.agents()) == ["1", "2"]
