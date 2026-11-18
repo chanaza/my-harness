@@ -138,6 +138,7 @@ def test_account_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: 
         text = archive.read("harness-account/SKILL.md").decode()
     assert "profile: claude-ai-personal-cloud" in text and "${" not in text
     assert "a decision, a result, or a wrap-up" in text                     # connector.save_every
+    assert "Not for Claude Code" in text                     # Claude Code saves itself: no double saving
     for section in ("## Goal", "## Open thread", "## Connections in use"):   # the one summary language
         assert section in text
     assert "Set up harness-account" in capsys.readouterr().out

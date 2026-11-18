@@ -1,6 +1,6 @@
 ---
 name: harness-account
-description: Keep this Claude account (claude.ai, Claude Desktop, Cowork) saved in the user's harness (my-harness) through the harness connector. Modes - "save" sends a summary of the current conversation (${SAVE_WHEN}); "describe" sends everything the account has built (instructions, memory, skills, projects, scheduled tasks...) in a fixed form; "setup" creates the daily scheduled task. Use when a scheduled task says to run harness-account, when the user says "save to harness" / "שמור להרנס", and ${SAVE_WHEN}.
+description: Not for Claude Code (it saves itself). Keep this Claude account (claude.ai, Claude Desktop, Cowork) saved in the user's harness (my-harness) through the harness connector. Modes - "save" sends a summary of the current conversation (${SAVE_WHEN}); "describe" sends everything the account has built (instructions, memory, skills, projects, scheduled tasks...) in a fixed form; "setup" creates the daily scheduled task. Use when a scheduled task says to run harness-account, when the user says "save to harness" / "שמור להרנס", and ${SAVE_WHEN}.
 ---
 
 # Save this Claude account to the harness
@@ -11,6 +11,10 @@ one shared form, so it can move between tools. You send ONE file per run with th
 It checks the file against its form: if it answers with a problem, fix the file and
 send it again. Never include passwords, API keys or tokens. Work quietly: do not
 mention the saving in your answer unless it failed.
+
+**Not in Claude Code:** Claude Code is saved by the harness itself (completely, with
+its own hooks). If you are running as Claude Code (a coding agent in a terminal, IDE
+or Claude Code on the web), do nothing with this skill.
 
 If the harness connector is not available here, say so in one sentence once per
 conversation and continue normally.
