@@ -32,6 +32,8 @@ class Adapter(ABC):
     tool: str = ""
     #: For services that are not tied to a machine (e.g. claude.ai): the profile's environment.
     environment: str | None = None
+    #: When accounts can be named before anything was found (e.g. by e-mail), the question to ask.
+    account_question: str | None = None
 
     def __init__(self, local: LocalHome | None = None) -> None:
         self.local = local or LocalHome()

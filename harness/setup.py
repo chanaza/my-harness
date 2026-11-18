@@ -100,7 +100,7 @@ class SetupWizard:
         # Known from now on, so adapters read this harness's settings (e.g. where exports land).
         self.local.save_settings(content_repo=str(repo.root.resolve()))
         adapter = adapters.create(options.tool, self.local)
-        chosen = self._choose_accounts(adapter.accounts(), options)
+        chosen = self._choose_accounts(adapter.accounts(), options, adapter.account_question)
 
         result = SetupResult("", repo.root)
         storage_folder: str | None = None
@@ -120,8 +120,13 @@ class SetupWizard:
         GitSync(repo.root, repo.config.git).sync(f"{options.tool}: setup {result.profile}", push=True)
         return result
 
-    def _choose_accounts(self, accounts: list[Account], options: SetupOptions) -> list[tuple[Account, str]]:
+    def _choose_accounts(self, accounts: list[Account], options: SetupOptions,
+                         adapter_question: str | None = None) -> list[tuple[Account, str]]:
         """One account: ask its name. Several: list them and name each (or skip it)."""
+        if not accounts and adapter_question:
+            # Nothing captured yet (e.g. no export downloaded): name the accounts up front.
+            answer = self.prompter.ask(adapter_question)
+            accounts = [Account(key.strip(), key.strip()) for key in answer.split(",") if key.strip()]
         if not accounts:
             raise SetupError(f"Nothing from {options.tool} was found on this machine.")
         if len(accounts) == 1:

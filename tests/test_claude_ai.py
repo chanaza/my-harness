@@ -136,3 +136,20 @@ def test_export_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: C
         text = archive.read("harness-claude-ai-export/SKILL.md").decode()
     assert "every 14 days" in text and str(tmp_path / "Downloads") in text
     assert "${" not in text
+
+
+def test_accounts_can_be_named_before_the_first_export(repo: ContentRepo, tmp_path: Path, monkeypatch):
+    class FakeScheduler:
+        def install(self, name, args, minutes):
+            return "scheduled"
+
+    monkeypatch.setattr("harness.scheduler.system_scheduler", FakeScheduler)
+    repo.config_file.update({"claude_ai.watch_folder": str(tmp_path / "empty")})
+    answers = Answers("me@example.com, work@example.com", "personal", "work", str(tmp_path / "f"), False)
+    SetupWizard(answers, LocalHome()).run(SetupOptions(tool="claude-ai", repo=str(repo.root),
+                                                       environment="local"))
+    adapter = ClaudeAiAdapter(LocalHome())
+    assert adapter.bindings() == {"me@example.com": "claude-ai-personal-cloud",
+                                  "work@example.com": "claude-ai-work-cloud"}
+    make_export(tmp_path / "empty", email="work@example.com")
+    assert adapter.run_harvest().counts["conversations imported"] == 1   # picked up by itself
