@@ -51,6 +51,7 @@ From then on, everything is saved by itself. Nothing is shown while it runs.
 | claude.ai | Every chat, projects (instructions and files), memory | From its official export, weekly |
 
 Saving only: nothing from the harness is loaded back into your tools yet.
+What is finished and what is not: [ROADMAP.md](ROADMAP.md).
 
 ---
 
