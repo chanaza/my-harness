@@ -23,6 +23,8 @@ OBSOLETE_SETTINGS: tuple[str, ...] = (
     "capture.transcript_on_checkpoint",
     "storage.live_logs.*",
     "storage_by_profile.*.live_logs.*",
+    # v0.14: the schedule is set per adapter type in capture_modes.
+    "capture.poll_minutes",
 )
 
 
@@ -34,8 +36,14 @@ class ConfigError(Exception):
 class CaptureSettings:
     context_window_tokens: int
     background: bool = True
-    poll_minutes: int = 30
 
+
+@dataclass(frozen=True)
+class CaptureMode:
+    """How one adapter type is captured: push, scheduled (every N minutes) or on_demand."""
+
+    mode: str
+    every_minutes: int = 30
 
 @dataclass(frozen=True)
 class CheckpointSettings:
@@ -103,6 +111,10 @@ class HarnessConfig:
     @property
     def capture(self) -> CaptureSettings:
         return _section(CaptureSettings, self.data["capture"])
+
+    def capture_mode(self, tool: str, default: str = "on_demand") -> CaptureMode:
+        values = (self.data.get("capture_modes") or {}).get(tool) or {"mode": default}
+        return _section(CaptureMode, values)
 
     @property
     def checkpoints(self) -> CheckpointSettings:

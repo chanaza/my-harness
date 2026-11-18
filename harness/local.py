@@ -45,6 +45,10 @@ class LocalHome:
         value = os.environ.get(REPO_ENV) or self.settings().get("content_repo")
         return Path(value).expanduser() if value else None
 
+    def machine(self) -> str | None:
+        """This computer's name in the harness (e.g. office, home), once set."""
+        return self.settings().get("machine")
+
     def rename_profile(self, old: str, new: str) -> None:
         """Re-point this machine's tool bindings and state from ``old`` to ``new``."""
         settings = self.settings()

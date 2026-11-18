@@ -11,6 +11,7 @@ e.g. from a cloud environment's setup script with --yes).
 from __future__ import annotations
 
 import os
+import platform
 import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -19,9 +20,10 @@ from pathlib import Path
 from .adapters import Account, Adapter, adapters
 from .git_sync import GitSync
 from .local import LocalHome
-from .profiles import Profile
+from .profiles import Profile, ProfileRegistry
 from .repo import ContentRepo
 from .scaffold import InitOptions, Scaffolder
+from .text import slugify
 
 CLOUD_ENV_FLAG = "CLAUDE_CODE_REMOTE"  # set to "true" in Claude Code cloud sessions
 
@@ -108,17 +110,20 @@ class SetupWizard:
         adapter = adapters.create(options.tool, self.local)
         chosen = self._choose_accounts(adapter.accounts(), options, adapter.account_question)
 
+        machine = self._machine_name() if environment == "local" else None
         result = SetupResult("", repo.root, environment=environment)
         storage_folder: str | None = None
         profile_environment = adapter.environment or environment  # e.g. claude.ai is always cloud
         for account, label in chosen:
-            profile = Profile.make_id(options.tool, label, profile_environment)
+            profile = Profile.make_id(options.tool, label, profile_environment, machine)
             if environment == "local" and storage_folder is None:
                 storage_folder = options.transcripts or self._ask_transcripts_folder()
             # Storage follows the machine doing the capture, not the service.
             repo.config_file.update(self._storage_for(profile, environment, storage_folder))
             result.done += adapter.install(profile, label, repo.root, hooks=True,
                                            environment=profile_environment, account_key=account.key)
+            if profile_environment == "local" and machine:
+                ProfileRegistry(repo).update(profile, machine=machine)
             result.profiles.append(profile)
         result.profile = ", ".join(result.profiles)
 
@@ -214,6 +219,16 @@ class SetupWizard:
                             "(Windows: cmdkey /delete:git:https://github.com) and try again.")
                 raise SetupError(f"Could not download {url}: {result.stderr.strip()}{hint}")
         return target
+
+    def _machine_name(self) -> str:
+        """This computer's name in the harness, asked once (two computers = two sets of profiles)."""
+        known = self.local.machine()
+        if known:
+            return known
+        name = slugify(self.prompter.ask("A short name for this computer (e.g. office, home)",
+                                         slugify(platform.node()) or "computer"))
+        self.local.save_settings(machine=name)
+        return name
 
     def _ask_transcripts_folder(self) -> str:
         return self.prompter.ask(

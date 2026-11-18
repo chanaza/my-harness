@@ -37,6 +37,9 @@ class Adapter(ABC):
     account_question: str | None = None
     #: Offer this tool in every setup, even when nothing of it is on the machine (account services).
     offered_everywhere: bool = False
+    #: Capture modes this adapter can work in (first = default) and, in plain words, why.
+    capture_modes: tuple[str, ...] = ("on_demand",)
+    capture_reason: str = ""
 
     def __init__(self, local: LocalHome | None = None) -> None:
         self.local = local or LocalHome()
@@ -132,18 +135,29 @@ class AccountBoundAdapter(Adapter):
         return None  # no hooks: captured on a schedule
 
     def schedule(self) -> str:
-        """One scheduled capture for this tool (every capture.poll_minutes); set up once."""
+        """Apply this tool's capture mode (capture_modes in the config) to this machine:
+        a scheduled task every N minutes for 'scheduled', none otherwise."""
         from ..scheduler import SchedulerError, system_scheduler
-        minutes = self.repo().config.capture.poll_minutes
-        scheduled = self.local.settings().get("scheduled") or {}
-        if scheduled.get(self.tool) == minutes:
-            return f"automatic capture already scheduled (every {minutes} minutes)"
+        mode = self.repo().config.capture_mode(self.tool, self.capture_modes[0])
+        scheduled = dict(self.local.settings().get("scheduled") or {})
+        task = f"capture-{self.tool}"
+        if mode.mode != "scheduled":
+            if self.tool in scheduled:
+                try:
+                    system_scheduler().remove(task)
+                except (SchedulerError, OSError):
+                    pass
+                scheduled.pop(self.tool)
+                self.local.save_settings(scheduled=scheduled)
+            return f"capture: {mode.mode.replace('_', ' ')} (run `harness harvest {self.tool}`)"
+        if scheduled.get(self.tool) == mode.every_minutes:
+            return f"automatic capture already scheduled (every {mode.every_minutes} minutes)"
         try:
-            task = system_scheduler().install(f"capture-{self.tool}", ["harvest", self.tool], minutes)
+            description = system_scheduler().install(task, ["harvest", self.tool], mode.every_minutes)
         except (SchedulerError, OSError) as exc:
             return f"automatic capture NOT scheduled ({exc}); run `harness harvest {self.tool}`"
-        self.local.save_settings(scheduled={**scheduled, self.tool: minutes})
-        return task
+        self.local.save_settings(scheduled={**scheduled, self.tool: mode.every_minutes})
+        return description
 
 
 class AdapterRegistry:

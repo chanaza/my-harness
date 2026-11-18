@@ -38,6 +38,7 @@ class ScriptedPrompter(Prompter):
 def machine(tmp_path: Path, monkeypatch, claude: ClaudeCodeLocations):
     """HOME with a Claude Code installation and an empty clone of a harness repository."""
     monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "harness-home"))
+    LocalHome().save_settings(machine="local")
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude.config_dir))
     monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
     monkeypatch.delenv("OneDrive", raising=False)

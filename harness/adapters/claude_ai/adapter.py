@@ -44,6 +44,8 @@ SKILL_NAME = "harness-export"
 @adapters.register
 class ClaudeAiAdapter(AccountBoundAdapter):
     tool = TOOL
+    capture_modes = ("scheduled", "on_demand")
+    capture_reason = "exports arrive as downloaded files and are picked up when they land"
     environment = "cloud"  # an account service, not a machine
     account_question = ("The e-mail address of your claude.ai account (several: separate them with "
                         "commas). If you don't use claude.ai, just press Enter")

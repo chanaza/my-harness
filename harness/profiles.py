@@ -34,10 +34,13 @@ class Profile:
     environment: str | None = None
     description: str | None = None
     previous_ids: list[str] | None = None
+    machine: str | None = None
 
     @staticmethod
-    def make_id(tool: str, label: str, environment: str | None = None) -> str:
-        return slugify("-".join(p for p in (tool, label, environment) if p))
+    def make_id(tool: str, label: str, environment: str | None = None, machine: str | None = None) -> str:
+        """tool-account-where: the computer's name for local profiles, else the environment."""
+        where = machine if environment == "local" and machine else environment
+        return slugify("-".join(p for p in (tool, label, where) if p))
 
     def to_dict(self) -> dict:
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -84,7 +87,7 @@ class ProfileRegistry:
         return profile
 
     def update(self, profile_id: str, **fields: str | None) -> Profile:
-        """Change label, environment or description of a profile."""
+        """Change label, environment, machine or description of a profile."""
         self._check_environment(fields.get("environment"))
         profiles = self.all()
         current = self.get(profile_id)
