@@ -358,8 +358,8 @@ class SkillCommand(Command):
         target = adapter.deliver_skill(Path(args.output).expanduser() if args.output else None)
         if target is None:
             raise ErrorExit(f"{args.tool} has no skill to install.")
-        print(f"Skill file: {target.resolve()} (a window showing it has opened)")
-        print("Upload it on the claude.ai page that opened: Skills > Upload skill.")
+        print(f"Skill file: {target.resolve()}")
+        print("Upload it in claude.ai (a page opened): Settings > Capabilities > Skills > Upload skill.")
         print("Then, in Cowork, type: Set up my harness export")
         return 0
 

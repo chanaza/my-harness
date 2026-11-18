@@ -133,9 +133,9 @@ def test_export_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: C
     from harness.cli import main
     repo.config_file.update({"claude_ai.export_every_days": 14})
     assert main(["skill", "claude-ai"]) == 0          # no options: to the desktop, shown
-    target = module._visible_folder() / "harness-claude-ai-export.zip"
+    target = module._visible_folder() / "harness-export.zip"
     with zipfile.ZipFile(target) as archive:
-        text = archive.read("harness-claude-ai-export/SKILL.md").decode()
+        text = archive.read("harness-export/SKILL.md").decode()
     assert "every 14 days" in text and str(tmp_path / "Downloads") in text
     assert "3 hours" in text and "${" not in text
     assert "Set up my harness export" in capsys.readouterr().out
@@ -168,7 +168,7 @@ def test_setup_prepares_the_skill_and_says_what_is_left(repo: ContentRepo, tmp_p
     result = SetupWizard(Answers("me@example.com", "personal", str(tmp_path / "f"), False), LocalHome()).run(
         SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
     from harness.adapters.claude_ai import adapter as module
-    assert (module._visible_folder() / "harness-claude-ai-export.zip").is_file()
+    assert (module._visible_folder() / "harness-export.zip").is_file()
     assert "Set up my harness export" in result.next_steps[-1]
 
 
@@ -177,3 +177,10 @@ def test_claude_ai_can_be_skipped_and_is_not_asked_again(repo: ContentRepo, tmp_
     with pytest.raises(SetupSkipped):
         SetupWizard(Answers(""), LocalHome()).run(
             SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
+
+
+def test_skill_name_avoids_reserved_words(connected: ClaudeAiAdapter):
+    name, files = connected.skill_package()
+    front = files[f"{name}/SKILL.md"].decode().split("---")[1]
+    skill_name = next(line for line in front.splitlines() if line.startswith("name:")).split(":", 1)[1]
+    assert "claude" not in skill_name.lower() and "anthropic" not in skill_name.lower()

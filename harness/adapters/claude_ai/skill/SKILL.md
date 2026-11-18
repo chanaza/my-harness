@@ -1,6 +1,6 @@
 ---
-name: harness-claude-ai-export
-description: Keep the user's claude.ai data (chats, projects, memory) saved in their harness. Two modes - "request" asks claude.ai for a data export; "download" saves the export from the e-mail into the folder the harness watches. Use when a scheduled task asks to run harness-claude-ai-export (request every ${EVERY_DAYS} days, download ${DOWNLOAD_AFTER} hours later), or when the user asks to export claude.ai to their harness.
+name: harness-export
+description: Keep the user's claude.ai data (chats, projects, memory) saved in their harness. Two modes - "request" asks claude.ai for a data export; "download" saves the export from the e-mail into the folder the harness watches. Use when a scheduled task asks to run harness-export (request every ${EVERY_DAYS} days, download ${DOWNLOAD_AFTER} hours later), or when the user asks to export claude.ai to their harness.
 ---
 
 # Export claude.ai to the harness
@@ -19,10 +19,10 @@ says "request" or "download". Anything else: do both, first "download", then
 Create two scheduled tasks in Cowork (use the scheduling capability):
 
 1. Name "Harness - request claude.ai export", every ${EVERY_DAYS} days, prompt:
-   "Run the harness-claude-ai-export skill in request mode."
+   "Run the harness-export skill in request mode."
 2. Name "Harness - download claude.ai export", every ${EVERY_DAYS} days,
    ${DOWNLOAD_AFTER} hours after the first, prompt:
-   "Run the harness-claude-ai-export skill in download mode."
+   "Run the harness-export skill in download mode."
 
 Then run request mode once now, and tell the user in one sentence that it is set
 up and the first export will be saved within a few hours.

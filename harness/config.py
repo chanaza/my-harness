@@ -56,6 +56,7 @@ class ClaudeAiSettings:
     archive_exports: bool = True
     export_every_days: int = 7
     download_after_hours: int = 3
+    skills_page: str = "https://claude.ai/settings"
 
 
 @dataclass(frozen=True)

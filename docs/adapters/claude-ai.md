@@ -29,13 +29,13 @@ conversations that changed since the last export are rewritten.
 
 ## Getting exports automatically
 
-1. `python -m harness skill claude-ai` creates `harness-claude-ai-export.zip`
+1. `python -m harness skill claude-ai` creates `harness-export.zip`
    from your settings.
 2. Upload it in claude.ai: Settings > Capabilities > Skills.
 3. In Cowork, create two scheduled tasks (the command prints them, from your
    settings):
-   - every `export_every_days`: "Run the harness-claude-ai-export skill in request mode."
-   - `download_after_hours` later: "Run the harness-claude-ai-export skill in download mode."
+   - every `export_every_days`: "Run the harness-export skill in request mode."
+   - `download_after_hours` later: "Run the harness-export skill in download mode."
 
 The first asks claude.ai for an export; the second saves it once the e-mail has
 arrived. The computer picks the file up from the watch folder on its own

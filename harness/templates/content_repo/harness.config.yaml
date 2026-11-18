@@ -75,6 +75,8 @@ claude_ai:
   export_every_days: 7
   # How long after the request the "download" scheduled task runs, in hours.
   download_after_hours: 3
+  # The claude.ai page opened for uploading the export skill.
+  skills_page: https://claude.ai/settings
 
 assets:
   # Larger files are stored outside Git and referenced from assets/<id>/asset.yaml.

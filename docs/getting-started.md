@@ -59,7 +59,7 @@ That's all. Use your tool as usual.
 
 They live in your claude.ai account, not on the computer. The installer asks
 for your claude.ai account e-mail(s) (leave it empty to skip). If you give
-them, it puts `harness-claude-ai-export.zip` on your desktop and opens
+them, it puts `harness-export.zip` on your desktop and opens
 claude.ai's skills page:
 
 1. Upload the file there (Skills > Upload skill), in each account.

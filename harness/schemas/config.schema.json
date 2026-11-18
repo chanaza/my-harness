@@ -306,6 +306,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "How long after requesting an export the download task runs."
+        },
+        "skills_page": {
+          "type": "string",
+          "description": "The claude.ai page opened for uploading the export skill."
         }
       },
       "additionalProperties": false

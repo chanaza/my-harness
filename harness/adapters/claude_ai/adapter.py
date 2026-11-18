@@ -18,8 +18,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import subprocess
-import sys
 import webbrowser
 import zipfile
 from fnmatch import fnmatch
@@ -39,7 +37,8 @@ from ..base import Account, AccountBoundAdapter, HarnessNotConfigured, adapters
 from .export import ClaudeAiExport, Conversation
 
 TOOL = "claude-ai"
-SKILL_NAME = "harness-claude-ai-export"
+#: Skill names may not contain "claude" (reserved by claude.ai).
+SKILL_NAME = "harness-export"
 
 
 @adapters.register
@@ -49,7 +48,6 @@ class ClaudeAiAdapter(AccountBoundAdapter):
     account_question = ("Do you also use claude.ai (chats, projects)? "
                         "Its account e-mail(s), separated by commas")
     offered_everywhere = True
-    SKILLS_PAGE = "https://claude.ai/settings/capabilities"
 
     def __init__(self, local: LocalHome | None = None, watch_folder: Path | None = None) -> None:
         super().__init__(local)
@@ -93,17 +91,16 @@ class ClaudeAiAdapter(AccountBoundAdapter):
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
             for path, content in files.items():
                 archive.writestr(path, content)
-        _reveal(target)
-        webbrowser.open(self.SKILLS_PAGE)
+        webbrowser.open(self._settings().skills_page)
         return target
 
     def after_setup(self, profiles: list[str]) -> list[str]:
         """Put the export skill where the user will find it and open the page to upload it."""
         target = self.deliver_skill()
         accounts = "each of your claude.ai accounts" if len(profiles) > 1 else "your claude.ai account"
-        return [f"In {accounts}, upload the file {target} (a window showing it just opened) "
-                f"on the claude.ai page that also opened ({self.SKILLS_PAGE}): Skills > Upload skill. "
-                f"Can't find it later? Run: python -m harness skill claude-ai",
+        return [f"In {accounts}, upload the file {target} in claude.ai (a page just opened): "
+                f"Settings > Capabilities > Skills > Upload skill. "
+                f"Can't find the file later? Run: python -m harness skill claude-ai",
                 "Then, in Cowork (in each account), type: Set up my harness export"]
 
     def scheduled_tasks(self) -> list[tuple[str, str]]:
@@ -262,16 +259,3 @@ def _windows_desktop() -> Path | None:
         return Path(os.path.expandvars(value))
     except OSError:
         return None
-
-
-def _reveal(path: Path) -> None:
-    """Show the file to the user in their file manager, selected."""
-    try:
-        if os.name == "nt":
-            subprocess.Popen(["explorer.exe", f"/select,{path}"])
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", "-R", str(path)])
-        else:
-            subprocess.Popen(["xdg-open", str(path.parent)])
-    except OSError:
-        pass  # showing it is a convenience; the path is printed anyway

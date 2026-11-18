@@ -30,7 +30,6 @@ def isolated_harness_home(tmp_path_factory, monkeypatch) -> None:
     desktop.mkdir()
     monkeypatch.setattr("harness.adapters.claude_ai.adapter._visible_folder", lambda: desktop)
     monkeypatch.setattr("webbrowser.open", lambda url: True)
-    monkeypatch.setattr("harness.adapters.claude_ai.adapter._reveal", lambda path: None)
 
 
 @pytest.fixture
