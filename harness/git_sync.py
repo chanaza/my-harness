@@ -40,7 +40,8 @@ class GitSync:
                 self._git("commit", "-q", "-m", message)
             pushed = False
             if push and self.settings.auto_push and self._has_remote():
-                self._git("push", "-q")
+                # -u keeps the branch linked to origin, so `git status` reports it as pushed.
+                self._git("push", "-q", "-u", "origin", "HEAD")
                 pushed = True
             return SyncResult(committed, pushed)
         except (subprocess.SubprocessError, OSError) as exc:

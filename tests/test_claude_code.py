@@ -235,3 +235,5 @@ def test_stop_pushes_every_turn(adapter: ClaudeCodeAdapter, repo: ContentRepo, t
     local = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo.root, capture_output=True, text=True)
     pushed = subprocess.run(["git", "rev-parse", "main"], cwd=remote, capture_output=True, text=True)
     assert local.stdout == pushed.stdout
+    status = subprocess.run(["git", "status", "-sb"], cwd=repo.root, capture_output=True, text=True)
+    assert "...origin/main" in status.stdout and "ahead" not in status.stdout
