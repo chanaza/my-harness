@@ -120,9 +120,10 @@ class SetupWizard:
         return answer
 
     def _content_repo(self, options: SetupOptions) -> ContentRepo:
-        source = options.repo or self.local.settings().get("content_repo") or self.prompter.ask(
-            "Where is your harness repository? (a folder, or its GitHub address)")
+        source = options.repo or self.local.settings().get("content_repo") or self._ask_repo()
         folder = self._clone(source) if _is_url(source) else Path(source).expanduser()
+        if not folder.is_dir():
+            raise SetupError(f"There is no folder {folder}.")
         repo = ContentRepo(folder)
         if not repo.config_file.path.is_file():
             if not self.prompter.confirm(f"{folder} has no harness yet. Create a new one there?"):
@@ -130,6 +131,17 @@ class SetupWizard:
             owner = options.owner or self.prompter.ask("Your name (shown in the repository)", "me")
             Scaffolder().create(folder, InitOptions(owner=owner))
         return ContentRepo(folder)
+
+    def _ask_repo(self) -> str:
+        """Ask until the answer is a GitHub address or an existing folder."""
+        question = ("Paste the GitHub address of your harness repository\n"
+                    "  (e.g. https://github.com/your-name/my-harness-content),\n"
+                    "  or the full path of a folder that already holds it")
+        while True:
+            answer = self.prompter.ask(question).strip().strip('"')
+            if _is_url(answer) or Path(answer).expanduser().is_dir():
+                return answer
+            self.prompter.say(f"'{answer}' is neither a GitHub address nor an existing folder. Try again.")
 
     def _clone(self, url: str) -> Path:
         target = Path.home() / url.rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]

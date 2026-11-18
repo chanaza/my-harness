@@ -98,3 +98,16 @@ def test_status_reports_connection_and_problems(machine: Path, capsys):
     out = capsys.readouterr().out
     assert "claude-code-personal-local" in out and "Repository check: OK" in out
     assert "transcript failed: boom" in out
+
+
+def test_repository_question_repeats_until_valid(machine: Path, tmp_path: Path):
+    prompter = ScriptedPrompter("local", "folder", str(machine), True, "Dana", "work",
+                                str(tmp_path / "t"), False)
+    SetupWizard(prompter, LocalHome()).run(SetupOptions())
+    assert any("neither a GitHub address nor an existing folder" in s for s in prompter.said)
+
+
+def test_missing_folder_option_is_an_error(machine: Path, tmp_path: Path):
+    with pytest.raises(SetupError):
+        SetupWizard(DefaultsPrompter(), LocalHome()).run(
+            SetupOptions(repo=str(tmp_path / "nope"), environment="local"))
