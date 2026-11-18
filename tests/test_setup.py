@@ -111,3 +111,21 @@ def test_missing_folder_option_is_an_error(machine: Path, tmp_path: Path):
     with pytest.raises(SetupError):
         SetupWizard(DefaultsPrompter(), LocalHome()).run(
             SetupOptions(repo=str(tmp_path / "nope"), environment="local"))
+
+
+def test_update_runs_every_step_with_fresh_processes(machine: Path, tmp_path: Path):
+    import subprocess as sp
+
+    from harness.update import Updater
+    main(["setup", "--repo", str(machine), "--account", "personal", "--environment", "local",
+          "--owner", "Dana", "--transcripts", str(tmp_path / "t"), "--yes", "--no-capture"])
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command[1:])
+        return sp.CompletedProcess(command, 0, "", "")
+
+    report = Updater(run=fake_run).update(engine=False)
+    assert not report.problems
+    assert [c[2] for c in calls] == ["upgrade", "install", "harvest"]
+    assert "claude-code-personal-local" in calls[1]

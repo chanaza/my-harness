@@ -53,7 +53,10 @@ def claude(tmp_path: Path) -> ClaudeCodeLocations:
     (home / "projects" / "-home-me-app" / "memory" / "MEMORY.md").write_text("Uses Postgres.\n")
     (home / "settings.json").write_text(json.dumps({"model": "opus", "env": {"TOKEN": "secret"}}))
     (home / "plugins" / "synced" / "bucket" / "my-plugin").mkdir(parents=True)
-    (home / "plugins" / "synced" / "bucket" / "manifest.json").write_text("{}")
+    (home / "plugins" / "synced" / "bucket" / ".staging").mkdir()  # internal folders, not plugins
+    (home / "plugins" / "synced" / "bucket" / "data").mkdir()
+    (home / "plugins" / "synced" / "bucket" / "manifest.json").write_text(
+        json.dumps({"plugins": [{"name": "my-plugin", "pluginId": "p1"}]}))
     user_config = tmp_path / ".claude.json"
     user_config.write_text(json.dumps({"mcpServers": {"monday": {
         "type": "http", "url": "https://mcp.monday.com/sse", "headers": {"Authorization": "Bearer x"}}}}))

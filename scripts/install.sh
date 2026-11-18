@@ -21,8 +21,8 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 echo "Installing my-harness..."
-"$PYTHON" -m pip install --user --quiet --upgrade --disable-pip-version-check "$ENGINE"
+"$PYTHON" -m pip install --user --quiet --upgrade --disable-pip-version-check --no-warn-script-location "$ENGINE"
 # Always take the latest engine code, even when its version number did not change.
-"$PYTHON" -m pip install --user --quiet --force-reinstall --no-deps --disable-pip-version-check "$ENGINE"
+"$PYTHON" -m pip install --user --quiet --force-reinstall --no-deps --disable-pip-version-check --no-warn-script-location "$ENGINE"
 # Interactive questions need the terminal even when this script is piped from curl.
 exec "$PYTHON" -m harness setup "$@" < /dev/tty

@@ -30,10 +30,10 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "Installing my-harness..."
-& $python -m pip install --user --quiet --upgrade --disable-pip-version-check $engine
+& $python -m pip install --user --quiet --upgrade --disable-pip-version-check --no-warn-script-location $engine
 if ($LASTEXITCODE -eq 0) {
     # Always take the latest engine code, even when its version number did not change.
-    & $python -m pip install --user --quiet --force-reinstall --no-deps --disable-pip-version-check $engine
+    & $python -m pip install --user --quiet --force-reinstall --no-deps --disable-pip-version-check --no-warn-script-location $engine
 }
 if ($LASTEXITCODE -ne 0) { Write-Host "Installation failed (see above)." -ForegroundColor Red; return }
 

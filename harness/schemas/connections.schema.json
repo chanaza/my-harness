@@ -43,6 +43,13 @@
                 },
                 "notes": {
                   "type": "string"
+                },
+                "profiles": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Profiles that have this connection in that tool."
                 }
               }
             }

@@ -8,6 +8,7 @@ the target last: if a *different* profile did, the incoming version goes to
 from __future__ import annotations
 
 import re
+import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,14 @@ class ItemWriter(ABC):
     def location(self, name: str, scope: str, profile: str) -> Path | None:
         """Where this writer puts an item by convention (None if not separable)."""
         return None
+
+    def retract(self, name: str, scope: str, profile: str, known_path: Path | None = None) -> bool:
+        """The tool no longer has this item: remove what ``profile`` contributed. True if removed."""
+        target = known_path or self.location(name, scope, profile)
+        if target is None or not target.exists():
+            return False
+        shutil.rmtree(target) if target.is_dir() else target.unlink()
+        return True
 
     # --- shared helpers -------------------------------------------------------
 
@@ -162,23 +171,58 @@ class ConnectionWriter(ItemWriter):
         entry_id = slugify(item.name)
         current = next((c for c in connections if c.get("id") == entry_id), None)
 
-        available = {"kind": item.meta["kind"]}
+        tool = item.meta["tool"]
+        previous = ((current or {}).get("available_in") or {}).get(tool) or {}
+        available = {"kind": item.meta["kind"],
+                     "profiles": sorted(set(previous.get("profiles", [])) | {origin.profile})}
         if item.meta.get("notes"):
             available["notes"] = item.meta["notes"]
         if current is None:
             connections.append({
                 "id": entry_id, "kind": item.meta["kind"],
                 "description": item.meta.get("description", item.name),
-                "available_in": {item.meta["tool"]: available},
+                "available_in": {tool: available},
                 "provenance": Provenance.new(origin),
             })
             action = "created"
         else:
-            current.setdefault("available_in", {})[item.meta["tool"]] = available
+            current.setdefault("available_in", {})[tool] = available
             current["provenance"] = Provenance.updated(current.get("provenance"), origin)
             action = "updated"
-        path.write_text(yaml_io.dump({"connections": connections}), encoding="utf-8")
+        self._save(path, connections)
         return WriteResult(action, path)
+
+    def retract(self, name: str, scope: str, profile: str, known_path: Path | None = None) -> bool:
+        """Drop ``profile`` from the connection; drop the tool when no profile has it any more,
+        and the connection when no tool does."""
+        path = self.repo.path(self.repo.layout.connections_file)
+        if not path.is_file():
+            return False
+        connections = list((yaml_io.load(path.read_text("utf-8")) or {}).get("connections") or [])
+        entry = next((c for c in connections if c.get("id") == slugify(name)), None)
+        if entry is None:
+            return False
+        source = ((entry.get("provenance") or {}).get("source") or {}).get("profile")
+        changed = False
+        for tool, available in list((entry.get("available_in") or {}).items()):
+            profiles = set(available.get("profiles") or ([source] if source else []))
+            if profile in profiles:
+                profiles.discard(profile)
+                changed = True
+                if profiles:
+                    available["profiles"] = sorted(profiles)
+                else:
+                    del entry["available_in"][tool]
+        if not changed:
+            return False
+        if not entry.get("available_in"):
+            connections.remove(entry)
+        self._save(path, connections)
+        return True
+
+    @staticmethod
+    def _save(path: Path, connections: list[dict[str, Any]]) -> None:
+        path.write_text(yaml_io.dump({"connections": connections}), encoding="utf-8")
 
 
 class NativeWriter(ItemWriter):

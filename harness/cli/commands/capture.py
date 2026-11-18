@@ -21,6 +21,7 @@ from ...repo import ContentRepo
 from ...sessions import SessionRecord
 from ...setup import ConsolePrompter, DefaultsPrompter, SetupError, SetupOptions, SetupWizard
 from ...storage import StorageError
+from ...update import Updater
 from ...validation import RepoValidator
 from ..base import Command, ErrorExit
 from .repository import open_repo, repo_argument
@@ -185,6 +186,23 @@ class StatusCommand(Command):
         for line in problems:
             print(f"  ! {line}")
         return 0
+
+
+class UpdateCommand(Command):
+    name = "update"
+    help = "Update everything on this machine: engine, harness repository, tool connections."
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--no-engine", action="store_true", help="Keep the installed engine code.")
+
+    def run(self, args: argparse.Namespace) -> int:
+        report = Updater().update(engine=not args.no_engine)
+        for step in report.steps:
+            print(f"  + {step}")
+        for problem in report.problems:
+            print(f"  x {problem}")
+        print("Up to date." if not report.problems else "Some steps failed (see above).")
+        return 1 if report.problems else 0
 
 
 class InstallCommand(Command):

@@ -44,7 +44,7 @@ class HarvestSync:
     PRUNABLE = (Kind.SKILL, Kind.AGENT, Kind.INSTRUCTION, Kind.NATIVE, Kind.MEMORY)
     #: Kinds that mirror the tool: when the tool no longer has the item, neither does the harness.
     #: (Knowledge such as skills and memory is never deleted just because the tool dropped it.)
-    MIRRORED = (Kind.NATIVE,)
+    MIRRORED = (Kind.NATIVE, Kind.CONNECTION)
 
     def __init__(self, repo: ContentRepo, state: StateFile,
                  writers: Sequence[type[ItemWriter]] = DEFAULT_WRITERS) -> None:
@@ -82,10 +82,9 @@ class HarvestSync:
         for key in sorted(set(seen) - current):
             kind, scope, name = key.split(":", 2)
             if Kind(kind) in self.MIRRORED and scope in scopes:
-                target = self.repo.path(written[key]) if key in written else \
-                    self.writers[Kind(kind)].location(name, scope, origin.profile)
-                if target is not None and target.exists():
-                    shutil.rmtree(target) if target.is_dir() else target.unlink()
+                known = self.repo.path(written[key]) if key in written and Kind(kind) is not \
+                    Kind.CONNECTION else None
+                if self.writers[Kind(kind)].retract(name, scope, origin.profile, known):
                     report.counts["removed"] += 1
                 seen.pop(key, None)
                 written.pop(key, None)

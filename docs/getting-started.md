@@ -101,14 +101,35 @@ repository is valid, and any recent problems.
 
 ## Keeping it up to date
 
-```bash
-python -m pip install --user --upgrade "git+https://github.com/chanaza/my-harness"
-python -m harness upgrade --repo <your harness folder>
+```
+python -m harness update
 ```
 
-The first command updates the engine; the second brings your harness
-repository's settings and stored data up to the new version (it keeps every
-value you set).
+One command: it installs the latest engine, brings your harness repository's
+settings and stored data up to the new version (keeping every value you
+set), refreshes the connection of every tool on this machine, and saves once.
+
+## Several computers
+
+Every computer (and cloud environment) saves to the same harness repository.
+Before pushing, each one first brings in what the others pushed, so they
+never overwrite each other. Each computer is its own profile, e.g.
+`claude-code-personal-local` and `claude-code-personal-cloud`.
+
+## If something goes wrong
+
+**"Repository not found" when downloading your harness repository.** Your
+repository is private, and GitHub answers "not found" when Git is signed in
+as an account that cannot see it. Remove the saved login, then download it
+once yourself, naming your account, and sign in when asked:
+
+```
+cmdkey /delete:git:https://github.com
+git clone https://<your-github-name>@github.com/<your-github-name>/<repository>
+```
+
+(The first line is for Windows.) Then run the installer again and give it
+the downloaded folder.
 
 ## Settings you may want to change
 

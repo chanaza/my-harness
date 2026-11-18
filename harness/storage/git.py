@@ -97,6 +97,11 @@ class GitStorage(Storage):
         self._git("add", "-A")
         if self._git("diff", "--cached", "--quiet", check=False).returncode != 0:
             self._git("commit", "-q", "-m", message)
+            # Another machine may have pushed to the branch meanwhile: rebase onto it first.
+            if self._git("fetch", "-q", "origin", self.branch, check=False).returncode == 0:
+                if self._git("rebase", "-q", "FETCH_HEAD", check=False).returncode != 0:
+                    self._git("rebase", "--abort", check=False)
+                    raise StorageError("could not merge the remote transcripts branch")
             self._git("push", "-q", "origin", f"HEAD:refs/heads/{self.branch}")
 
     def _git(self, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:

@@ -51,6 +51,7 @@ def test_harvester_finds_everything_and_strips_secrets(claude: ClaudeCodeLocatio
     assert monday.meta["notes"] == "http; host mcp.monday.com"
     assert "Bearer" not in json.dumps(monday.meta)
     assert (Kind.CONNECTION, "my-plugin") in items
+    assert (Kind.CONNECTION, ".staging") not in items and (Kind.CONNECTION, "data") not in items
     assert b"secret" not in items[(Kind.NATIVE, "settings")].files["settings.json"]
 
 
@@ -272,3 +273,46 @@ def test_stop_pushes_every_turn(adapter: ClaudeCodeAdapter, repo: ContentRepo, t
     assert local.stdout == pushed.stdout
     status = subprocess.run(["git", "status", "-sb"], cwd=repo.root, capture_output=True, text=True)
     assert "...origin/main" in status.stdout and "ahead" not in status.stdout
+
+
+def test_connections_mirror_the_tool_per_profile(adapter: ClaudeCodeAdapter, repo: ContentRepo):
+    from harness import yaml_io
+    adapter.run_harvest()
+    connections = yaml_io.load(repo.path("core", "connections.yaml").read_text())["connections"]
+    monday = next(c for c in connections if c["id"] == "monday")
+    assert monday["available_in"]["claude-code"]["profiles"] == [PROFILE]
+
+    adapter.locations.user_config_file.write_text("{}")  # the MCP server was removed in the tool
+    report = adapter.run_harvest()
+    assert report.counts["removed"] == 1
+    ids = [c["id"] for c in yaml_io.load(repo.path("core", "connections.yaml").read_text())["connections"]]
+    assert "monday" not in ids and "my-plugin" in ids
+    assert validate(repo).ok, validate(repo).problems
+
+
+def test_sync_rebases_onto_another_machines_push(tmp_path: Path):
+    from harness.config import GitSettings
+    from harness.git_sync import GitSync
+
+    def git(cwd, *args):
+        subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", *args], cwd=cwd,
+                       check=True, capture_output=True)
+
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
+    machines = []
+    for name in ("cloud", "windows"):
+        clone = tmp_path / name
+        git(tmp_path, "clone", "-q", str(remote), str(clone))
+        machines.append(clone)
+    cloud, windows = machines
+    (cloud / "a.txt").write_text("a")
+    for args in (("add", "-A"), ("commit", "-q", "-m", "a"), ("push", "-q", "-u", "origin", "HEAD")):
+        git(cloud, *args)
+    (windows / "b.txt").write_text("b")  # windows has not seen cloud's commit
+    settings = GitSettings(auto_commit=True, auto_push=True)
+    result = GitSync(windows, settings).sync("b", push=True)
+    assert result.pushed, result.message
+    files = subprocess.run(["git", "ls-tree", "--name-only", "main"], cwd=remote,
+                           capture_output=True, text=True)
+    assert files.stdout.split() == ["a.txt", "b.txt"]

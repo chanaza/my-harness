@@ -128,10 +128,11 @@ class ClaudeCodeHarvester:
         installed = _read_json(plugins_dir / "installed_plugins.json")
         for key in (installed.get("plugins") or {}):
             names[key.split("@", 1)[0]] = str(plugins_dir / "installed_plugins.json")
+        # Plugins synced from the account: listed by name in a manifest.
         for manifest in plugins_dir.glob("*/*/manifest.json") if plugins_dir.is_dir() else []:
-            for folder in manifest.parent.iterdir():
-                if folder.is_dir():
-                    names.setdefault(folder.name, str(folder))
+            for plugin in _read_json(manifest).get("plugins") or []:
+                if isinstance(plugin, dict) and plugin.get("name"):
+                    names.setdefault(plugin["name"], str(manifest))
         for name, origin in sorted(names.items()):
             yield Captured(Kind.CONNECTION, name, origin, meta={
                 "tool": TOOL, "kind": "plugin", "description": f"Plugin '{name}'"})

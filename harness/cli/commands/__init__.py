@@ -11,12 +11,13 @@ from .capture import (
     SessionCommand,
     SetupCommand,
     StatusCommand,
+    UpdateCommand,
 )
 from .repository import ConfigCommand, InitCommand, UpgradeCommand, ValidateCommand
 
 #: Commands exposed by `harness`, in help order.
 DEFAULT_COMMANDS: tuple[type[Command], ...] = (
-    SetupCommand, StatusCommand,
+    SetupCommand, StatusCommand, UpdateCommand,
     InitCommand, ValidateCommand, ConfigCommand, UpgradeCommand,
     ProfileCommand, InstallCommand, HarvestCommand, BackfillCommand, HookCommand,
     SessionCommand, MemoryCommand,

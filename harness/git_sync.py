@@ -40,12 +40,29 @@ class GitSync:
                 self._git("commit", "-q", "-m", message)
             pushed = False
             if push and self.settings.auto_push and self._has_remote():
+                if not self._catch_up():
+                    return SyncResult(committed, False, "git failed: could not merge changes "
+                                      "from the remote; they will be retried next time")
                 # -u keeps the branch linked to origin, so `git status` reports it as pushed.
                 self._git("push", "-q", "-u", "origin", "HEAD")
                 pushed = True
             return SyncResult(committed, pushed)
         except (subprocess.SubprocessError, OSError) as exc:
             return SyncResult(False, False, f"git failed: {exc}")
+
+    def _catch_up(self) -> bool:
+        """Put this machine's commits on top of what other machines pushed (rebase).
+
+        Profiles write to separate files, so this almost never conflicts. If it does,
+        the rebase is undone and nothing is lost; the push waits for a later turn.
+        """
+        branch = self._git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        if self._git("fetch", "-q", "origin", branch, check=False).returncode != 0:
+            return True  # the remote does not have the branch yet: nothing to catch up on
+        if self._git("rebase", "-q", "--autostash", "FETCH_HEAD", check=False).returncode == 0:
+            return True
+        self._git("rebase", "--abort", check=False)
+        return False
 
     def _has_remote(self) -> bool:
         return bool(self._git("remote", check=False).stdout.strip())
