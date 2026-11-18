@@ -101,11 +101,9 @@ repository is valid, and any recent problems.
 
 ## Keeping it up to date
 
-```
-python -m harness update
-```
-
-One command: it installs the latest engine, brings your harness repository's
+Run the same installation command again (or `python -m harness update`).
+On a computer that is already connected it asks nothing: it installs the
+latest engine, brings your harness repository's
 settings and stored data up to the new version (keeping every value you
 set), refreshes the connection of every tool on this machine, and saves once.
 

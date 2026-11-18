@@ -145,6 +145,10 @@ class SetupCommand(Command):
         parser.add_argument("--no-capture", action="store_true", help="Install only; capture later.")
 
     def run(self, args: argparse.Namespace) -> int:
+        if self._already_connected(args):
+            # Running the installer again on a connected machine means "bring me up to date".
+            print(f"This machine is already connected to {LocalHome().content_repo()}. Updating...")
+            return UpdateCommand().run(argparse.Namespace(no_engine=True))
         prompter = DefaultsPrompter() if args.yes else ConsolePrompter()
         options = SetupOptions(tool=args.tool, repo=args.repo, account=args.account,
                                environment=args.environment, transcripts=args.transcripts,
@@ -158,6 +162,17 @@ class SetupCommand(Command):
             print(f"  + {line}")
         print("From now on conversations are saved automatically, in the background.")
         return 0
+
+    @staticmethod
+    def _already_connected(args: argparse.Namespace) -> bool:
+        """No options given, and this machine's tool account is already bound to a profile."""
+        if any((args.repo, args.account, args.environment, args.transcripts, args.owner)):
+            return False
+        try:
+            adapter = adapters.create(args.tool)
+            return bool(adapter.local.content_repo()) and bool(adapter.profile_id())
+        except HarnessNotConfigured:
+            return False
 
 
 class StatusCommand(Command):

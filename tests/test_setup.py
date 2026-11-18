@@ -129,3 +129,21 @@ def test_update_runs_every_step_with_fresh_processes(machine: Path, tmp_path: Pa
     assert not report.problems
     assert [c[2] for c in calls] == ["upgrade", "install", "harvest"]
     assert "claude-code-personal-local" in calls[1]
+
+
+def test_setup_on_a_connected_machine_updates_instead_of_asking(machine: Path, tmp_path: Path,
+                                                               monkeypatch, capsys):
+    from harness.update import Updater, UpdateReport
+    main(["setup", "--repo", str(machine), "--account", "personal", "--environment", "local",
+          "--owner", "Dana", "--transcripts", str(tmp_path / "t"), "--yes", "--no-capture"])
+    called = {}
+
+    def fake_update(self, engine: bool = True) -> UpdateReport:
+        called["engine"] = engine
+        return UpdateReport()
+
+    monkeypatch.setattr(Updater, "update", fake_update)
+    capsys.readouterr()
+    assert main(["setup"]) == 0
+    assert "already connected" in capsys.readouterr().out
+    assert called == {"engine": False}
