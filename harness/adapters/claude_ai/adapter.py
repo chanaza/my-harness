@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import webbrowser
+import zipfile
 from fnmatch import fnmatch
 from importlib import resources
 from pathlib import Path
@@ -41,7 +43,10 @@ SKILL_NAME = "harness-claude-ai-export"
 class ClaudeAiAdapter(AccountBoundAdapter):
     tool = TOOL
     environment = "cloud"  # an account service, not a machine
-    account_question = "E-mail address(es) of your claude.ai account(s), separated by commas"
+    account_question = ("Do you also use claude.ai (chats, projects)? "
+                        "Its account e-mail(s), separated by commas")
+    offered_everywhere = True
+    SKILLS_PAGE = "https://claude.ai/settings/capabilities"
 
     def __init__(self, local: LocalHome | None = None, watch_folder: Path | None = None) -> None:
         super().__init__(local)
@@ -77,6 +82,19 @@ class ClaudeAiAdapter(AccountBoundAdapter):
             accounts.append(Account(email, f"claude.ai {email}: {len(latest.conversations())} conversations, "
                                            f"{len(latest.projects())} projects"))
         return accounts
+
+    def after_setup(self, profiles: list[str]) -> list[str]:
+        """Put the export skill where the user will find it and open the page to upload it."""
+        name, files = self.skill_package()
+        target = _visible_folder() / f"{name}.zip"
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+            for path, content in files.items():
+                archive.writestr(path, content)
+        webbrowser.open(self.SKILLS_PAGE)
+        accounts = "each of your claude.ai accounts" if len(profiles) > 1 else "your claude.ai account"
+        return [f"In {accounts}, upload the file {target} on the page that just opened "
+                f"({self.SKILLS_PAGE}): Skills > Upload skill.",
+                "Then, in Cowork (in each account), type: Set up my harness export"]
 
     def scheduled_tasks(self) -> list[tuple[str, str]]:
         """The two Cowork scheduled tasks that run the export skill: (when, what to type)."""
@@ -211,3 +229,11 @@ class ConversationImporter:
 def _file_signature(path: Path) -> str:
     stat = path.stat()
     return hashlib.sha256(f"{stat.st_size}|{stat.st_mtime_ns}".encode()).hexdigest()
+
+
+def _visible_folder() -> Path:
+    """Where a non-technical user will see a new file: the desktop, else Downloads, else home."""
+    for folder in (Path.home() / "Desktop", Path.home() / "OneDrive" / "Desktop", Path.home() / "Downloads"):
+        if folder.is_dir():
+            return folder
+    return Path.home()

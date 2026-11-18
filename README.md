@@ -1,9 +1,59 @@
 # my-harness
 
-**Keep your AI harness portable.** Instructions, skills, agents, workflows,
-memory, app specs and conversation records live in a Git repository you own,
-not inside any single AI tool. When you switch tools (or run out of tokens in
-one), everything you built comes with you.
+**Everything you build with AI, kept safe outside any one tool.**
+
+Your instructions, skills, projects, memory and conversations live inside the
+AI tools you use. When you run out of tokens, change tool or switch account,
+that work stays behind. my-harness copies it, continuously and in the
+background, into a private GitHub repository that is yours, so it always
+goes with you.
+
+## Start here (5 minutes)
+
+**You need:** a GitHub account, and an empty **private** repository in it
+(on github.com: New repository, Private, nothing else). That repository will
+hold your harness.
+
+**1. On your computer, run one command.**
+Open a terminal (on Windows: Command Prompt or PowerShell) and paste:
+
+```
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/chanaza/my-harness/main/scripts/install.ps1 | iex"
+```
+
+On macOS / Linux:
+
+```
+curl -fsSL https://raw.githubusercontent.com/chanaza/my-harness/main/scripts/install.sh | bash
+```
+
+It asks a few short questions (where your repository is, a name for each of
+your accounts, whether you use claude.ai) and shows what it found before
+saving anything.
+
+**2. If you use claude.ai,** the installer puts a file on your desktop and opens
+claude.ai's skills page: upload the file there. Then, in Cowork, type
+`Set up my harness export`. That's all.
+
+From then on, everything is saved by itself. Nothing is shown while it runs.
+
+**Check that it works:** `python -m harness status`.
+**Update later:** run the same installation command again.
+**More details, cloud sessions and troubleshooting:** [docs/getting-started.md](docs/getting-started.md).
+
+### What is saved today
+
+| Tool | What | How |
+|---|---|---|
+| Claude Code (computer and cloud) | Instructions, skills, agents, memory, connections, every conversation | Every turn, in the background |
+| Cowork (Claude desktop app) | Skills, plugins, memory, scheduled tasks, every conversation and its files | Every 30 minutes |
+| claude.ai | Every chat, projects (instructions and files), memory | From its official export, weekly |
+
+Saving only: nothing from the harness is loaded back into your tools yet.
+
+---
+
+## How it works (for developers)
 
 This repository is the **engine**: code, schemas and tool adapters. It holds
 no personal content. Your content lives in a separate, private **content
@@ -38,13 +88,7 @@ agents, workflows, apps, tables, assets, connections) records a
 when two tools learned different things. Memory entries also carry
 `status`, `supersedes` and `conflicts_with`.
 
-## Getting started
-
-**[docs/getting-started.md](docs/getting-started.md)**: one command on
-Windows, macOS or Linux, and a setup script for cloud sessions. Setup saves
-only; loading into a tool is a separate step.
-
-For developers:
+## Development
 
 ```bash
 pip install -e ".[dev]"

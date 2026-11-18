@@ -10,8 +10,22 @@ single tool. claude.ai chats and projects can only leave claude.ai through its
 official data export, which arrives by e-mail. This skill moves that along.
 Work quietly; report only the outcome in one or two sentences.
 
-**Which mode:** the task that runs you says "request" or "download". If it
-says neither, do both: first "download", then "request".
+**Which mode:** "set up my harness export" means setup mode. A scheduled task
+says "request" or "download". Anything else: do both, first "download", then
+"request".
+
+## Setup mode: create the schedule (once per account)
+
+Create two scheduled tasks in Cowork (use the scheduling capability):
+
+1. Name "Harness - request claude.ai export", every ${EVERY_DAYS} days, prompt:
+   "Run the harness-claude-ai-export skill in request mode."
+2. Name "Harness - download claude.ai export", every ${EVERY_DAYS} days,
+   ${DOWNLOAD_AFTER} hours after the first, prompt:
+   "Run the harness-claude-ai-export skill in download mode."
+
+Then run request mode once now, and tell the user in one sentence that it is set
+up and the first export will be saved within a few hours.
 
 You need control of the user's browser (or computer). Use the claude.ai account
 the user is signed in to; do not sign in to anything else.

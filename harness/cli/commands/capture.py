@@ -19,7 +19,7 @@ from ...profiles import ENVIRONMENTS, ProfileError, ProfileRegistry
 from ...provenance import Origin
 from ...repo import ContentRepo
 from ...sessions import SessionRecord
-from ...setup import ConsolePrompter, DefaultsPrompter, SetupError, SetupOptions, SetupWizard
+from ...setup import ConsolePrompter, DefaultsPrompter, SetupError, SetupOptions, SetupSkipped, SetupWizard
 from ...storage import StorageError
 from ...update import Updater
 from ...validation import RepoValidator
@@ -152,14 +152,17 @@ class SetupCommand(Command):
         tools = [args.tool] if args.tool else self._present_tools()
         explicit = any((args.repo, args.account, args.environment, args.transcripts, args.owner))
         missing = [t for t in tools if explicit or not self._connected(t)]
+        if not args.tool:
+            missing += [t for t in self._offered_tools() if t not in tools and not self._connected(t)]
         if tools and not missing:
             # Running the installer again on a connected machine means "bring me up to date".
             print(f"This machine is already connected to {LocalHome().content_repo()}. Updating...")
             return UpdateCommand().run(argparse.Namespace(no_engine=True))
-        if not tools:
+        if not missing:
             raise ErrorExit("No supported AI tool was found on this machine.")
         prompter = DefaultsPrompter() if args.yes else ConsolePrompter()
         environment = args.environment
+        next_steps: list[str] = []
         for tool in missing:
             print(f"--- {tool} ---")
             options = SetupOptions(tool=tool, repo=args.repo, account=args.account,
@@ -167,19 +170,35 @@ class SetupCommand(Command):
                                    owner=args.owner, capture_now=False if args.no_capture else None)
             try:
                 result = SetupWizard(prompter).run(options)
+            except SetupSkipped:
+                declined = LocalHome().settings().get("declined") or []
+                LocalHome().save_settings(declined=sorted(set(declined) | {tool}))  # not asked again
+                print(f"  {tool}: skipped (run `harness setup {tool}` any time to add it)")
+                continue
             except (SetupError, HarnessNotConfigured, ProfileError, StorageError) as exc:
                 raise ErrorExit(str(exc)) from None
-            environment = environment or ProfileRegistry(ContentRepo(result.repo)).get(
-                result.profiles[0]).environment
-            print(f"Ready: {tool} -> {result.profile}, saving to {result.repo}.")
+            environment = environment or result.environment
+            print(f"Ready: {tool} -> {result.profile}")
             for line in result.done:
                 print(f"  + {line}")
-        print("From now on your work is saved automatically, in the background.")
+            next_steps += result.next_steps
+        print("\nDone. From now on your work is saved automatically, in the background.")
+        if next_steps:
+            print("\nTwo things only you can do (once):")
+            for number, step in enumerate(next_steps, 1):
+                print(f"  {number}. {step}")
         return 0
 
     @staticmethod
     def _present_tools() -> list[str]:
         return [name for name in adapters.names() if adapters.create(name).is_present()]
+
+    @staticmethod
+    def _offered_tools() -> list[str]:
+        """Account services (e.g. claude.ai) offered once in setup; an empty answer skips them."""
+        declined = LocalHome().settings().get("declined") or []
+        return [name for name in adapters.names()
+                if adapters.create(name).offered_everywhere and name not in declined]
 
     @staticmethod
     def _connected(tool: str) -> bool:

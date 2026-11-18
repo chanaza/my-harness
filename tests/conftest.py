@@ -21,9 +21,15 @@ def validate(repo: ContentRepo) -> Report:
 
 
 @pytest.fixture(autouse=True)
-def isolated_harness_home(tmp_path: Path, monkeypatch) -> None:
-    """Tests never touch the real ~/.my-harness (settings, state, logs) of the machine."""
-    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "isolated-harness-home"))
+def isolated_harness_home(tmp_path_factory, monkeypatch) -> None:
+    """Tests never touch the real ~/.my-harness, desktop or browser of the machine.
+    (Kept outside tmp_path, which some tests need empty.)"""
+    isolated = tmp_path_factory.mktemp("isolated")
+    monkeypatch.setenv("HARNESS_HOME", str(isolated / "harness-home"))
+    desktop = isolated / "desktop"
+    desktop.mkdir()
+    monkeypatch.setattr("harness.adapters.claude_ai.adapter._visible_folder", lambda: desktop)
+    monkeypatch.setattr("webbrowser.open", lambda url: True)
 
 
 @pytest.fixture

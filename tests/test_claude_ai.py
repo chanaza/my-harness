@@ -156,3 +156,24 @@ def test_accounts_can_be_named_before_the_first_export(repo: ContentRepo, tmp_pa
                                   "work@example.com": "claude-ai-work-cloud"}
     make_export(tmp_path / "empty", email="work@example.com")
     assert adapter.run_harvest().counts["conversations imported"] == 1   # picked up by itself
+
+
+def test_setup_prepares_the_skill_and_says_what_is_left(repo: ContentRepo, tmp_path: Path, monkeypatch):
+    class FakeScheduler:
+        def install(self, name, args, minutes):
+            return "scheduled"
+
+    monkeypatch.setattr("harness.scheduler.system_scheduler", FakeScheduler)
+    repo.config_file.update({"claude_ai.watch_folder": str(tmp_path / "empty")})
+    result = SetupWizard(Answers("me@example.com", "personal", str(tmp_path / "f"), False), LocalHome()).run(
+        SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
+    from harness.adapters.claude_ai import adapter as module
+    assert (module._visible_folder() / "harness-claude-ai-export.zip").is_file()
+    assert "Set up my harness export" in result.next_steps[-1]
+
+
+def test_claude_ai_can_be_skipped_and_is_not_asked_again(repo: ContentRepo, tmp_path: Path):
+    from harness.setup import SetupSkipped
+    with pytest.raises(SetupSkipped):
+        SetupWizard(Answers(""), LocalHome()).run(
+            SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))

@@ -57,12 +57,20 @@ That's all. Use your tool as usual.
 
 ## claude.ai chats and projects
 
-They live in your claude.ai account, not on the computer. Download a data
-export (claude.ai Settings > Privacy > Export data; the link arrives by
-e-mail) into your Downloads folder, then run `python -m harness setup
-claude-ai` once. From then on every export you download is saved by itself.
-To have exports requested and downloaded for you every week, see
-[docs/adapters/claude-ai.md](adapters/claude-ai.md).
+They live in your claude.ai account, not on the computer. The installer asks
+for your claude.ai account e-mail(s) (leave it empty to skip). If you give
+them, it puts `harness-claude-ai-export.zip` on your desktop and opens
+claude.ai's skills page:
+
+1. Upload the file there (Skills > Upload skill), in each account.
+2. In Cowork, in each account, type: `Set up my harness export`.
+
+Cowork then requests an export every week and downloads it a few hours later
+(both times are settings: `claude_ai.export_every_days`,
+`claude_ai.download_after_hours`), and your computer saves everything in it:
+every chat, your projects (instructions and files) and memory. You can also
+download an export yourself (Settings > Privacy > Export data) into your
+Downloads folder; it is saved the same way.
 
 ## In Claude Code on the web (cloud sessions)
 

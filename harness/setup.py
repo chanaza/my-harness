@@ -30,6 +30,10 @@ class SetupError(Exception):
     pass
 
 
+class SetupSkipped(Exception):
+    """The user chose not to connect this tool."""
+
+
 # --- asking questions -----------------------------------------------------------------
 
 class Prompter(ABC):
@@ -87,6 +91,8 @@ class SetupResult:
     repo: Path
     done: list[str] = field(default_factory=list)
     profiles: list[str] = field(default_factory=list)
+    environment: str = "local"                         # of this machine
+    next_steps: list[str] = field(default_factory=list)  # what the user still does by hand
 
 
 class SetupWizard:
@@ -102,7 +108,7 @@ class SetupWizard:
         adapter = adapters.create(options.tool, self.local)
         chosen = self._choose_accounts(adapter.accounts(), options, adapter.account_question)
 
-        result = SetupResult("", repo.root)
+        result = SetupResult("", repo.root, environment=environment)
         storage_folder: str | None = None
         profile_environment = adapter.environment or environment  # e.g. claude.ai is always cloud
         for account, label in chosen:
@@ -117,6 +123,7 @@ class SetupWizard:
         result.profile = ", ".join(result.profiles)
 
         self._offer_capture(adapter, repo, options, result)
+        result.next_steps = adapter.after_setup(result.profiles)
         GitSync(repo.root, repo.config.git).sync(f"{options.tool}: setup {result.profile}", push=True)
         return result
 
@@ -125,8 +132,10 @@ class SetupWizard:
         """One account: ask its name. Several: list them and name each (or skip it)."""
         if not accounts and adapter_question:
             # Nothing captured yet (e.g. no export downloaded): name the accounts up front.
-            answer = self.prompter.ask(adapter_question)
+            answer = self.prompter.ask(f"{adapter_question} (leave empty to skip)", "")
             accounts = [Account(key.strip(), key.strip()) for key in answer.split(",") if key.strip()]
+            if not accounts:
+                raise SetupSkipped(options.tool)
         if not accounts:
             raise SetupError(f"Nothing from {options.tool} was found on this machine.")
         if len(accounts) == 1:

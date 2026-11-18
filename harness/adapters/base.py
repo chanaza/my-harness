@@ -33,7 +33,10 @@ class Adapter(ABC):
     #: For services that are not tied to a machine (e.g. claude.ai): the profile's environment.
     environment: str | None = None
     #: When accounts can be named before anything was found (e.g. by e-mail), the question to ask.
+    #: An empty answer skips the tool.
     account_question: str | None = None
+    #: Offer this tool in every setup, even when nothing of it is on the machine (account services).
+    offered_everywhere: bool = False
 
     def __init__(self, local: LocalHome | None = None) -> None:
         self.local = local or LocalHome()
@@ -62,6 +65,10 @@ class Adapter(ABC):
     def accounts(self) -> list[Account]:
         """Accounts of this tool on this machine (one by default)."""
         return [Account(None, self.tool)]
+
+    def after_setup(self, profiles: list[str]) -> list[str]:
+        """Prepare anything the user still has to do by hand; return those steps in plain words."""
+        return []
 
     def skill_package(self) -> tuple[str, dict[str, bytes]] | None:
         """A skill to install in the tool's account (name, files), when the adapter offers one."""
