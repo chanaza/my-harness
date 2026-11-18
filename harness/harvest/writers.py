@@ -182,20 +182,33 @@ class ConnectionWriter(ItemWriter):
 
 
 class NativeWriter(ItemWriter):
-    """Tool-specific files kept as-is (secrets already removed) -> native/<profile>/<scope>/..."""
+    """Tool-specific files kept as-is (secrets already removed) -> native/<profile>/<scope>/...
+
+    Rule: a native item occupies one entry in its scope folder, named after the
+    item (``settings`` -> ``settings.json``, ``output-styles`` -> ``output-styles/``).
+    """
 
     kind = Kind.NATIVE
 
     def write(self, item: Captured, origin: Origin) -> WriteResult:
-        scope = "global" if item.scope == "global" else slugify(item.scope.split(":", 1)[-1])
-        folder = self.repo.path("native", origin.profile, scope)
+        folder = self._folder(item.scope, origin.profile)
         existed = False
         for relative, content in item.files.items():
             path = folder.joinpath(*relative.split("/"))
             existed = existed or path.exists()
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
-        return WriteResult("updated" if existed else "created", folder)
+        entry = folder / next(iter(item.files)).split("/", 1)[0]
+        return WriteResult("updated" if existed else "created", entry)
+
+    def location(self, name: str, scope: str, profile: str) -> Path | None:
+        folder = self._folder(scope, profile)
+        matches = [p for p in folder.glob(f"{name}*") if p.name == name or p.stem == name]
+        return matches[0] if matches else None
+
+    def _folder(self, scope: str, profile: str) -> Path:
+        name = "global" if scope == "global" else slugify(scope.split(":", 1)[-1])
+        return self.repo.path("native", profile, name)
 
 
 DEFAULT_WRITERS: tuple[type[ItemWriter], ...] = (

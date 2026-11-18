@@ -173,3 +173,13 @@ def test_prune_works_for_items_harvested_before_paths_were_recorded(adapter, rep
     state.save()
     repo.config_file.update({"harvest.exclude": ["skill:deck-review"]})
     assert adapter.prune_harvest() == ["core/skills/deck-review"]
+
+
+def test_native_mirror_follows_the_tool(adapter: ClaudeCodeAdapter, repo: ContentRepo):
+    adapter.run_harvest()
+    mirrored = repo.path("native", PROFILE, "global", "settings.json")
+    assert mirrored.is_file()
+    adapter.locations.settings_file.write_text(json.dumps({"hooks": {}}))  # nothing of the user's left
+    report = adapter.run_harvest()
+    assert report.counts["removed"] == 1 and not mirrored.exists()
+    assert repo.path("core", "skills", "deck-review").is_dir()  # knowledge is never mirrored away

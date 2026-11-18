@@ -24,7 +24,7 @@ class HarvestReport:
 
     @property
     def changed(self) -> bool:
-        return any(self.counts[k] for k in ("created", "updated", "conflict"))
+        return any(self.counts[k] for k in ("created", "updated", "conflict", "removed"))
 
     def summary(self) -> str:
         parts = [f"{n} {action}" for action, n in sorted(self.counts.items()) if n]
@@ -42,6 +42,9 @@ class HarvestSync:
     WRITTEN_KEY = "written"
     #: Kinds whose written path can be removed on its own (connections share one file).
     PRUNABLE = (Kind.SKILL, Kind.AGENT, Kind.INSTRUCTION, Kind.NATIVE, Kind.MEMORY)
+    #: Kinds that mirror the tool: when the tool no longer has the item, neither does the harness.
+    #: (Knowledge such as skills and memory is never deleted just because the tool dropped it.)
+    MIRRORED = (Kind.NATIVE,)
 
     def __init__(self, repo: ContentRepo, state: StateFile,
                  writers: Sequence[type[ItemWriter]] = DEFAULT_WRITERS) -> None:
@@ -53,7 +56,8 @@ class HarvestSync:
         report = HarvestReport()
         seen: dict[str, str] = dict(self.state.get(self.STATE_KEY, {}))
         written: dict[str, str] = dict(self.state.get(self.WRITTEN_KEY, {}))
-        for item in items:
+        items_list = list(items)
+        for item in items_list:
             fingerprint = item.fingerprint
             if seen.get(item.key) == fingerprint:
                 report.counts["unchanged"] += 1
@@ -73,6 +77,18 @@ class HarvestSync:
             else:
                 written[item.key] = self._owned_path(item.kind, result.path)
             seen[item.key] = fingerprint
+        current = {item.key for item in items_list}
+        scopes = {item.scope for item in items_list} | {"global"}
+        for key in sorted(set(seen) - current):
+            kind, scope, name = key.split(":", 2)
+            if Kind(kind) in self.MIRRORED and scope in scopes:
+                target = self.repo.path(written[key]) if key in written else \
+                    self.writers[Kind(kind)].location(name, scope, origin.profile)
+                if target is not None and target.exists():
+                    shutil.rmtree(target) if target.is_dir() else target.unlink()
+                    report.counts["removed"] += 1
+                seen.pop(key, None)
+                written.pop(key, None)
         self.state.set(self.STATE_KEY, seen)
         self.state.set(self.WRITTEN_KEY, written)
         self.state.save()
@@ -109,7 +125,8 @@ class HarvestSync:
         return removed
 
     def _owned_path(self, kind: Kind, path: Path) -> str:
-        """The file or folder an item occupies (a skill owns its whole folder)."""
+        """The file or folder an item occupies (a skill owns its whole folder; a native item
+        its entry, as reported by the writer)."""
         target = path.parent if kind is Kind.SKILL else path
         return target.relative_to(self.repo.root).as_posix()
 
