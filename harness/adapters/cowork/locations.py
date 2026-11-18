@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SESSIONS_FOLDER = "local-agent-mode-sessions"
+CODE_SESSIONS_FOLDER = "claude-code-sessions"  # Claude Code inside the desktop app
+SCHEDULED_TASKS_FILE = "scheduled-tasks.json"
 SKILLS_FOLDER = "skills-plugin"
 INTERNAL = frozenset({SKILLS_FOLDER})
 
@@ -33,6 +35,7 @@ class CoworkAccount:
     second: str
     folder: Path
     skills_folder: Path
+    code_folder: Path | None = None
 
     @property
     def key(self) -> str:
@@ -58,6 +61,13 @@ class CoworkAccount:
     @property
     def memory_folder(self) -> Path:
         return self.folder / "agent" / "memory"
+
+    def scheduled_task_files(self) -> list[Path]:
+        """Scheduled tasks of this account, in Cowork and in the app's Claude Code."""
+        candidates = [self.folder / SCHEDULED_TASKS_FILE]
+        if self.code_folder:
+            candidates.append(self.code_folder / SCHEDULED_TASKS_FILE)
+        return [p for p in candidates if p.is_file()]
 
     def plugin_folders(self) -> list[Path]:
         rpm = self.folder / "rpm"
@@ -85,7 +95,8 @@ class CoworkLocations:
                 continue
             for second in sorted(p for p in first.iterdir() if p.is_dir()):
                 skills = self.sessions_root / SKILLS_FOLDER / second.name / first.name
-                found.append(CoworkAccount(first.name, second.name, second, skills))
+                code = self.root / CODE_SESSIONS_FOLDER / first.name / second.name
+                found.append(CoworkAccount(first.name, second.name, second, skills, code))
         return found
 
     def account(self, key: str) -> CoworkAccount | None:

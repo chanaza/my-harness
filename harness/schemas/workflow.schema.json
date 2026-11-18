@@ -83,6 +83,16 @@
     },
     "provenance": {
       "$ref": "provenance.schema.json"
+    },
+    "origin": {
+      "type": "string"
+    },
+    "native": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      },
+      "description": "The tool's own record of the task, keyed by profile."
     }
   },
   "additionalProperties": false

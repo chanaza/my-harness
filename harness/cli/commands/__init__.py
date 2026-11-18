@@ -10,6 +10,7 @@ from .capture import (
     ProfileCommand,
     SessionCommand,
     SetupCommand,
+    SkillCommand,
     StatusCommand,
     UpdateCommand,
 )
@@ -20,7 +21,7 @@ DEFAULT_COMMANDS: tuple[type[Command], ...] = (
     SetupCommand, StatusCommand, UpdateCommand,
     InitCommand, ValidateCommand, ConfigCommand, UpgradeCommand,
     ProfileCommand, InstallCommand, HarvestCommand, BackfillCommand, HookCommand,
-    SessionCommand, MemoryCommand, MergeFileCommand,
+    SessionCommand, MemoryCommand, SkillCommand, MergeFileCommand,
 )
 
 __all__ = ["DEFAULT_COMMANDS"]

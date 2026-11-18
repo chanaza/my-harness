@@ -55,6 +55,15 @@ like, e.g. `harness config set harvest.exclude "skill:pdf"`.
 
 That's all. Use your tool as usual.
 
+## claude.ai chats and projects
+
+They live in your claude.ai account, not on the computer. Download a data
+export (claude.ai Settings > Privacy > Export data; the link arrives by
+e-mail) into your Downloads folder, then run `python -m harness setup
+claude-ai` once. From then on every export you download is saved by itself.
+To have exports requested and downloaded for you every week, see
+[docs/adapters/claude-ai.md](adapters/claude-ai.md).
+
 ## In Claude Code on the web (cloud sessions)
 
 A cloud session starts on a fresh machine each time, so the connection is

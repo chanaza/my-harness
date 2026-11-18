@@ -41,6 +41,7 @@ DEFAULT_LAYOUT = RepoLayout(
         Area("core/skills", "Reusable skills, one folder per skill with a SKILL.md."),
         Area("core/agents", "Agent definitions, one YAML file per agent."),
         Area("core/workflows", "Multi-step workflows, one YAML file per workflow."),
+        Area("core/projects", "Projects: their instructions (project.yaml) and knowledge files."),
         Area("core/plugins", "Plugins you built, kept whole (their skills, agents, commands), "
                              "with plugin.yaml recording where they came from."),
         Area("memory", "What is known: facts, decisions, project state. Updated by agents; "

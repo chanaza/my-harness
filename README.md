@@ -74,6 +74,9 @@ are marked with ★.
 | `Adapter` ★, `AdapterRegistry` | `harness/adapters/` | One class per tool: harvest, hooks, install |
 | `ClaudeCodeAdapter` | `harness/adapters/claude_code/` | Claude Code ([docs](docs/adapters/claude-code.md)) |
 | `CoworkAdapter` | `harness/adapters/cowork/` | Cowork in the Claude desktop app ([docs](docs/adapters/cowork.md)) |
+| `ClaudeAiAdapter` | `harness/adapters/claude_ai/` | claude.ai chats, projects, memory via its export ([docs](docs/adapters/claude-ai.md)) |
+| `AccountBoundAdapter` | `harness/adapters/base.py` | Shared base for tools with several accounts, captured on a schedule |
+| `StructuredMerge` | `harness/merge.py` | Merges the harness's YAML files by content across machines |
 | `Scheduler` | `harness/scheduler.py` | Periodic capture for tools without hooks (Task Scheduler / cron) |
 | `Storage` ★, `BackendRegistry` | `harness/storage/` | Transcript storage (per profile) |
 | `Migration` ★ | `harness/migrations.py` | Bring existing content to the current engine (`harness upgrade`) |

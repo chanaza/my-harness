@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chanaza/my-harness/schemas/project.schema.json",
+  "title": "Project descriptor (core/projects/<name>/project.yaml); knowledge files sit next to it",
+  "type": "object",
+  "required": [
+    "name",
+    "description",
+    "provenance"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "description": "The project's name as the user wrote it."
+    },
+    "instructions": {
+      "type": "string",
+      "description": "The project's custom instructions."
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "origin": {
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "provenance.schema.json"
+    }
+  },
+  "additionalProperties": false
+}

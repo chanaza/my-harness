@@ -59,6 +59,12 @@ def app(tmp_path: Path) -> CoworkLocations:
     (conversation / "host-cwd").mkdir()
     (conversation / "host-cwd" / "private.txt").write_text("not Cowork content")
 
+    (work / "scheduled-tasks.json").write_text(json.dumps({"scheduledTasks": [
+        {"id": "t1", "name": "Weekly export", "prompt": "Export my claude.ai data", "schedule": "weekly"}],
+        "recordedSkips": []}))
+    code = tmp_path / "Claude" / "claude-code-sessions" / WORK[0] / WORK[1]
+    code.mkdir(parents=True)
+    (code / "scheduled-tasks.json").write_text(json.dumps({"scheduledTasks": [], "recordedSkips": []}))
     skill(sessions / "skills-plugin" / PERSONAL[1] / PERSONAL[0] / "skills", "chana-deck-review")
     skill(sessions / "skills-plugin" / WORK[1] / WORK[0] / "skills", "pdf")
     return CoworkLocations(tmp_path / "Claude")
@@ -89,7 +95,7 @@ def connected(app: CoworkLocations, repo: ContentRepo, tmp_path: Path, monkeypat
             scheduled.append((name, args, minutes))
             return f"scheduled {name}"
 
-    monkeypatch.setattr("harness.adapters.cowork.adapter.system_scheduler", FakeScheduler)
+    monkeypatch.setattr("harness.scheduler.system_scheduler", FakeScheduler)
     repo.config_file.update({"harvest.exclude": ["skill:pdf"]})
     SetupWizard(Answers("personal", "work", str(tmp_path / "files"), False), LocalHome()).run(
         SetupOptions(tool="cowork", repo=str(repo.root), environment="local"))
@@ -165,10 +171,20 @@ def test_setup_without_a_tool_connects_every_tool_found(app, claude, repo, tmp_p
         def install(self, name, args, minutes):
             return "scheduled"
 
-    monkeypatch.setattr("harness.adapters.cowork.adapter.system_scheduler", FakeScheduler)
+    monkeypatch.setattr("harness.scheduler.system_scheduler", FakeScheduler)
     args = ["setup", "--repo", str(repo.root), "--environment", "local", "--transcripts", str(tmp_path / "f"),
             "--account", "aaaa1111=personal,cccc3333=work", "--yes", "--no-capture"]
     assert main(args) == 0
     ids = ProfileRegistry(repo).ids()
     assert {"cowork-personal-local", "cowork-work-local"} <= ids
     assert "claude-code-personal-local" in ids  # one account: the default name, not the list
+
+
+def test_scheduled_tasks_become_workflows(connected: CoworkAdapter, repo: ContentRepo):
+    from harness import yaml_io
+    connected.run_harvest()
+    workflow = yaml_io.load(repo.path("core", "workflows", "weekly-export.yaml").read_text())
+    assert workflow["trigger"] == "weekly"
+    assert workflow["steps"][0]["description"] == "Export my claude.ai data"
+    assert workflow["native"]["cowork-work-local"]["id"] == "t1"
+    assert validate(repo).ok, validate(repo).problems

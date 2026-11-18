@@ -97,18 +97,22 @@ class SetupWizard:
     def run(self, options: SetupOptions) -> SetupResult:
         environment = options.environment or self._detect_environment()
         repo = self._content_repo(options)
+        # Known from now on, so adapters read this harness's settings (e.g. where exports land).
+        self.local.save_settings(content_repo=str(repo.root.resolve()))
         adapter = adapters.create(options.tool, self.local)
         chosen = self._choose_accounts(adapter.accounts(), options)
 
         result = SetupResult("", repo.root)
         storage_folder: str | None = None
+        profile_environment = adapter.environment or environment  # e.g. claude.ai is always cloud
         for account, label in chosen:
-            profile = Profile.make_id(options.tool, label, environment)
+            profile = Profile.make_id(options.tool, label, profile_environment)
             if environment == "local" and storage_folder is None:
                 storage_folder = options.transcripts or self._ask_transcripts_folder()
+            # Storage follows the machine doing the capture, not the service.
             repo.config_file.update(self._storage_for(profile, environment, storage_folder))
             result.done += adapter.install(profile, label, repo.root, hooks=True,
-                                           environment=environment, account_key=account.key)
+                                           environment=profile_environment, account_key=account.key)
             result.profiles.append(profile)
         result.profile = ", ".join(result.profiles)
 

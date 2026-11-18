@@ -63,6 +63,17 @@ storage:
     backend: filesystem
     path: ~/harness-storage/transcripts
 
+claude_ai:
+  # claude.ai chats, projects and memory are captured from its official data export.
+  # Exports are looked for in this folder (every capture run).
+  watch_folder: ~/Downloads
+  # File name pattern of a claude.ai export.
+  file_pattern: data-*.zip
+  # Keep a copy of every export file in transcript storage.
+  archive_exports: true
+  # How often to request a new export, in days (used by the export skill).
+  export_every_days: 7
+
 assets:
   # Larger files are stored outside Git and referenced from assets/<id>/asset.yaml.
   max_inline_size_mb: 10

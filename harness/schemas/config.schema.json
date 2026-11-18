@@ -280,6 +280,30 @@
         },
         "additionalProperties": false
       }
+    },
+    "claude_ai": {
+      "type": "object",
+      "description": "Capturing claude.ai (chats, projects, memory) from its data export.",
+      "properties": {
+        "watch_folder": {
+          "type": "string",
+          "description": "Where downloaded exports are looked for."
+        },
+        "file_pattern": {
+          "type": "string",
+          "description": "File name pattern of claude.ai exports."
+        },
+        "archive_exports": {
+          "type": "boolean",
+          "description": "Keep a copy of each export file in transcript storage."
+        },
+        "export_every_days": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How often to request a new export (used by the export skill)."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

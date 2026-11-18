@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 import traceback
+import zipfile
 from collections import Counter
 from pathlib import Path
 
@@ -322,6 +323,28 @@ class BackfillCommand(Command):
             GitSync(repo.root, repo.config.git).sync(f"{adapter.profile_id()}: backfill ({summary})",
                                                      push=True)
             print(f"Backfill: {summary}")
+        return 0
+
+
+class SkillCommand(Command):
+    name = "skill"
+    help = "Create the skill a tool's account needs (a .zip to upload), e.g. `harness skill claude-ai`."
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        _tool_argument(parser)
+        parser.add_argument("--output", help="Where to write the .zip (default: current folder).")
+
+    def run(self, args: argparse.Namespace) -> int:
+        package = adapters.create(args.tool).skill_package()
+        if not package:
+            raise ErrorExit(f"{args.tool} has no skill to install.")
+        name, files = package
+        target = Path(args.output or f"{name}.zip").expanduser()
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+            for path, content in files.items():
+                archive.writestr(path, content)
+        print(f"Skill written to {target.resolve()}")
+        print("Upload it in claude.ai: Settings > Capabilities > Skills > Upload skill.")
         return 0
 
 

@@ -50,6 +50,14 @@ class CheckpointSettings:
 
 
 @dataclass(frozen=True)
+class ClaudeAiSettings:
+    watch_folder: str = "~/Downloads"
+    file_pattern: str = "data-*.zip"
+    archive_exports: bool = True
+    export_every_days: int = 7
+
+
+@dataclass(frozen=True)
 class GitSettings:
     auto_commit: bool
     auto_push: bool
@@ -89,6 +97,10 @@ class HarnessConfig:
     @property
     def checkpoints(self) -> CheckpointSettings:
         return _section(CheckpointSettings, self.data["checkpoints"])
+
+    @property
+    def claude_ai(self) -> ClaudeAiSettings:
+        return _section(ClaudeAiSettings, self.data.get("claude_ai") or {})
 
     @property
     def git(self) -> GitSettings:

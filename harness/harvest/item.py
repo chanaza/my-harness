@@ -15,6 +15,8 @@ class Kind(StrEnum):
     MEMORY = "memory"             # a memory document
     CONNECTION = "connection"     # an MCP server or plugin (names only, never secrets)
     PLUGIN = "plugin"             # a whole plugin the user built (its skills, agents, commands)
+    PROJECT = "project"           # a project: its instructions and knowledge files
+    WORKFLOW = "workflow"         # a scheduled / repeatable task
     NATIVE = "native"             # tool-specific settings with no portable equivalent
 
 

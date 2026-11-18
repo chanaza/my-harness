@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
 from ..harvest import Captured, HarvestReport
 from ..local import LocalHome
+from ..repo import ContentRepo
 
 
 class HarnessNotConfigured(Exception):
@@ -28,6 +30,8 @@ class Adapter(ABC):
 
     #: Tool id used in profiles and connections, e.g. "claude-code".
     tool: str = ""
+    #: For services that are not tied to a machine (e.g. claude.ai): the profile's environment.
+    environment: str | None = None
 
     def __init__(self, local: LocalHome | None = None) -> None:
         self.local = local or LocalHome()
@@ -57,6 +61,10 @@ class Adapter(ABC):
         """Accounts of this tool on this machine (one by default)."""
         return [Account(None, self.tool)]
 
+    def skill_package(self) -> tuple[str, dict[str, bytes]] | None:
+        """A skill to install in the tool's account (name, files), when the adapter offers one."""
+        return None
+
     def preview(self, exclude: list[str]) -> list[str]:
         """What a capture would save, one line per item (for setup)."""
         return [f"{i.kind.value:11} {i.name}" for i in self.harvest(exclude)]
@@ -75,6 +83,54 @@ class Adapter(ABC):
                 account_key: str | None = None) -> list[str]:
         """Bind this machine's tool account to a profile (and, with ``hooks``, install
         automatic capture); return what was done."""
+
+
+class AccountBoundAdapter(Adapter):
+    """An adapter whose accounts are bound to profiles on this machine and that is captured
+    on a schedule (no hooks): Cowork, claude.ai, ..."""
+
+    def bindings(self) -> dict[str, str]:
+        """account key -> profile id."""
+        return dict((self.local.settings().get("profiles") or {}).get(self.tool) or {})
+
+    def repo(self) -> ContentRepo:
+        root = self.local.content_repo()
+        if not root:
+            raise HarnessNotConfigured(f"No harness repository on this machine. "
+                                       f"Run `harness setup {self.tool}`.")
+        return ContentRepo(root)
+
+    def bind(self, account_key: str, profile_id: str) -> None:
+        settings = self.local.settings()
+        settings.setdefault("profiles", {}).setdefault(self.tool, {})[account_key] = profile_id
+        self.local.save_settings(profiles=settings["profiles"])
+
+    def prune_harvest(self) -> list[str]:
+        from ..harvest import HarvestSync
+        repo = self.repo()
+        patterns = repo.config.harvest_exclude
+        removed: list[str] = []
+        for profile in sorted(set(self.bindings().values())):
+            removed += HarvestSync(repo, self.local.state("harvest", profile)).prune(
+                lambda kind, name: any(fnmatch(f"{kind}:{name}", p) for p in patterns), profile)
+        return removed
+
+    def handle_hook(self, event: dict[str, Any], deferred: bool = False) -> dict[str, Any] | None:
+        return None  # no hooks: captured on a schedule
+
+    def schedule(self) -> str:
+        """One scheduled capture for this tool (every capture.poll_minutes); set up once."""
+        from ..scheduler import SchedulerError, system_scheduler
+        minutes = self.repo().config.capture.poll_minutes
+        scheduled = self.local.settings().get("scheduled") or {}
+        if scheduled.get(self.tool) == minutes:
+            return f"automatic capture already scheduled (every {minutes} minutes)"
+        try:
+            task = system_scheduler().install(f"capture-{self.tool}", ["harvest", self.tool], minutes)
+        except (SchedulerError, OSError) as exc:
+            return f"automatic capture NOT scheduled ({exc}); run `harness harvest {self.tool}`"
+        self.local.save_settings(scheduled={**scheduled, self.tool: minutes})
+        return task
 
 
 class AdapterRegistry:

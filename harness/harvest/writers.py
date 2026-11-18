@@ -229,37 +229,92 @@ class ConnectionWriter(ItemWriter):
         path.write_text(yaml_io.dump({"connections": connections}), encoding="utf-8")
 
 
-class PluginWriter(ItemWriter):
-    """A plugin the user built -> core/plugins/<name>/ (its files as-is) + plugin.yaml (provenance)."""
+class FolderWriter(ItemWriter):
+    """An item kept as a folder of files plus a descriptor YAML with provenance.
 
-    kind = Kind.PLUGIN
-    DESCRIPTOR = "plugin.yaml"
+    Subclasses set the area and descriptor name; ``item.meta['fields']`` adds
+    descriptor fields (e.g. a project's instructions).
+    """
+
+    AREA: tuple[str, ...] = ()
+    DESCRIPTOR = ""
 
     def location(self, name: str, scope: str, profile: str) -> Path | None:
-        return self.repo.path("core", "plugins", slugify(name))
+        return self.repo.path(*self.AREA, slugify(name))
 
     def write(self, item: Captured, origin: Origin) -> WriteResult:
         folder = self.location(item.name, item.scope, origin.profile)
         descriptor = folder / self.DESCRIPTOR
         existing = yaml_io.load(descriptor.read_text("utf-8")) if descriptor.is_file() else None
-        same_content = bool(existing) and _folder_matches(folder, item.files)
+        fields = dict(item.meta.get("fields") or {})
+        same_content = bool(existing) and _folder_matches(folder, item.files, self.DESCRIPTOR) and \
+            all(existing.get(k) == v for k, v in fields.items())
         conflict = bool(existing) and not same_content and \
             self._conflicting(existing.get("provenance"), origin)
         if conflict:
             folder = self._conflict_path(folder, origin)
             descriptor = folder / self.DESCRIPTOR
         elif folder.is_dir():
-            shutil.rmtree(folder)  # the plugin as it is now; Git keeps every earlier version
+            shutil.rmtree(folder)  # the item as it is now; Git keeps every earlier version
         for relative, content in item.files.items():
             path = folder.joinpath(*relative.split("/"))
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
         previous = None if conflict or not existing else existing.get("provenance")
+        descriptor.parent.mkdir(parents=True, exist_ok=True)
         descriptor.write_text(yaml_io.dump({
             "name": slugify(item.name), "description": item.meta.get("description", item.name),
-            "origin": item.origin, "provenance": Provenance.updated(previous, origin),
+            **fields, "origin": item.origin, "provenance": Provenance.updated(previous, origin),
         }), encoding="utf-8")
         return WriteResult("conflict" if conflict else ("updated" if existing else "created"), descriptor)
+
+
+class PluginWriter(FolderWriter):
+    """A plugin the user built -> core/plugins/<name>/ (its files as-is) + plugin.yaml."""
+
+    kind = Kind.PLUGIN
+    AREA = ("core", "plugins")
+    DESCRIPTOR = "plugin.yaml"
+
+
+class ProjectWriter(FolderWriter):
+    """A project -> core/projects/<name>/ with its knowledge files + project.yaml (instructions)."""
+
+    kind = Kind.PROJECT
+    AREA = ("core", "projects")
+    DESCRIPTOR = "project.yaml"
+
+
+class WorkflowWriter(ItemWriter):
+    """A scheduled / repeatable task -> core/workflows/<name>.yaml (the tool's own record under native)."""
+
+    kind = Kind.WORKFLOW
+
+    def location(self, name: str, scope: str, profile: str) -> Path | None:
+        return self.repo.path("core", "workflows", f"{slugify(name)}.yaml")
+
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        target = self.location(item.name, item.scope, origin.profile)
+        existing = yaml_io.load(target.read_text("utf-8")) if target.is_file() else None
+        workflow: dict[str, Any] = {
+            "name": slugify(item.name),
+            "description": str(item.meta.get("description") or item.name),
+            "steps": [{"name": "run", "description": str(item.meta.get("prompt") or item.name)}],
+            "origin": item.origin,
+        }
+        if item.meta.get("trigger"):
+            workflow["trigger"] = str(item.meta["trigger"])
+        if item.meta.get("native"):
+            workflow["native"] = {origin.profile: item.meta["native"]}
+        same = bool(existing) and existing.get("steps") == workflow["steps"]
+        conflict = bool(existing) and not same and self._conflicting(existing.get("provenance"), origin)
+        if conflict:
+            target = self._conflict_path(target, origin)
+        previous = None if conflict or not existing else existing.get("provenance")
+        workflow["provenance"] = Provenance.updated(previous, origin)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(yaml_io.dump(workflow), encoding="utf-8")
+        return WriteResult("conflict" if conflict else ("updated" if existing else "created"), target)
 
 
 class NativeWriter(ItemWriter):
@@ -294,7 +349,7 @@ class NativeWriter(ItemWriter):
 
 DEFAULT_WRITERS: tuple[type[ItemWriter], ...] = (
     InstructionWriter, SkillWriter, AgentWriter, MemoryWriter, ConnectionWriter, PluginWriter,
-    NativeWriter,
+    ProjectWriter, WorkflowWriter, NativeWriter,
 )
 
 
@@ -313,9 +368,9 @@ def _write_markdown(writer: ItemWriter, target: Path, item: Captured, origin: Or
     return WriteResult("conflict" if conflict else ("updated" if existing else "created"), target)
 
 
-def _folder_matches(folder: Path, files: dict[str, bytes]) -> bool:
-    """Whether ``folder`` already holds exactly ``files`` (besides plugin.yaml)."""
-    present = {p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()} - {"plugin.yaml"}
+def _folder_matches(folder: Path, files: dict[str, bytes], descriptor: str) -> bool:
+    """Whether ``folder`` already holds exactly ``files`` (besides its descriptor)."""
+    present = {p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()} - {descriptor}
     return present == set(files) and all(
         folder.joinpath(*k.split("/")).read_bytes() == v for k, v in files.items())
 

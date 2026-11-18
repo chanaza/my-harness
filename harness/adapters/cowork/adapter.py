@@ -7,6 +7,7 @@ Per account it captures:
   skills ........... the account's skills (skills-plugin/.../skills/<name>/)
   plugins .......... plugins installed in Cowork (whole, unless excluded)
   memory ........... the agent memory folder
+  scheduled tasks .. as workflows (Cowork's and the app's Claude Code's)
   conversations .... every Cowork conversation and persistent agent: a session
                      record, the full transcript, the action log (audit.jsonl),
                      and the files uploaded and produced (uploads/, outputs/)
@@ -27,10 +28,9 @@ from ...local import LocalHome, StateFile
 from ...profiles import ProfileRegistry
 from ...provenance import Origin, now_iso
 from ...repo import ContentRepo
-from ...scheduler import SchedulerError, system_scheduler
 from ...sessions import SessionRecord
 from ...storage import Storage
-from ..base import Account, Adapter, HarnessNotConfigured, adapters
+from ..base import Account, AccountBoundAdapter, HarnessNotConfigured, adapters
 from ..claude_code.transcript import TranscriptReader
 from .locations import CoworkAccount, CoworkLocations
 
@@ -42,7 +42,7 @@ FILE_FOLDERS = ("uploads", "outputs")
 
 
 @adapters.register
-class CoworkAdapter(Adapter):
+class CoworkAdapter(AccountBoundAdapter):
     tool = TOOL
 
     def __init__(self, local: LocalHome | None = None, locations: CoworkLocations | None = None) -> None:
@@ -59,16 +59,6 @@ class CoworkAdapter(Adapter):
             found.append(Account(account.key, f"account {account.short}…: {sessions} conversations, "
                                               f"skills: {', '.join(skills) or 'none'}"))
         return found
-
-    def bindings(self) -> dict[str, str]:
-        """account key -> profile id, for this machine."""
-        return dict((self.local.settings().get("profiles") or {}).get(self.tool) or {})
-
-    def repo(self) -> ContentRepo:
-        root = self.local.content_repo()
-        if not root:
-            raise HarnessNotConfigured("No harness repository on this machine. Run `harness setup cowork`.")
-        return ContentRepo(root)
 
     def _bound(self) -> list[tuple[CoworkAccount, str]]:
         bound = [(a, self.bindings()[a.key]) for a in self.locations.accounts() if a.key in self.bindings()]
@@ -93,6 +83,11 @@ class CoworkAdapter(Adapter):
                 "tool": TOOL, "kind": "plugin", "description": description}))
             items.append(Captured(Kind.PLUGIN, name, str(folder), _files(folder),
                                   meta={"description": description}))
+        for path in account.scheduled_task_files():
+            surface = "cowork" if path.parent == account.folder else "claude-code"
+            for task in _read_json(path).get("scheduledTasks") or []:
+                if isinstance(task, dict):
+                    items.append(_workflow_item(task, path, surface))
         if account.memory_folder.is_dir():
             for path in sorted(account.memory_folder.rglob("*.md")):
                 items.append(Captured(Kind.MEMORY, path.stem, str(path), {path.name: path.read_bytes()}))
@@ -128,22 +123,11 @@ class CoworkAdapter(Adapter):
             state.save()
         return report
 
-    def prune_harvest(self) -> list[str]:
-        repo = self.repo()
-        rules = _Exclusions(repo.config.harvest_exclude)
-        removed: list[str] = []
-        for _account, profile in self._bound():
-            removed += HarvestSync(repo, self.local.state("harvest", profile)).prune(rules.match, profile)
-        return removed
-
     def preview(self, exclude: list[str]) -> list[str]:
         lines = [f"{i.kind.value:11} {i.name}" for i in self.harvest(exclude)]
         conversations = sum(len(a.session_folders()) + len(a.agent_folders())
                             for a in self.locations.accounts())
         return lines + [f"conversations: {conversations} (with their files)"]
-
-    def handle_hook(self, event: dict[str, Any], deferred: bool = False) -> dict[str, Any] | None:
-        return None  # Cowork has no hooks; capture is scheduled
 
     # --- installation ------------------------------------------------------------------------
 
@@ -156,26 +140,11 @@ class CoworkAdapter(Adapter):
         account_key = account_key or self._only_account_key()
         profile = ProfileRegistry(self.repo()).add(self.tool, label, profile_id=profile_id,
                                                    environment=environment or "local")
-        settings = self.local.settings()
-        settings.setdefault("profiles", {}).setdefault(self.tool, {})[account_key] = profile.id
-        self.local.save_settings(profiles=settings["profiles"])
+        self.bind(account_key, profile.id)
         done.append(f"Cowork account {account_key[:8]}… -> {profile.id}")
         if hooks:
-            done.append(self._schedule())
+            done.append(self.schedule())
         return done
-
-    def _schedule(self) -> str:
-        """One task captures every connected account; set it up once per interval."""
-        minutes = self.repo().config.capture.poll_minutes
-        scheduled = self.local.settings().get("scheduled") or {}
-        if scheduled.get(self.tool) == minutes:
-            return f"automatic capture already scheduled (every {minutes} minutes)"
-        try:
-            task = system_scheduler().install(f"capture-{self.tool}", ["harvest", self.tool], minutes)
-        except (SchedulerError, OSError) as exc:
-            return f"automatic capture NOT scheduled ({exc}); run `harness harvest cowork`"
-        self.local.save_settings(scheduled={**scheduled, self.tool: minutes})
-        return task
 
     def _only_account_key(self) -> str:
         accounts = self.locations.accounts()
@@ -236,6 +205,22 @@ class _Exclusions:
 
     def match(self, kind: str, name: str) -> bool:
         return any(fnmatch(f"{kind}:{name}", p) for p in self.patterns)
+
+
+def _workflow_item(task: dict[str, Any], source: Path, surface: str) -> Captured:
+    """A scheduled task as a workflow. Field names vary, so common ones are tried and the
+    whole original record is kept under ``native``."""
+    def first(*keys: str) -> str:
+        return next((str(task[k]) for k in keys if task.get(k)), "")
+
+    prompt = first("prompt", "instructions", "message", "task", "text")
+    name = first("name", "title", "label", "id") or "scheduled-task"
+    return Captured(Kind.WORKFLOW, name, str(source), meta={
+        "description": first("description", "summary") or prompt[:200] or name,
+        "prompt": prompt or name,
+        "trigger": first("schedule", "cron", "cronExpression", "rrule", "frequency", "interval"),
+        "native": {"surface": surface, **task},
+    })
 
 
 def _main_transcript(folder: Path) -> Path | None:
