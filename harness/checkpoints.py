@@ -46,6 +46,11 @@ class CheckpointPolicy:
             return f"{progress.user_messages_since} messages since the last checkpoint"
         return None
 
+    def is_forced(self, context_percent: float | None) -> bool:
+        """Whether usage is at the forced threshold (the last chance before tokens run out)."""
+        threshold = self.settings.force_at_context_percent
+        return bool(threshold and context_percent is not None and context_percent >= threshold)
+
     def reset(self, progress: CheckpointProgress, context_percent: float | None) -> CheckpointProgress:
         """Progress right after a checkpoint was written."""
         percent = context_percent if context_percent is not None else progress.percent_at_last
@@ -102,6 +107,23 @@ class CheckpointRecorder:
         progress.compacted = True
         self._save(progress)
 
+    def set_pending(self, reason: str | None) -> None:
+        """Remember (or clear) a checkpoint that should be requested with the next prompt."""
+        if self.state.get("pending") != reason:
+            self.state.set("pending", reason)
+            self.state.save()
+
+    def pending_request(self) -> str | None:
+        return self.state.get("pending")
+
+    def claim_forced_request(self) -> bool:
+        """True the first time only: the forced checkpoint interrupts the model at most once."""
+        if self.state.get("forced_requested"):
+            return False
+        self.state.set("forced_requested", True)
+        self.state.save()
+        return True
+
     def record_turn(self, percent: float | None) -> None:
         """Remember the latest context usage (stored with the next checkpoint)."""
         self.state.set("last_percent", percent)
@@ -116,6 +138,8 @@ class CheckpointRecorder:
         number = self.session.write_summary(session_part(text), reason, percent,
                                             progress.user_messages_since)
         self._save(CheckpointPolicy(self.repo.config.checkpoints).reset(progress, percent))
+        self.state.set("pending", None)
+        self.state.save()
         return CheckpointResult(number, digest.written)
 
     def _save(self, progress: CheckpointProgress) -> None:

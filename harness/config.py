@@ -33,6 +33,7 @@ class ConfigError(Exception):
 @dataclass(frozen=True)
 class CaptureSettings:
     context_window_tokens: int
+    background: bool = True
 
 
 @dataclass(frozen=True)

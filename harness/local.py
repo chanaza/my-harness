@@ -63,8 +63,20 @@ class LocalHome:
     def state(self, *parts: str) -> StateFile:
         return StateFile(self.root.joinpath("state", *parts).with_suffix(".json"))
 
+    @property
+    def log_path(self) -> Path:
+        return self.root / "logs" / "harness.log"
+
+    def recent_problems(self, limit: int = 10) -> list[str]:
+        """The last logged problems (first line of each entry)."""
+        if not self.log_path.is_file():
+            return []
+        lines = self.log_path.read_text("utf-8", errors="replace").splitlines()
+        entries = [line for line in lines if line[:4].isdigit()]  # entries start with a timestamp
+        return entries[-limit:]
+
     def log(self, message: str) -> None:
-        path = self.root / "logs" / "harness.log"
+        path = self.log_path
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
             f.write(f"{datetime.now().isoformat(timespec='seconds')} {message}\n")

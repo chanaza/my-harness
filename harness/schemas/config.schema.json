@@ -47,6 +47,10 @@
           "type": "integer",
           "minimum": 1,
           "description": "Context window size used to compute usage percent."
+        },
+        "background": {
+          "type": "boolean",
+          "description": "Do slow capture work (harvest, transcript, commit, push) after the hook returns."
         }
       },
       "additionalProperties": false

@@ -17,8 +17,11 @@ from ...local import LocalHome
 from ...memory import KINDS, MemoryStore
 from ...profiles import ENVIRONMENTS, ProfileError, ProfileRegistry
 from ...provenance import Origin
+from ...repo import ContentRepo
 from ...sessions import SessionRecord
+from ...setup import ConsolePrompter, DefaultsPrompter, SetupError, SetupOptions, SetupWizard
 from ...storage import StorageError
+from ...validation import RepoValidator
 from ..base import Command, ErrorExit
 from .repository import open_repo, repo_argument
 
@@ -126,6 +129,64 @@ class ProfileCommand(Command):
 
 # --- tools --------------------------------------------------------------------------
 
+class SetupCommand(Command):
+    name = "setup"
+    help = "Guided setup: connect a tool on this machine to your harness (capture only, nothing is loaded)."
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("tool", nargs="?", default="claude-code", choices=adapters.names())
+        parser.add_argument("--repo", help="Your harness repository: a folder or a GitHub address.")
+        parser.add_argument("--account", help="Which account this is, e.g. personal or work.")
+        parser.add_argument("--environment", choices=ENVIRONMENTS, help="local or cloud (detected).")
+        parser.add_argument("--transcripts", help="Folder for transcripts (local only).")
+        parser.add_argument("--owner", help="Your name, when a new harness is created.")
+        parser.add_argument("--yes", action="store_true", help="Use defaults; ask nothing (scripts).")
+        parser.add_argument("--no-capture", action="store_true", help="Install only; capture later.")
+
+    def run(self, args: argparse.Namespace) -> int:
+        prompter = DefaultsPrompter() if args.yes else ConsolePrompter()
+        options = SetupOptions(tool=args.tool, repo=args.repo, account=args.account,
+                               environment=args.environment, transcripts=args.transcripts,
+                               owner=args.owner, capture_now=False if args.no_capture else None)
+        try:
+            result = SetupWizard(prompter).run(options)
+        except (SetupError, HarnessNotConfigured, ProfileError, StorageError) as exc:
+            raise ErrorExit(str(exc)) from None
+        print(f"Ready. This {args.tool} account is profile '{result.profile}', saving to {result.repo}.")
+        for line in result.done:
+            print(f"  + {line}")
+        print("From now on conversations are saved automatically, in the background.")
+        return 0
+
+
+class StatusCommand(Command):
+    name = "status"
+    help = "Show what is connected on this machine and any recent capture problems."
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--problems", type=int, default=10, help="How many recent problems to show.")
+
+    def run(self, args: argparse.Namespace) -> int:
+        local = LocalHome()
+        repo_path = local.content_repo()
+        print(f"Harness repository: {repo_path or 'not configured (run `harness setup`)'}")
+        for tool, bindings in (local.settings().get("profiles") or {}).items():
+            for folder, profile in bindings.items():
+                current = local.state("profiles", profile).get("current_session") or "-"
+                print(f"  {tool}: {folder} -> {profile} (latest session: {current})")
+        if repo_path:
+            repo = ContentRepo(repo_path)
+            report = RepoValidator.default(repo.layout).validate(repo)
+            print(f"Repository check: {'OK' if report.ok else f'{len(report.problems)} problem(s)'}")
+            for problem in report.problems[:args.problems]:
+                print(f"  x {problem}")
+        problems = local.recent_problems(args.problems)
+        print(f"Recent capture problems: {len(problems) or 'none'}")
+        for line in problems:
+            print(f"  ! {line}")
+        return 0
+
+
 class InstallCommand(Command):
     name = "install"
     help = "Connect a tool on this machine to the harness (hooks, skill, profile)."
@@ -224,12 +285,13 @@ class HookCommand(Command):
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
         _tool_argument(parser)
+        parser.add_argument("--deferred", action="store_true", help=argparse.SUPPRESS)
 
     def run(self, args: argparse.Namespace) -> int:
         local = LocalHome()
         try:
             event = json.loads(sys.stdin.read() or "{}")
-            response = adapters.create(args.tool, local).handle_hook(event)
+            response = adapters.create(args.tool, local).handle_hook(event, deferred=args.deferred)
             if response:
                 print(json.dumps(response))
         except HarnessNotConfigured as exc:
@@ -254,6 +316,7 @@ class SessionCheckpointCommand(Command):
     def configure(self, parser: argparse.ArgumentParser) -> None:
         _profile_and_repo_arguments(parser)
         parser.add_argument("--reason", default="manual", help="Why this checkpoint was written.")
+        parser.add_argument("--quiet", action="store_true", help="Print nothing (used by hooks).")
 
     def run(self, args: argparse.Namespace) -> int:
         local, repo = LocalHome(), open_repo(args)
@@ -266,9 +329,10 @@ class SessionCheckpointCommand(Command):
         result = recorder.write(_read_stdin_text(), args.reason)
         GitSync(repo.root, repo.config.git).sync(
             f"{args.profile}: checkpoint {result.number} of {recorder.session.id}", push=True)
-        print(f"Checkpoint {result.number} saved for {recorder.session.id}.")
-        for path in result.digested:
-            print(f"  + {path}")
+        if not args.quiet:
+            print(f"Checkpoint {result.number} saved for {recorder.session.id}.")
+            for path in result.digested:
+                print(f"  + {path}")
         return 0
 
 

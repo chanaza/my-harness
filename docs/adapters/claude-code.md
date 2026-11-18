@@ -22,31 +22,38 @@ Skip items with `harvest.exclude` in `harness.config.yaml`, e.g.
 
 | Event | Action |
 |---|---|
-| SessionStart | Register the session, harvest; after a compaction, the next Stop requests a checkpoint |
-| UserPromptSubmit | Count the message toward the next checkpoint |
-| Stop | Harvest; workspace state; save the transcript; commit; request a structured checkpoint when due |
+| SessionStart | Register the session and harvest (background); after a compaction, a checkpoint is due |
+| UserPromptSubmit | Count the message; when a checkpoint is due, pass the request to the model as hidden context |
+| Stop | Decide whether a checkpoint is due; in the background: harvest, workspace state, transcript, commit, push |
 | PreCompact | Save the transcript |
 | SessionEnd | Save the transcript; commit and push |
 
-A checkpoint asks the model, in the same conversation, to refresh
-`sessions/<profile>/<id>/summary.md` through `harness session checkpoint`.
-When it is due is set under `checkpoints:` in `harness.config.yaml`.
+A checkpoint asks the model, in the same conversation and without comment,
+to refresh `sessions/<profile>/<id>/summary.md` through `harness session
+checkpoint`. The request travels as hidden context with the user's next
+message; only the forced one (context nearly full, when there may be no next
+message) is made at the end of a turn, once. When checkpoints are due is set
+under `checkpoints:` in `harness.config.yaml`.
 
-Hooks never interrupt Claude Code: failures go to `~/.my-harness/logs/harness.log`.
+Hooks are silent: they print nothing, hand slow work to a background process
+(`capture.background`), and log problems to `~/.my-harness/logs/harness.log`
+(`harness status` shows them).
 
-## Setup (Windows, macOS, Linux)
+## Setup
 
-Requires Python 3.11+ and Git.
+See [getting-started.md](../getting-started.md). Under the hood, `harness
+setup` calls this adapter's installer, which:
 
-```bash
-pip install git+https://github.com/chanaza/my-harness
-git clone https://github.com/<you>/<your-content-repo> <folder>
-python -m harness install claude-code --profile claude-code-personal-local --environment local --repo <folder>
-```
+- registers the profile (tool + account + environment) in `core/profiles.yaml`,
+- binds this Claude Code installation (its config folder) to that profile in `~/.my-harness/`,
+- adds the five hooks above to `settings.json` (each runs `python -m harness hook claude-code`),
+- adds the `harness-save` skill (save on request).
+
+It does not write anything from the harness into Claude Code (no
+instructions, skills or memory are loaded).
 
 Several accounts on one machine: run each with its own `CLAUDE_CONFIG_DIR`
-and install once per account, with a different `--profile`. The hook detects
-which account is running from that folder.
+and run setup once per account. The hook detects which account is running.
 
 To import sessions from before the harness was installed (session records
 with their real dates, plus transcripts; safe to re-run):

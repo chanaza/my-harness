@@ -2,14 +2,17 @@
 
 Hook events and what they do:
 
-  SessionStart      register the session; harvest; after a compaction, make the
-                    next Stop ask for a checkpoint
-  UserPromptSubmit  count the message toward the next checkpoint
-  Stop              harvest; workspace state; save the transcript; commit (and push,
-                    with git.push_every_turn); when a
-                    checkpoint is due, ask the model to refresh the summary
+  SessionStart      register the session; harvest (background)
+  UserPromptSubmit  count the message; if a checkpoint is pending, hand the request to
+                    the model as hidden context (nothing is shown to the user)
+  Stop              decide whether a checkpoint is due; in the background: harvest,
+                    workspace state, transcript, commit and push
   PreCompact        save the transcript
   SessionEnd        save the transcript; commit and push
+
+Hooks are built to be invisible: they print nothing, return within moments,
+and log problems to ~/.my-harness/logs/ instead of showing them
+(`harness status` lists recent problems).
 
 Per session this keeps exactly three things: meta.yaml and summary.md in Git,
 and the full transcript in transcript storage. Everything else (recent
@@ -29,6 +32,7 @@ from pathlib import Path
 from string import Template
 from typing import Any, TypeVar
 
+from ...background import ProcessLock, spawn_detached
 from ...checkpoints import CheckpointPolicy, CheckpointRecorder
 from ...config import HarnessConfig
 from ...digest import SECTIONS
@@ -148,12 +152,25 @@ class ClaudeCodeAdapter(Adapter):
 
     # --- hooks -----------------------------------------------------------------------
 
-    def handle_hook(self, event: dict[str, Any]) -> dict[str, Any] | None:
+    def handle_hook(self, event: dict[str, Any], deferred: bool = False) -> dict[str, Any] | None:
+        """React to a Claude Code hook event.
+
+        Hooks return fast; slow work (harvest, transcript, commit, push) is handed to
+        ``self.defer``, which by default runs it in a detached background process.
+        """
         name = event.get("hook_event_name", "")
         self.locations = self.locations.for_project(Path(event["cwd"]) if event.get("cwd") else None)
         context = _HookContext(self, event)
-        handler = getattr(context, f"on_{_snake(name)}", None)
+        prefix = "deferred_" if deferred else "on_"
+        handler = getattr(context, f"{prefix}{_snake(name)}", None)
         return handler() if handler else None
+
+    def defer(self, event: dict[str, Any]) -> None:
+        """Run the slow part of ``event`` later (background). Tests replace this to run inline."""
+        if self.repo().config.capture.background:
+            spawn_detached(["hook", self.tool, "--deferred"], json.dumps(event))
+        else:
+            self.handle_hook(event, deferred=True)
 
     # --- installation ------------------------------------------------------------------
 
@@ -220,37 +237,66 @@ class _HookContext:
     # --- events ---------------------------------------------------------------------
 
     def on_session_start(self) -> None:
+        if self.event.get("source") == "compact":
+            self.recorder.mark_compacted()  # a checkpoint is requested with the next prompt
+        self.adapter.defer(self.event)
+
+    def deferred_session_start(self) -> None:
         project = self.adapter.locations.project_dir
         self.session.touch(project=project.name if project else None)
-        self._safely("harvest", lambda: self.adapter.run_harvest(self.session.id))
-        if self.event.get("source") == "compact":
-            self.recorder.mark_compacted()  # the next Stop asks for a checkpoint
-        self._sync(f"session {self.session.id} started")
+        with self._sync_lock() as lock:
+            if lock.acquired:
+                self._safely("harvest", lambda: self.adapter.run_harvest(self.session.id))
+                self._sync(f"session {self.session.id} started", push=self.config.git.push_every_turn)
 
-    def on_user_prompt_submit(self) -> None:
+    def on_user_prompt_submit(self) -> dict[str, Any] | None:
+        """Count the message; if a checkpoint is pending, pass the request quietly to the model."""
         self.recorder.count_user_message()
+        reason = self.recorder.pending_request()
+        if not reason:
+            return None
+        return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
+                                       "additionalContext": self._checkpoint_request(reason)}}
 
     def on_stop(self) -> dict[str, Any] | None:
-        """Every turn: harvest, workspace, transcript, commit. A checkpoint request when due."""
+        """Fast: decide whether a checkpoint is due. Slow work is deferred.
+
+        A due checkpoint is normally requested quietly with the next prompt. Only the
+        forced one (context nearly full: there may be no next prompt) blocks here, once.
+        """
         if self.event.get("stop_hook_active"):
             return None  # the model is already answering our request; never loop
-        report = self._safely("harvest", lambda: self.adapter.run_harvest(self.session.id))
         percent = self._percent()
         self.recorder.record_turn(percent)
-        self._safely("workspace", self._record_workspace)
-        self._safely("transcript", self._save_transcript)
-        changes = report.summary() if report and report.changed else "activity"
-        self._sync(f"session {self.session.id} ({changes})", push=self.config.git.push_every_turn)
+        self.adapter.defer(self.event)
         reason = self.policy.due(self.recorder.progress(), percent)
-        return {"decision": "block", "reason": self._checkpoint_request(reason)} if reason else None
+        if not reason:
+            self.recorder.set_pending(None)
+            return None
+        if self.policy.is_forced(percent) and self.recorder.claim_forced_request():
+            return {"decision": "block", "reason": self._checkpoint_request(reason)}
+        self.recorder.set_pending(reason)
+        return None
+
+    def deferred_stop(self) -> None:
+        with self._sync_lock() as lock:
+            if not lock.acquired:
+                return  # another background sync is running; the next turn catches up
+            report = self._safely("harvest", lambda: self.adapter.run_harvest(self.session.id))
+            self._safely("workspace", self._record_workspace)
+            self._safely("transcript", self._save_transcript)
+            changes = report.summary() if report and report.changed else "activity"
+            self._sync(f"session {self.session.id} ({changes})", push=self.config.git.push_every_turn)
 
     def on_pre_compact(self) -> None:
-        self._safely("transcript", self._save_transcript)
+        self._safely("transcript", self._save_transcript)  # synchronous: before the tool compacts
 
     def on_session_end(self) -> None:
         self._safely("transcript", self._save_transcript)
         self.session.touch()
-        self._sync(f"session {self.session.id} ended", push=True)
+        with self._sync_lock(wait=60) as lock:
+            if lock.acquired:
+                self._sync(f"session {self.session.id} ended", push=True)
 
     # --- helpers ---------------------------------------------------------------------
 
@@ -261,6 +307,9 @@ class _HookContext:
         except Exception as exc:
             self.adapter.local.log(f"claude-code {self.profile} {step} failed: {exc!r}")
             return None
+
+    def _sync_lock(self, wait: float = 30) -> ProcessLock:
+        return ProcessLock(self.adapter.local.root / "locks" / f"sync-{self.profile}.lock", wait=wait)
 
     def _sync(self, message: str, push: bool = False) -> None:
         result = self.git.sync(f"{self.profile}: {message}", push=push)
@@ -288,21 +337,21 @@ class _HookContext:
         words = self.config.checkpoints.summary_max_words
         sections = "\n".join(f"## {s}" for s in SECTIONS)
         return (
-            f"[my-harness checkpoint: {reason}] Before finishing, refresh the user's harness summary "
-            f"of this WHOLE conversation (not only the latest part), so that a new session in any "
-            f"tool could continue from exactly this point. Use exactly these Markdown sections:\n\n"
-            f"{sections}\n\n"
+            f"[my-harness checkpoint: {reason}] This is a background housekeeping step for the user's "
+            f"harness. Do it silently: do not mention it, do not comment on it, and do not let it "
+            f"change your answer. Run the command below once, then continue normally.\n\n"
+            f"Write a summary of this WHOLE conversation (not only the latest part) so that a new "
+            f"session in any tool could continue from exactly this point, using exactly these "
+            f"Markdown sections:\n\n{sections}\n\n"
             f"'Open thread' = what is in progress right now and what you are waiting for from the "
             f"user. 'Standing instructions' = rules the user gave that should apply to future work, "
             f"in their words. 'Preferences learned' = how the user likes to work. 'Connections in "
             f"use' = one line per connector/MCP server available to you here ('- name: purpose'), "
             f"names only. Write 'None' in an empty section. At most {words} words, in "
-            f"'{self.config.working_language}'. Run exactly this, with the summary in place of "
-            f"<summary>:\n\n"
-            f'"{sys.executable}" -m harness session checkpoint --profile {self.profile} '
+            f"'{self.config.working_language}'.\n\n"
+            f'"{sys.executable}" -m harness session checkpoint --quiet --profile {self.profile} '
             f'--session {self.session.native_id} --reason "{reason}" <<\'HARNESS_EOF\'\n'
-            f"<summary>\nHARNESS_EOF\n\n"
-            f"Then end your turn. No need to report this to the user."
+            f"<summary>\nHARNESS_EOF"
         )
 
 

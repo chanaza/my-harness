@@ -156,11 +156,13 @@ def test_stop_records_workspace_and_structured_request(adapter, repo: ContentRep
     repo.config_file.update({"checkpoints.every_user_messages": 1})
     transcript = write_transcript(tmp_path / "t.jsonl", 3, 20_000)
     adapter.handle_hook(event("UserPromptSubmit", transcript, project))
-    response = adapter.handle_hook(event("Stop", transcript, project))
+    adapter.handle_hook(event("Stop", transcript, project))
+    response = adapter.handle_hook(event("UserPromptSubmit", transcript, project))
 
     meta = SessionRecord(repo, "claude-code-personal", "sess-1").meta()
     assert meta["workspace"][0]["remote"] == "https://github.com/me/app.git"  # credentials removed
-    assert all(f"## {s}" in response["reason"] for s in SECTIONS)
+    request = response["hookSpecificOutput"]["additionalContext"]
+    assert all(f"## {s}" in request for s in SECTIONS)
     assert validate(repo).ok, validate(repo).problems
 
 

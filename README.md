@@ -38,17 +38,19 @@ agents, workflows, apps, tables, assets, connections) records a
 when two tools learned different things. Memory entries also carry
 `status`, `supersedes` and `conflicts_with`.
 
-## Quick start
+## Getting started
+
+**[docs/getting-started.md](docs/getting-started.md)**: one command on
+Windows, macOS or Linux, and a setup script for cloud sessions. Setup saves
+only; loading into a tool is a separate step.
+
+For developers:
 
 ```bash
 pip install -e ".[dev]"
-harness init ../my-content --owner "Your Name" --transcripts-path "C:\Users\you\OneDrive\Sessions\transcripts"
-harness config set checkpoints.every_user_messages 10 --repo ../my-content
-harness validate --repo ../my-content
+python -m pytest
+harness --help
 ```
-
-Every change to a content repository goes through a command like these;
-settings are validated before they are written, and comments are kept.
 
 ## Code map
 

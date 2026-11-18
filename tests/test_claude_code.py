@@ -102,37 +102,63 @@ def test_harvest_conflict_with_other_profile(adapter: ClaudeCodeAdapter, repo: C
 
 # --- hooks --------------------------------------------------------------------------------
 
+def context_of(response: dict | None) -> str:
+    return ((response or {}).get("hookSpecificOutput") or {}).get("additionalContext", "")
+
+
 def test_hook_flow(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
-    """Every turn: transcript saved and committed; a checkpoint request when due."""
+    """Every turn: transcript saved and committed in the background; a due checkpoint is
+    requested quietly with the next prompt, never shown at the end of a turn."""
     subprocess.run(["git", "init", "-q"], cwd=repo.root, check=True)
     repo.config_file.update({"checkpoints.every_user_messages": 3})
     project = adapter.locations.project_dir
     transcript = write_transcript(tmp_path / "t.jsonl", 3, 20_000)
 
-    adapter.handle_hook(event("SessionStart", transcript, project, source="startup"))
+    assert adapter.handle_hook(event("SessionStart", transcript, project, source="startup")) is None
     assert repo.path("sessions", PROFILE, "sess-1", "meta.yaml").is_file()
 
-    for _ in range(2):
-        adapter.handle_hook(event("UserPromptSubmit", transcript, project))
-    assert adapter.handle_hook(event("Stop", transcript, project)) is None
+    for _ in range(3):
+        assert context_of(adapter.handle_hook(event("UserPromptSubmit", transcript, project))) == ""
+    assert adapter.handle_hook(event("Stop", transcript, project)) is None  # nothing shown
     saved = tmp_path / "transcripts" / PROFILE / "sess-1" / "transcript.jsonl"
     assert saved.read_text() == transcript.read_text()
     status = subprocess.run(["git", "status", "--porcelain"], cwd=repo.root, capture_output=True, text=True)
     assert status.stdout == ""  # every turn is committed
 
+    request = context_of(adapter.handle_hook(event("UserPromptSubmit", transcript, project)))
+    assert "harness session checkpoint --quiet" in request and "silently" in request
+
+
+def test_checkpoint_clears_the_pending_request(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
+    from harness.checkpoints import CheckpointRecorder
+    repo.config_file.update({"checkpoints.every_user_messages": 1})
+    project = adapter.locations.project_dir
+    transcript = write_transcript(tmp_path / "t.jsonl", 1, 1000)
     adapter.handle_hook(event("UserPromptSubmit", transcript, project))
-    response = adapter.handle_hook(event("Stop", transcript, project))
-    assert response["decision"] == "block"
-    assert "harness session checkpoint" in response["reason"]
-    assert adapter.handle_hook(event("Stop", transcript, project, stop_hook_active=True)) is None
+    adapter.handle_hook(event("Stop", transcript, project))
+    assert context_of(adapter.handle_hook(event("UserPromptSubmit", transcript, project)))
+    session = SessionRecord(repo, PROFILE, "sess-1")
+    CheckpointRecorder(adapter.local, repo, session).write("## Goal\nX\n", "test")
+    adapter.handle_hook(event("Stop", transcript, project))
+    assert context_of(adapter.handle_hook(event("UserPromptSubmit", transcript, project))) == ""
+
+
+def test_forced_checkpoint_blocks_once(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
+    """Near the end of the context there may be no next prompt: the model is asked at Stop, once."""
+    project = adapter.locations.project_dir
+    transcript = write_transcript(tmp_path / "t.jsonl", 1, 170_000)
+    first = adapter.handle_hook(event("Stop", transcript, project))
+    assert first["decision"] == "block" and "reached" in first["reason"]
+    assert adapter.handle_hook(event("Stop", transcript, project)) is None
+    assert context_of(adapter.handle_hook(event("UserPromptSubmit", transcript, project)))
 
 
 def test_compaction_requests_a_checkpoint(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
     transcript = write_transcript(tmp_path / "t.jsonl", 1, 10_000, compact="What we did so far")
     project = adapter.locations.project_dir
     adapter.handle_hook(event("SessionStart", transcript, project, source="compact"))
-    response = adapter.handle_hook(event("Stop", transcript, project))
-    assert "compacted" in response["reason"]
+    adapter.handle_hook(event("Stop", transcript, project))
+    assert "compacted" in context_of(adapter.handle_hook(event("UserPromptSubmit", transcript, project)))
 
 
 def test_transcript_saved_on_pre_compact(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
@@ -148,6 +174,15 @@ def test_hook_survives_unusable_storage(adapter: ClaudeCodeAdapter, repo: Conten
     response = adapter.handle_hook(event("Stop", transcript, adapter.locations.project_dir))
     assert response["decision"] == "block"  # the forced checkpoint still happens
     assert "transcript failed" in (adapter.local.root / "logs" / "harness.log").read_text()
+
+
+def test_background_lock_skips_overlapping_work(tmp_path: Path):
+    from harness.background import ProcessLock
+    with ProcessLock(tmp_path / "x.lock") as first:
+        with ProcessLock(tmp_path / "x.lock", wait=0.3) as second:
+            assert first.acquired and not second.acquired
+    with ProcessLock(tmp_path / "x.lock") as again:
+        assert again.acquired
 
 
 def test_engine_artifacts_are_not_harvested(adapter: ClaudeCodeAdapter, repo: ContentRepo):

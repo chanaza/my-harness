@@ -68,6 +68,7 @@ def adapter(repo: ContentRepo, claude: ClaudeCodeLocations, tmp_path: Path) -> C
     local = LocalHome(tmp_path / "harness-home")
     adapter = ClaudeCodeAdapter(local, claude)
     adapter.install(CC_PROFILE, "personal", repo.root)
+    adapter.defer = lambda e: adapter.handle_hook(e, deferred=True)  # background work inline
     return adapter
 
 
