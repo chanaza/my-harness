@@ -276,11 +276,15 @@ class FolderWriter(ItemWriter):
             path.write_bytes(content)
         previous = None if conflict or not existing else existing.get("provenance")
         descriptor.parent.mkdir(parents=True, exist_ok=True)
-        descriptor.write_text(yaml_io.dump({
-            "name": slugify(item.name), "description": item.meta.get("description", item.name),
-            **fields, "origin": item.origin, "provenance": Provenance.updated(previous, origin),
-        }), encoding="utf-8")
+        content = self._descriptor(item, origin, fields, previous)
+        descriptor.write_text(yaml_io.dump(content), encoding="utf-8")
         return WriteResult("conflict" if conflict else ("updated" if existing else "created"), descriptor)
+
+
+    def _descriptor(self, item: Captured, origin: Origin, fields: dict[str, Any],
+                    previous: Any) -> dict[str, Any]:
+        return {"name": slugify(item.name), "description": item.meta.get("description", item.name),
+                **fields, "origin": item.origin, "provenance": Provenance.updated(previous, origin)}
 
 
 class PluginWriter(FolderWriter):
@@ -297,6 +301,15 @@ class AppWriter(FolderWriter):
     kind = Kind.APP
     AREA = ("apps",)
     DESCRIPTOR = "app.yaml"
+
+    def _descriptor(self, item: Captured, origin: Origin, fields: dict[str, Any],
+                    previous: Any) -> dict[str, Any]:
+        """In the form of apps/ (schemas/app.schema.json)."""
+        descriptor = {"name": slugify(item.name), "profile": origin.profile,
+                      "purpose": item.meta.get("description", item.name)}
+        if fields.get("link"):
+            descriptor["url"] = fields["link"]
+        return {**descriptor, "provenance": Provenance.updated(previous, origin)}
 
 
 class ProjectWriter(FolderWriter):

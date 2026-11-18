@@ -84,7 +84,7 @@ class ProfileReferenceCheck(Check):
                 report.add(folder.relative_to(repo.root).as_posix(), f"unknown profile {folder.name!r}")
         for pattern in self.SCANNED:
             for path in sorted(repo.root.rglob(pattern)):
-                if ".git" in path.parts:
+                if ".git" in path.parts or "rejected" in path.parts:  # rejected: kept as sent
                     continue
                 for profile in set(self.REFERENCE.findall(path.read_text("utf-8", errors="replace"))):
                     if profile not in known:

@@ -365,6 +365,9 @@ def test_connector_inbox_is_saved_in_the_harness_form(connected: ClaudeAiAdapter
         "captured_at: 2026-11-20T06:00:00Z\npart: 2/2\nconnections:" + tail, encoding="utf-8")
     InboxProcessor(repo).run()
     assert not any(inbox.iterdir())                                            # both parts saved together
+    from conftest import validate
+    report = validate(repo)
+    assert report.ok, report.problems                                          # the repository stays valid
 
 
 def test_descriptions_saved_before_full_content_are_cleaned(repo: ContentRepo):

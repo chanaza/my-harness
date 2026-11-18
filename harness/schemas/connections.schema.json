@@ -38,7 +38,8 @@
                     "plugin",
                     "native",
                     "api",
-                    "manual"
+                    "manual",
+                    "connector"
                   ]
                 },
                 "notes": {
@@ -62,7 +63,8 @@
               "mcp",
               "plugin",
               "api",
-              "native"
+              "native",
+              "connector"
             ]
           }
         },

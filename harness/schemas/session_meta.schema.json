@@ -120,6 +120,10 @@
     "agent": {
       "type": "string",
       "description": "The agent the conversation was with (core/agents/<name>)."
+    },
+    "surface": {
+      "type": "string",
+      "description": "Where inside the tool the conversation ran, e.g. cowork, claude-ai, desktop."
     }
   },
   "additionalProperties": false
