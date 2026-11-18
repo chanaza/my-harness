@@ -46,18 +46,23 @@ class SessionRecord:
     def transcript_key(self, extension: str) -> str:
         return self.storage_key(f"transcript{extension}")
 
-    def save_transcript(self, storage: Storage, source: Path) -> str | None:
-        """Copy the tool's transcript into transcript storage (skipped when unchanged)."""
+    def save_transcript(self, storage: Storage, source: Path,
+                        activity_at: str | None = None) -> tuple[str, bool] | None:
+        """Copy the tool's transcript into transcript storage.
+
+        Returns (key, changed); nothing is written when the stored copy is identical.
+        """
         source = Path(source)
         if not source.is_file():
             return None
         key = self.transcript_key(source.suffix)
         text = source.read_text("utf-8")
-        if not storage.exists(key) or storage.read_text(key) != text:
+        changed = not storage.exists(key) or storage.read_text(key) != text
+        if changed:
             storage.write_text(key, text)
         if self.meta().get("transcript") != key:
-            self.touch(transcript=key)
-        return key
+            self.touch(activity_at=activity_at, transcript=key)
+        return key, changed
 
     # --- meta.yaml ------------------------------------------------------------
 
@@ -70,15 +75,16 @@ class SessionRecord:
             return {}
         return dict(yaml_io.load(self.meta_path.read_text("utf-8")) or {})
 
-    def touch(self, **fields: Any) -> dict[str, Any]:
-        """Create meta.yaml on first use; update ``fields`` and the activity time."""
+    def touch(self, activity_at: str | None = None, **fields: Any) -> dict[str, Any]:
+        """Create meta.yaml on first use; update ``fields`` and the activity time
+        (now, unless ``activity_at`` gives it, e.g. when importing an old session)."""
         meta = self.meta()
         if not meta:
             meta = {"id": self.id, "profile": self.profile, "started_at": now_iso()}
             if self.native_id != self.id:
                 meta["native_id"] = self.native_id
         meta.update({k: v for k, v in fields.items() if v is not None})
-        meta["last_activity_at"] = now_iso()
+        meta["last_activity_at"] = activity_at or now_iso()
         self.folder.mkdir(parents=True, exist_ok=True)
         self.meta_path.write_text(yaml_io.dump(meta), encoding="utf-8")
         return meta

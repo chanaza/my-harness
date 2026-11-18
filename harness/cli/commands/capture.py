@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 import traceback
+from collections import Counter
 from pathlib import Path
 
 from ...adapters import adapters
@@ -17,6 +18,7 @@ from ...memory import KINDS, MemoryStore
 from ...profiles import ENVIRONMENTS, ProfileError, ProfileRegistry
 from ...provenance import Origin
 from ...sessions import SessionRecord
+from ...storage import StorageError
 from ..base import Command, ErrorExit
 from .repository import open_repo, repo_argument
 
@@ -186,6 +188,34 @@ class HarvestCommand(Command):
                                                  push=True)
         print(f"Harvest: {report.summary()}")
         return 1 if report.errors else 0
+
+
+class BackfillCommand(Command):
+    name = "backfill"
+    help = "Import sessions from before the harness was installed (session records + transcripts)."
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        _tool_argument(parser)
+        parser.add_argument("--since-days", type=int, help="Only sessions active in the last N days.")
+        parser.add_argument("--dry-run", action="store_true", help="List the sessions without importing.")
+
+    def run(self, args: argparse.Namespace) -> int:
+        adapter = adapters.create(args.tool)
+        try:
+            entries = adapter.backfill(args.since_days, args.dry_run)
+            repo = adapter.repo()
+        except (HarnessNotConfigured, StorageError) as exc:
+            raise ErrorExit(str(exc)) from None
+        for e in entries:
+            print(f"  {e.action:9} {e.started_at or '?':20} {e.user_messages:4} msgs  "
+                  f"{e.project or '-':20} {e.session}")
+        if not args.dry_run:
+            counts = Counter(e.action for e in entries)
+            summary = ", ".join(f"{n} {a}" for a, n in sorted(counts.items())) or "nothing found"
+            GitSync(repo.root, repo.config.git).sync(f"{adapter.profile_id()}: backfill ({summary})",
+                                                     push=True)
+            print(f"Backfill: {summary}")
+        return 0
 
 
 class HookCommand(Command):

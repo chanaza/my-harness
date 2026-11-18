@@ -18,8 +18,11 @@ exchanges, compaction summaries) is derived from the transcript when needed.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
 from importlib import resources
 from pathlib import Path
 from string import Template
@@ -32,7 +35,7 @@ from ...git_sync import GitSync
 from ...harvest import Captured, HarvestReport, HarvestSync
 from ...local import LocalHome
 from ...profiles import ProfileRegistry
-from ...provenance import Origin
+from ...provenance import Origin, now_iso
 from ...repo import ContentRepo
 from ...sessions import SessionRecord
 from ...workspace import WorkspaceScanner, merge_workspace
@@ -47,6 +50,16 @@ T = TypeVar("T")
 
 class HarnessNotConfigured(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class BackfillEntry:
+    session: str
+    project: str | None
+    started_at: str | None
+    ended_at: str | None
+    user_messages: int
+    action: str = "found"  # found (dry run) | imported | updated | unchanged
 
 
 @adapters.register
@@ -94,6 +107,43 @@ class ClaudeCodeAdapter(Adapter):
         repo, profile = self.repo(), self.profile_id()
         excluded = ClaudeCodeHarvester(self.locations, repo.config.harvest_exclude).is_excluded
         return HarvestSync(repo, self.local.state("harvest", profile)).prune(excluded, profile)
+
+    # --- backfill (sessions from before the harness was installed) -----------------------
+
+    def transcripts(self) -> list[Path]:
+        """Main-thread transcripts of every session this account has on this machine."""
+        projects = self.locations.config_dir / "projects"
+        return sorted(projects.glob("*/*.jsonl")) if projects.is_dir() else []
+
+    def backfill(self, since_days: int | None = None, dry_run: bool = False) -> list[BackfillEntry]:
+        """Import past sessions: a session record with their real dates, and the transcript.
+
+        Idempotent. Sessions already recorded live keep their meta; only the
+        transcript is refreshed. No summary is invented: imported sessions have
+        none until the loading step derives one from the transcript.
+        """
+        repo, profile = self.repo(), self.profile_id()
+        storage = None if dry_run else repo.storage("transcripts", profile)
+        cutoff = (datetime.now(UTC) - timedelta(days=since_days)).isoformat() if since_days else None
+        entries = []
+        for path in self.transcripts():
+            span = TranscriptReader(path).span()
+            if cutoff and (span.ended_at or "") < cutoff[:19]:
+                continue
+            session = SessionRecord(repo, profile, path.stem)
+            project = _folder_name(span.cwd)
+            entry = BackfillEntry(session.id, project, span.started_at, span.ended_at, span.user_messages)
+            if dry_run:
+                entries.append(entry)
+                continue
+            new = not session.meta_path.is_file()
+            if new:
+                session.touch(activity_at=span.ended_at, started_at=span.started_at or now_iso(),
+                              project=project, imported_at=now_iso())
+            _, changed = session.save_transcript(storage, path, activity_at=span.ended_at)
+            entries.append(replace(entry, action="imported" if new else
+                                   ("updated" if changed else "unchanged")))
+        return entries
 
     # --- hooks -----------------------------------------------------------------------
 
@@ -253,6 +303,13 @@ class _HookContext:
             f"<summary>\nHARNESS_EOF\n\n"
             f"Then end your turn. No need to report this to the user."
         )
+
+
+def _folder_name(path: str | None) -> str | None:
+    """Last folder of a path recorded on any OS (Windows or POSIX separators)."""
+    if not path:
+        return None
+    return re.split(r"[\\/]", path.rstrip("\\/"))[-1] or None
 
 
 def _snake(name: str) -> str:

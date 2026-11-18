@@ -10,6 +10,16 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class Span:
+    """When and where a transcript's conversation happened."""
+
+    started_at: str | None
+    ended_at: str | None
+    cwd: str | None
+    user_messages: int
+
+
+@dataclass(frozen=True)
 class Exchange:
     prompt: str
     answer: str
@@ -54,6 +64,18 @@ class TranscriptReader:
         return bool(cls.text_of(entry))
 
     # --- queries ----------------------------------------------------------------
+
+    def span(self) -> Span:
+        first = last = cwd = None
+        prompts = 0
+        for entry in self.entries():
+            stamp = entry.get("timestamp")
+            if stamp:
+                first = first or stamp
+                last = stamp
+            cwd = cwd or entry.get("cwd")
+            prompts += self.is_user_prompt(entry)
+        return Span(_iso(first), _iso(last), cwd, prompts)
 
     def context_tokens(self) -> int | None:
         """Tokens in context at the latest main-thread model call."""
@@ -114,3 +136,10 @@ class ContextMeter:
         if tokens is None:
             return None
         return 100.0 * tokens / self.window_for(tokens)
+
+
+def _iso(stamp: str | None) -> str | None:
+    """Claude Code timestamps ('2026-11-18T07:20:10.123Z') in the schema format."""
+    if not stamp:
+        return None
+    return stamp.split(".")[0].rstrip("Z") + "Z"

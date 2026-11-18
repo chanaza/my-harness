@@ -92,6 +92,11 @@
         },
         "additionalProperties": false
       }
+    },
+    "imported_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set when the session was imported after the fact (no checkpoints were written live)."
     }
   },
   "additionalProperties": false

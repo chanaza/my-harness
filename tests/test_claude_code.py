@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 from conftest import CC_PROFILE as PROFILE
@@ -17,6 +18,7 @@ from harness.adapters.claude_code import (
 )
 from harness.harvest import Kind
 from harness.repo import ContentRepo
+from harness.sessions import SessionRecord
 
 # --- transcript ------------------------------------------------------------------------
 
@@ -182,3 +184,40 @@ def test_native_mirror_follows_the_tool(adapter: ClaudeCodeAdapter, repo: Conten
     report = adapter.run_harvest()
     assert report.counts["removed"] == 1 and not mirrored.exists()
     assert repo.path("core", "skills", "deck-review").is_dir()  # knowledge is never mirrored away
+
+
+def add_old_session(adapter: ClaudeCodeAdapter, session: str, cwd: str, stamp: str) -> Path:
+    folder = adapter.locations.config_dir / "projects" / "-old-project"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{session}.jsonl"
+    lines = [{"type": "user", "timestamp": f"{stamp}T09:00:00.120Z", "cwd": cwd,
+              "message": {"role": "user", "content": "old question"}},
+             {"type": "assistant", "timestamp": f"{stamp}T09:01:00.000Z",
+              "message": {"role": "assistant", "content": [{"type": "text", "text": "old answer"}]}}]
+    path.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+    return path
+
+
+def test_backfill_imports_past_sessions(adapter: ClaudeCodeAdapter, repo: ContentRepo, tmp_path: Path):
+    add_old_session(adapter, "old-1", r"C:\Users\me\projects\deck-tool", "2026-09-01")
+    add_old_session(adapter, "old-2", "/home/me/api", "2026-11-17")
+
+    assert [e.action for e in adapter.backfill(dry_run=True)] == ["found", "found"]
+    assert not repo.path("sessions", PROFILE).exists()
+
+    entries = {e.session: e for e in adapter.backfill()}
+    assert entries["old-1"].action == "imported" and entries["old-1"].project == "deck-tool"
+    meta = SessionRecord(repo, PROFILE, "old-1").meta()
+    assert meta["started_at"] == "2026-09-01T09:00:00Z"
+    assert meta["last_activity_at"] == "2026-09-01T09:01:00Z"  # real dates, not import time
+    assert "imported_at" in meta
+    assert (tmp_path / "transcripts" / PROFILE / "old-1" / "transcript.jsonl").is_file()
+    assert validate(repo).ok, validate(repo).problems
+
+    assert {e.action for e in adapter.backfill()} == {"unchanged"}  # idempotent
+
+
+def test_backfill_since_days(adapter: ClaudeCodeAdapter):
+    add_old_session(adapter, "ancient", "/x", "2020-01-01")
+    add_old_session(adapter, "recent", "/x", datetime.now(UTC).strftime("%Y-%m-%d"))
+    assert [e.session for e in adapter.backfill(since_days=7, dry_run=True)] == ["recent"]

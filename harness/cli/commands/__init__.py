@@ -2,6 +2,7 @@
 
 from ..base import Command
 from .capture import (
+    BackfillCommand,
     HarvestCommand,
     HookCommand,
     InstallCommand,
@@ -14,7 +15,7 @@ from .repository import ConfigCommand, InitCommand, UpgradeCommand, ValidateComm
 #: Commands exposed by `harness`, in help order.
 DEFAULT_COMMANDS: tuple[type[Command], ...] = (
     InitCommand, ValidateCommand, ConfigCommand, UpgradeCommand,
-    ProfileCommand, InstallCommand, HarvestCommand, HookCommand,
+    ProfileCommand, InstallCommand, HarvestCommand, BackfillCommand, HookCommand,
     SessionCommand, MemoryCommand,
 )
 

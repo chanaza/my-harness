@@ -48,6 +48,14 @@ Several accounts on one machine: run each with its own `CLAUDE_CONFIG_DIR`
 and install once per account, with a different `--profile`. The hook detects
 which account is running from that folder.
 
+To import sessions from before the harness was installed (session records
+with their real dates, plus transcripts; safe to re-run):
+
+```bash
+python -m harness backfill claude-code --dry-run
+python -m harness backfill claude-code            # or --since-days 30
+```
+
 To capture without hooks (e.g. a temporary cloud session):
 
 ```bash
