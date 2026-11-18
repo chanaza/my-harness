@@ -149,7 +149,15 @@ class SetupWizard:
             self.prompter.say(f"Downloading {url} to {target} ...")
             result = subprocess.run(["git", "clone", url, str(target)], capture_output=True, text=True)
             if result.returncode != 0:
-                raise SetupError(f"Could not download {url}: {result.stderr.strip()}")
+                hint = ""
+                if "not found" in result.stderr.lower():
+                    hint = ("\n\nGitHub says 'not found' for a private repository when Git is not signed "
+                            "in as an account that can see it. Sign in, then run setup again: run\n"
+                            f"  git clone {url}\n"
+                            "and log in with the GitHub account that owns the repository. If no login "
+                            "window appears, Git is signed in as another account; remove that login "
+                            "(Windows: cmdkey /delete:git:https://github.com) and try again.")
+                raise SetupError(f"Could not download {url}: {result.stderr.strip()}{hint}")
         return target
 
     def _storage_for(self, profile: str, environment: str, options: SetupOptions) -> dict[str, object]:
