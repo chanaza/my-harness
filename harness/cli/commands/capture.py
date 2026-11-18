@@ -345,6 +345,12 @@ class SkillCommand(Command):
                 archive.writestr(path, content)
         print(f"Skill written to {target.resolve()}")
         print("Upload it in claude.ai: Settings > Capabilities > Skills > Upload skill.")
+        adapter = adapters.create(args.tool)
+        tasks = adapter.scheduled_tasks() if hasattr(adapter, "scheduled_tasks") else []
+        if tasks:
+            print("Then create these scheduled tasks in Cowork:")
+            for when, prompt in tasks:
+                print(f"  - {when}: {prompt}")
         return 0
 
 

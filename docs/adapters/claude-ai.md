@@ -24,18 +24,21 @@ conversations that changed since the last export are rewritten.
 | `watch_folder` | `~/Downloads` | Where downloaded exports are looked for |
 | `file_pattern` | `data-*.zip` | Export file names |
 | `archive_exports` | `true` | Keep each export file in transcript storage |
-| `export_every_days` | `7` | How often the export skill requests a new export |
+| `export_every_days` | `7` | How often a new export is requested |
+| `download_after_hours` | `3` | How long after the request the download task runs |
 
 ## Getting exports automatically
 
 1. `python -m harness skill claude-ai` creates `harness-claude-ai-export.zip`
    from your settings.
 2. Upload it in claude.ai: Settings > Capabilities > Skills.
-3. In Cowork, create a scheduled task (e.g. weekly): "Run the
-   harness-claude-ai-export skill".
+3. In Cowork, create two scheduled tasks (the command prints them, from your
+   settings):
+   - every `export_every_days`: "Run the harness-claude-ai-export skill in request mode."
+   - `download_after_hours` later: "Run the harness-claude-ai-export skill in download mode."
 
-Each run downloads the export requested by the previous run and requests a new
-one. The computer picks the file up from the watch folder on its own
+The first asks claude.ai for an export; the second saves it once the e-mail has
+arrived. The computer picks the file up from the watch folder on its own
 (scheduled every `capture.poll_minutes`).
 
 Without the skill: request the export yourself and download it to the watch

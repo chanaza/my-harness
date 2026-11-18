@@ -78,13 +78,21 @@ class ClaudeAiAdapter(AccountBoundAdapter):
                                            f"{len(latest.projects())} projects"))
         return accounts
 
+    def scheduled_tasks(self) -> list[tuple[str, str]]:
+        """The two Cowork scheduled tasks that run the export skill: (when, what to type)."""
+        s = self._settings()
+        return [(f"every {s.export_every_days} days",
+                 f"Run the {SKILL_NAME} skill in request mode."),
+                (f"every {s.export_every_days} days, {s.download_after_hours} hours after the first",
+                 f"Run the {SKILL_NAME} skill in download mode.")]
+
     def skill_package(self) -> tuple[str, dict[str, bytes]]:
         """The export skill, filled in from this harness's `claude_ai` settings."""
         settings = self._settings()
         template = resources.files(__package__).joinpath("skill", "SKILL.md").read_text("utf-8")
         text = Template(template).safe_substitute(
             WATCH_FOLDER=str(Path(settings.watch_folder).expanduser()),
-            EVERY_DAYS=settings.export_every_days)
+            EVERY_DAYS=settings.export_every_days, DOWNLOAD_AFTER=settings.download_after_hours)
         return SKILL_NAME, {f"{SKILL_NAME}/SKILL.md": text.encode("utf-8")}
 
     # --- what an export holds ----------------------------------------------------------------

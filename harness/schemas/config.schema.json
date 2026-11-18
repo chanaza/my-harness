@@ -301,6 +301,11 @@
           "type": "integer",
           "minimum": 1,
           "description": "How often to request a new export (used by the export skill)."
+        },
+        "download_after_hours": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How long after requesting an export the download task runs."
         }
       },
       "additionalProperties": false

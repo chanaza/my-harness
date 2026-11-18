@@ -55,6 +55,7 @@ class ClaudeAiSettings:
     file_pattern: str = "data-*.zip"
     archive_exports: bool = True
     export_every_days: int = 7
+    download_after_hours: int = 3
 
 
 @dataclass(frozen=True)
