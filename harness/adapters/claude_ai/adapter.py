@@ -17,6 +17,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import subprocess
+import sys
 import webbrowser
 import zipfile
 from fnmatch import fnmatch
@@ -90,10 +93,11 @@ class ClaudeAiAdapter(AccountBoundAdapter):
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
             for path, content in files.items():
                 archive.writestr(path, content)
+        _reveal(target)
         webbrowser.open(self.SKILLS_PAGE)
         accounts = "each of your claude.ai accounts" if len(profiles) > 1 else "your claude.ai account"
-        return [f"In {accounts}, upload the file {target} on the page that just opened "
-                f"({self.SKILLS_PAGE}): Skills > Upload skill.",
+        return [f"In {accounts}, upload the file {target} (a window showing it just opened) "
+                f"on the claude.ai page that also opened ({self.SKILLS_PAGE}): Skills > Upload skill.",
                 "Then, in Cowork (in each account), type: Set up my harness export"]
 
     def scheduled_tasks(self) -> list[tuple[str, str]]:
@@ -232,8 +236,36 @@ def _file_signature(path: Path) -> str:
 
 
 def _visible_folder() -> Path:
-    """Where a non-technical user will see a new file: the desktop, else Downloads, else home."""
-    for folder in (Path.home() / "Desktop", Path.home() / "OneDrive" / "Desktop", Path.home() / "Downloads"):
-        if folder.is_dir():
+    """The desktop the user actually sees (on Windows often redirected into OneDrive),
+    else Downloads, else home."""
+    candidates = [_windows_desktop()] if os.name == "nt" else []
+    candidates += [Path.home() / "Desktop", Path.home() / "Downloads"]
+    for folder in candidates:
+        if folder and folder.is_dir():
             return folder
     return Path.home()
+
+
+def _windows_desktop() -> Path | None:
+    """The Desktop folder as Windows has it configured (it may live in OneDrive)."""
+    try:
+        import winreg
+        key = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as handle:
+            value, _ = winreg.QueryValueEx(handle, "Desktop")
+        return Path(os.path.expandvars(value))
+    except OSError:
+        return None
+
+
+def _reveal(path: Path) -> None:
+    """Show the file to the user in their file manager, selected."""
+    try:
+        if os.name == "nt":
+            subprocess.Popen(["explorer.exe", f"/select,{path}"])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path.parent)])
+    except OSError:
+        pass  # showing it is a convenience; the path is printed anyway
