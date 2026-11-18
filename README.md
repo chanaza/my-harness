@@ -38,7 +38,7 @@ opens claude.ai: upload the file there. Then, in Cowork, type
 
 From then on, everything is saved by itself. Nothing is shown while it runs.
 
-**Check that it works:** `python -m harness status`.
+**Check that it works:** `python -m harness status` (and `python -m harness sources`: how each tool is captured).
 **Update later:** run the same installation command again.
 **More details, cloud sessions and troubleshooting:** [docs/getting-started.md](docs/getting-started.md).
 

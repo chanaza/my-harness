@@ -49,6 +49,15 @@ class LocalHome:
         """This computer's name in the harness (e.g. office, home), once set."""
         return self.settings().get("machine")
 
+    def record_capture(self, tool: str) -> None:
+        """Remember when this tool was last captured on this machine (for `harness sources`)."""
+        state = self.state("captures")
+        state.set(tool, datetime.now().isoformat(timespec="minutes"))
+        state.save()
+
+    def last_capture(self, tool: str) -> str | None:
+        return self.state("captures").get(tool)
+
     def rename_profile(self, old: str, new: str) -> None:
         """Re-point this machine's tool bindings and state from ``old`` to ``new``."""
         settings = self.settings()

@@ -148,3 +148,23 @@ def test_setup_on_a_connected_machine_updates_instead_of_asking(machine: Path, t
     assert main(["setup"]) == 0
     assert "already connected" in capsys.readouterr().out
     assert called == {"engine": False}
+
+
+def test_naming_a_computer_renames_its_local_profiles(tmp_path, monkeypatch, capsys):
+    from harness.cli.app import main
+    from harness.profiles import ProfileRegistry
+    from harness.repo import ContentRepo
+    from harness.scaffold import InitOptions, Scaffolder
+    repo = Scaffolder().create(tmp_path / "content", InitOptions(owner="T"))
+    ProfileRegistry(repo).add("claude-code", "work", environment="local")
+    ProfileRegistry(repo).add("claude-code", "personal", environment="cloud")
+    local = LocalHome()
+    local.save_settings(content_repo=str(repo.root),
+                        profiles={"claude-code": {"/c": "claude-code-work-local"}})
+    assert main(["machine", "name", "Office", "--repo", str(repo.root)]) == 0
+    ids = ProfileRegistry(ContentRepo(repo.root)).ids()
+    assert ids == {"claude-code-work-office", "claude-code-personal-cloud"}
+    assert LocalHome().machine() == "office"
+    assert LocalHome().settings()["profiles"]["claude-code"]["/c"] == "claude-code-work-office"
+    assert main(["sources"]) == 0
+    assert "claude-code  push" in capsys.readouterr().out
