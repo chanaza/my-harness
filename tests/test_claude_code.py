@@ -42,6 +42,7 @@ def test_harvester_finds_everything_and_strips_secrets(claude: ClaudeCodeLocatio
     collected = ClaudeCodeHarvester(claude).collect()
     items = {(i.kind, i.name): i for i in collected}
     assert (Kind.SKILL, "deck-review") in items
+    assert (Kind.SKILL, "old-skill") not in items  # deleted (in skills/.trash)
     assert "references/style.md" in items[(Kind.SKILL, "deck-review")].files
     assert (Kind.SKILL, "standup") in items
     assert (Kind.AGENT, "researcher") in items

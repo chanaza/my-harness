@@ -42,6 +42,9 @@ def claude(tmp_path: Path) -> ClaudeCodeLocations:
         "---\nname: deck-review\ndescription: Review decks\nallowed-tools: Read\n---\n"
         "# Deck review\nSteps.\n")
     (home / "skills" / "synced" / "bucket" / "deck-review" / "references" / "style.md").write_text("Style")
+    (home / "skills" / ".trash" / "123-x" / "old-skill").mkdir(parents=True)  # deleted skill
+    (home / "skills" / ".trash" / "123-x" / "old-skill" / "SKILL.md").write_text(
+        "---\nname: old-skill\ndescription: deleted\n---\nGone.\n")
     (home / "commands").mkdir()
     (home / "commands" / "standup.md").write_text("Write my standup.\n")
     (home / "agents").mkdir()

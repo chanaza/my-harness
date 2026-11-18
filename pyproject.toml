@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "my-harness"
-version = "0.7.2"
+version = "0.7.3"
 description = "A tool-agnostic engine for keeping your AI harness (instructions, skills, memory, sessions) portable across AI tools."
 readme = "README.md"
 requires-python = ">=3.11"

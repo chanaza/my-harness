@@ -76,7 +76,10 @@ class ClaudeCodeHarvester:
 
     def _skills(self) -> Iterator[Captured]:
         for scope, base in self._scopes():
-            for main in sorted((base / "skills").rglob("SKILL.md")) if (base / "skills").is_dir() else []:
+            skills = base / "skills"
+            for main in sorted(skills.rglob("SKILL.md")) if skills.is_dir() else []:
+                if _in_hidden_folder(main, skills):
+                    continue  # e.g. skills/.trash: deleted skills are not the user's skills
                 folder = main.parent
                 files = {p.relative_to(folder).as_posix(): p.read_bytes()
                          for p in sorted(folder.rglob("*"))
@@ -87,6 +90,8 @@ class ClaudeCodeHarvester:
         for scope, base in self._scopes():
             folder = base / "commands"
             for path in sorted(folder.rglob("*.md")) if folder.is_dir() else []:
+                if _in_hidden_folder(path, folder):
+                    continue
                 yield Captured(Kind.SKILL, path.stem, str(path), {"SKILL.md": path.read_bytes()},
                                meta={"source": "command"}, scope=scope)
 
@@ -153,6 +158,11 @@ class ClaudeCodeHarvester:
                 files = {f"output-styles/{p.name}": p.read_bytes() for p in sorted(styles.glob("*.md"))}
                 if files:
                     yield Captured(Kind.NATIVE, "output-styles", str(styles), files, scope=scope)
+
+
+def _in_hidden_folder(path: Path, root: Path) -> bool:
+    """Whether ``path`` sits inside a dot-folder under ``root`` (.trash, .staging, ...)."""
+    return any(part.startswith(".") for part in path.relative_to(root).parts[:-1])
 
 
 def _read_json(path: Path) -> dict[str, Any]:
