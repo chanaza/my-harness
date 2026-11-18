@@ -49,6 +49,17 @@ class FilesystemStorage(Storage):
         with path.open("a", encoding="utf-8") as f:
             f.write(text)
 
+    def write_bytes(self, key: str, data: bytes) -> None:
+        path = self._path(key)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    def read_bytes(self, key: str) -> bytes:
+        path = self._path(key)
+        if not path.is_file():
+            raise StorageError(f"No document at {key!r}")
+        return path.read_bytes()
+
     def read_text(self, key: str) -> str:
         path = self._path(key)
         if not path.is_file():

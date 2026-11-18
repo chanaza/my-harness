@@ -44,6 +44,13 @@
               "cloud"
             ],
             "description": "Where this account's tool runs: on your computer (local) or in a cloud session (cloud)."
+          },
+          "previous_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ids this profile had before being renamed (references to them are rewritten)."
           }
         },
         "additionalProperties": false

@@ -196,3 +196,24 @@ def test_workspace_scanner_finds_nested_repos(tmp_path: Path):
     git("init", "-q", cwd=tmp_path / "a")
     (tmp_path / "plain").mkdir()
     assert [r.path for r in WorkspaceScanner(tmp_path).scan()] == ["a"]
+
+
+def test_rename_moves_derived_names_and_finishes_partial_renames(repo: ContentRepo, tmp_path, monkeypatch):
+    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "home"))
+    registry = ProfileRegistry(repo)
+    registry.add("claude-code", "personal", environment="local")
+    old, new = "claude-code-personal-local", "claude-code-work-local"
+    MemoryStore(repo).put(f"{old}-projects-notes", "x", Origin.now(old))
+
+    registry.rename(old, new)
+    assert repo.path("memory", f"{new}-projects-notes.md").is_file()
+    assert f"id: {new}-projects-notes" in repo.path("memory", f"{new}-projects-notes.md").read_text()
+    assert registry.get(new).previous_ids == [old]
+
+    # an older engine left a file with the old name behind: running rename again finishes it
+    leftover = repo.path("memory", f"{old}-other.md")
+    leftover.write_text(repo.path("memory", f"{new}-projects-notes.md").read_text()
+                        .replace(f"{new}-projects-notes", f"{old}-other"))
+    changes = registry.rename(old, new)
+    assert any("-other.md" in c for c in changes) and not leftover.exists()
+    assert validate(repo).ok, validate(repo).problems

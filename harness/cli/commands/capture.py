@@ -87,11 +87,13 @@ class ProfileSetCommand(Command):
         repo_argument(parser)
 
     def run(self, args: argparse.Namespace) -> int:
+        repo = open_repo(args)
         try:
-            profile = ProfileRegistry(open_repo(args)).update(
+            profile = ProfileRegistry(repo).update(
                 args.profile, label=args.label, environment=args.environment, description=args.description)
         except ProfileError as exc:
             raise ErrorExit(str(exc)) from None
+        GitSync(repo.root, repo.config.git).sync(f"profile {profile.id} updated", push=True)
         print(f"Profile {profile.id}: {profile.tool}, {profile.environment or '-'}, {profile.label}")
         return 0
 
@@ -111,7 +113,7 @@ class ProfileRenameCommand(Command):
             changes = ProfileRegistry(repo).rename(args.old, args.new)
         except ProfileError as exc:
             raise ErrorExit(str(exc)) from None
-        LocalHome().rename_profile(args.old, args.new)
+        LocalHome().rename_profile(args.old, args.new)  # no-op when already re-pointed
         for change in changes:
             print(f"  ~ {change}")
         GitSync(repo.root, repo.config.git).sync(f"rename profile {args.old} -> {args.new}", push=True)

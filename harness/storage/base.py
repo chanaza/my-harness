@@ -15,6 +15,8 @@ To add a backend (e.g. Google Drive API, Postgres, S3):
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 
@@ -23,7 +25,7 @@ class StorageError(Exception):
 
 
 class Storage(ABC):
-    """Key/value storage for text documents.
+    """Key/value storage for documents (text and binary).
 
     Keys are forward-slash paths such as ``claude-code/<session-id>/transcript.jsonl``.
     """
@@ -59,3 +61,16 @@ class Storage(ABC):
     @abstractmethod
     def delete(self, key: str) -> None:
         """Remove the document at ``key``. Missing keys are ignored."""
+
+    @abstractmethod
+    def write_bytes(self, key: str, data: bytes) -> None:
+        """Create or replace a binary document (uploaded or generated files)."""
+
+    @abstractmethod
+    def read_bytes(self, key: str) -> bytes:
+        """Return a binary document. Raise StorageError if missing."""
+
+    @contextmanager
+    def batch(self) -> Iterator[None]:
+        """Group many writes. Backends with a cost per write (e.g. git push) publish once at the end."""
+        yield

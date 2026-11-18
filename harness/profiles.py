@@ -33,6 +33,7 @@ class Profile:
     added_at: str
     environment: str | None = None
     description: str | None = None
+    previous_ids: list[str] | None = None
 
     @staticmethod
     def make_id(tool: str, label: str, environment: str | None = None) -> str:
@@ -92,11 +93,31 @@ class ProfileRegistry:
         return changed
 
     def rename(self, old: str, new: str) -> list[str]:
-        """Rename a profile everywhere in the repository. Returns what was changed."""
+        """Rename a profile everywhere in the repository. Returns what was changed.
+
+        Also finishes a rename that an older engine version did only partly: when
+        ``new`` is registered and ``old`` is not, only the leftovers are fixed.
+        Every step is idempotent.
+        """
         new = slugify(new)
-        if new in self.ids():
-            raise ProfileError(f"Profile {new!r} already exists")
-        current = self.get(old)
+        ids = self.ids()
+        finishing = old not in ids and new in ids
+        if not finishing:
+            if new in ids:
+                raise ProfileError(f"Profile {new!r} already exists")
+            self.get(old)  # raises for an unknown profile
+        changes = self._move_folders(old, new) + self._rewrite_references(old, new) + \
+            self._rename_files(old, new)
+        if not finishing:
+            self._save([self._renamed(p, old, new) if p.id == old else p for p in self.all()])
+        return changes
+
+    @staticmethod
+    def _renamed(profile: Profile, old: str, new: str) -> Profile:
+        previous = list(dict.fromkeys([*(profile.previous_ids or []), old]))
+        return Profile(**{**profile.to_dict(), "id": new, "previous_ids": previous})
+
+    def _move_folders(self, old: str, new: str) -> list[str]:
         changes = []
         for pattern in self.PROFILE_FOLDERS:
             source = self.repo.path(pattern.format(id=old))
@@ -105,20 +126,36 @@ class ProfileRegistry:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(source), str(target))
                 changes.append(f"{pattern.format(id=old)} -> {pattern.format(id=new)}")
+        return changes
+
+    def _rewrite_references(self, old: str, new: str) -> list[str]:
+        """Provenance and meta references, `native:` keys, storage keys, and ids derived
+        from the profile id (memory entries and their links)."""
         reference = re.compile(rf"^(\s*(?:-\s*)?profile:\s*){re.escape(old)}(\s*)$", re.MULTILINE)
+        derived = re.compile(rf"(?<![a-z0-9-]){re.escape(old)}(?=-)")  # e.g. id: <old>-preferences-...
+        changes = []
         for path in sorted(self.repo.root.rglob("*")):
             if path.suffix not in (".yaml", ".md") or ".git" in path.parts or path == self.path:
                 continue
             text = path.read_text("utf-8")
-            updated = text
-            if old in text:  # provenance/meta references, `native:` keys and storage keys
-                updated = reference.sub(rf"\g<1>{new}\g<2>", text)
-                updated = updated.replace(f" {old}:", f" {new}:").replace(f" {old}/", f" {new}/")
+            if old not in text:
+                continue
+            updated = reference.sub(rf"\g<1>{new}\g<2>", text)
+            updated = updated.replace(f" {old}:", f" {new}:").replace(f" {old}/", f" {new}/")
+            updated = derived.sub(new, updated)
             if updated != text:
                 path.write_text(updated, encoding="utf-8")
                 changes.append(path.relative_to(self.repo.root).as_posix())
-        renamed = Profile(**{**current.to_dict(), "id": new})
-        self._save([renamed if p.id == old else p for p in self.all()])
+        return changes
+
+    def _rename_files(self, old: str, new: str) -> list[str]:
+        changes = []
+        for path in sorted(self.repo.root.rglob(f"*{old}*")):
+            if ".git" in path.parts or not path.is_file():
+                continue
+            target = path.with_name(path.name.replace(old, new))
+            path.rename(target)
+            changes.append(f"{path.relative_to(self.repo.root).as_posix()} -> {target.name}")
         return changes
 
     def _save(self, profiles: list[Profile]) -> None:

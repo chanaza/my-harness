@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,7 @@ class GitStorage(Storage):
         self.timeout = timeout
         self._files = FilesystemStorage(self.checkout)
         self._ready = False
+        self._deferred = False
 
     @classmethod
     def from_settings(cls, settings: dict[str, Any]) -> GitStorage:
@@ -57,6 +60,25 @@ class GitStorage(Storage):
         self._prepare()
         self._files.append_text(key, text)
         self._publish(f"append {key}")
+
+    def write_bytes(self, key: str, data: bytes) -> None:
+        self._prepare()
+        self._files.write_bytes(key, data)
+        self._publish(f"write {key}")
+
+    def read_bytes(self, key: str) -> bytes:
+        self._prepare()
+        return self._files.read_bytes(key)
+
+    @contextmanager
+    def batch(self) -> Iterator[None]:
+        """Commit and push once for all writes inside the block."""
+        self._deferred = True
+        try:
+            yield
+        finally:
+            self._deferred = False
+            self._publish("batch")
 
     def read_text(self, key: str) -> str:
         self._prepare()
@@ -94,6 +116,8 @@ class GitStorage(Storage):
         self._ready = True
 
     def _publish(self, message: str) -> None:
+        if self._deferred or not self._ready:
+            return
         self._git("add", "-A")
         if self._git("diff", "--cached", "--quiet", check=False).returncode != 0:
             self._git("commit", "-q", "-m", message)
