@@ -73,6 +73,10 @@ class ClaudeAiAdapter(AccountBoundAdapter):
     def is_present(self) -> bool:
         return bool(self.exports())
 
+    def is_connected(self) -> bool:
+        """Connected once its accounts (e-mails) are named, even before the first export arrives."""
+        return bool(self.bindings())
+
     def accounts(self) -> list[Account]:
         summary: dict[str, list[ClaudeAiExport]] = {}
         for export in self.exports():
@@ -102,8 +106,8 @@ class ClaudeAiAdapter(AccountBoundAdapter):
         """Put the export skill where the user will find it and open the page to upload it."""
         target = self.deliver_skill()
         accounts = "each of your claude.ai accounts" if len(profiles) > 1 else "your claude.ai account"
-        return [f"In {accounts}, upload the file {target} in claude.ai (a page just opened): "
-                f"Settings > Capabilities > Skills > Upload skill. "
+        return [f"In {accounts}, upload the file {target} on the claude.ai page that just opened "
+                f"(sign in to each account in turn). "
                 f"Can't find the file later? Run: python -m harness skill claude-ai",
                 "Then, in Cowork (in each account), type: Set up my harness export"]
 

@@ -167,7 +167,8 @@ def test_setup_prepares_the_skill_and_says_what_is_left(repo: ContentRepo, tmp_p
     repo.config_file.update({"claude_ai.watch_folder": str(tmp_path / "empty")})
     result = SetupWizard(Answers("me@example.com", "personal", str(tmp_path / "f"), False), LocalHome()).run(
         SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
-    assert Path(result.next_steps[0].split("upload the file ")[1].split(" in claude.ai")[0]).is_file()
+    target = result.next_steps[0].split("upload the file ")[1].split(" on the claude.ai page")[0]
+    assert Path(target).is_file() and target.endswith("harness-export.zip")
     assert "Set up my harness export" in result.next_steps[-1]
 
 
@@ -210,3 +211,17 @@ def test_typed_accounts_are_named_by_their_e_mail_without_a_found_list(repo: Con
                                                         environment="local"))
     assert not any(s.startswith("Found") for s in prompter.said)
     assert any("Name for me@example.com" in q for q in prompter.questions)
+
+
+def test_named_accounts_count_as_connected_before_any_export(repo: ContentRepo, tmp_path: Path, monkeypatch):
+    class FakeScheduler:
+        def install(self, name, args, minutes):
+            return "scheduled"
+
+    monkeypatch.setattr("harness.scheduler.system_scheduler", FakeScheduler)
+    repo.config_file.update({"claude_ai.watch_folder": str(tmp_path / "empty")})
+    adapter = ClaudeAiAdapter(LocalHome())
+    assert not adapter.is_connected()
+    SetupWizard(Answers("me@example.com", "personal", str(tmp_path / "f"), False), LocalHome()).run(
+        SetupOptions(tool="claude-ai", repo=str(repo.root), environment="local"))
+    assert ClaudeAiAdapter(LocalHome()).is_connected()   # the next installer run only updates

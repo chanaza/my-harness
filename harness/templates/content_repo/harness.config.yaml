@@ -76,7 +76,7 @@ claude_ai:
   # How long after the request the "download" scheduled task runs, in hours.
   download_after_hours: 3
   # The claude.ai page opened for uploading the export skill.
-  skills_page: https://claude.ai/settings
+  skills_page: https://claude.ai/new#customize/skills/new/upload
   # Where the export skill file is written for you to upload (empty = your desktop).
   skill_folder: ~/Downloads
 

@@ -62,7 +62,7 @@ for your claude.ai account e-mail(s) (leave it empty to skip). If you give
 them, it puts `harness-export.zip` in your Downloads folder
 (setting `claude_ai.skill_folder`) and opens claude.ai:
 
-1. Upload the file there (Skills > Upload skill), in each account.
+1. Upload the file on the page that opened, in each account.
 2. In Cowork, in each account, type: `Set up my harness export`.
 
 Can't find the file? `python -m harness skill claude-ai` creates it again and

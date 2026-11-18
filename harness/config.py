@@ -56,7 +56,7 @@ class ClaudeAiSettings:
     archive_exports: bool = True
     export_every_days: int = 7
     download_after_hours: int = 3
-    skills_page: str = "https://claude.ai/settings"
+    skills_page: str = "https://claude.ai/new#customize/skills/new/upload"
     skill_folder: str = "~/Downloads"
 
 
