@@ -34,13 +34,11 @@ from ...repo import ContentRepo
 from ...sessions import SessionRecord
 from ...workspace import WorkspaceScanner
 from ..base import Adapter, adapters
-from .harvester import TOOL, ClaudeCodeHarvester
+from .constants import HOOK_EVENTS, HOOK_MARKER, SKILL_NAME, TOOL
+from .harvester import ClaudeCodeHarvester
 from .locations import ClaudeCodeLocations
 from .transcript import ContextMeter, TranscriptReader
 
-HOOK_EVENTS = ("SessionStart", "UserPromptSubmit", "Stop", "PreCompact", "SessionEnd")
-HOOK_MARKER = "-m harness hook claude-code"
-SKILL_NAME = "harness-save"
 T = TypeVar("T")
 
 
@@ -87,6 +85,12 @@ class ClaudeCodeAdapter(Adapter):
         items = self.harvest(config.harvest_exclude)
         state = self.local.state("harvest", profile)
         return HarvestSync(repo, state).run(items, Origin.now(profile, session))
+
+    def prune_harvest(self) -> list[str]:
+        """Remove previously harvested items that are now excluded (by config or as engine-owned)."""
+        repo, profile = self.repo(), self.profile_id()
+        excluded = ClaudeCodeHarvester(self.locations, repo.config.harvest_exclude).is_excluded
+        return HarvestSync(repo, self.local.state("harvest", profile)).prune(excluded, profile)
 
     # --- hooks -----------------------------------------------------------------------
 

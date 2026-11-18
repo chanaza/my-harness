@@ -159,6 +159,8 @@ class HarvestCommand(Command):
         _tool_argument(parser)
         parser.add_argument("--project", help="Also harvest this project folder's settings.")
         parser.add_argument("--dry-run", action="store_true", help="List what would be captured.")
+        parser.add_argument("--prune", action="store_true",
+                            help="Also remove items harvested earlier that are now excluded.")
 
     def run(self, args: argparse.Namespace) -> int:
         adapter = adapters.create(args.tool)
@@ -172,6 +174,8 @@ class HarvestCommand(Command):
                 return 0
             report = adapter.run_harvest()
             repo = adapter.repo()
+            for removed in adapter.prune_harvest() if args.prune else []:
+                print(f"  - removed {removed}")
         except HarnessNotConfigured as exc:
             raise ErrorExit(str(exc)) from None
         for problem in report.errors:

@@ -40,6 +40,10 @@ class ItemWriter(ABC):
     def write(self, item: Captured, origin: Origin) -> WriteResult:
         """Write ``item`` into the repository."""
 
+    def location(self, name: str, scope: str, profile: str) -> Path | None:
+        """Where this writer puts an item by convention (None if not separable)."""
+        return None
+
     # --- shared helpers -------------------------------------------------------
 
     def _conflicting(self, existing: dict[str, Any] | None, origin: Origin) -> bool:
@@ -68,6 +72,9 @@ class SkillWriter(ItemWriter):
 
     kind = Kind.SKILL
     MAIN = "SKILL.md"
+
+    def location(self, name: str, scope: str, profile: str) -> Path | None:
+        return self.repo.path("core", "skills", slugify(name))
 
     def write(self, item: Captured, origin: Origin) -> WriteResult:
         folder = self.repo.path("core", "skills", slugify(item.name))

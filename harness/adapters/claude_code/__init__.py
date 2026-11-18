@@ -1,6 +1,7 @@
 """Claude Code adapter: hooks for capture, a harvester for what was built, an installer."""
 
-from .adapter import HOOK_EVENTS, ClaudeCodeAdapter, HarnessNotConfigured
+from .adapter import ClaudeCodeAdapter, HarnessNotConfigured
+from .constants import HOOK_EVENTS
 from .harvester import ClaudeCodeHarvester
 from .locations import ClaudeCodeLocations
 from .transcript import ContextMeter, TranscriptReader

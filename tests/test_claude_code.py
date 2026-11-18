@@ -147,3 +147,29 @@ def test_hook_survives_unusable_storage(adapter: ClaudeCodeAdapter, repo: Conten
     response = adapter.handle_hook(event("Stop", transcript, adapter.locations.project_dir))
     assert response["decision"] == "block"  # the checkpoint still happens
     assert "live log failed" in (adapter.local.root / "logs" / "harness.log").read_text()
+
+
+def test_engine_artifacts_are_not_harvested(adapter: ClaudeCodeAdapter, repo: ContentRepo):
+    items = adapter.harvest()
+    assert not any(i.name == "harness-save" for i in items)
+    settings = next(i for i in items if i.kind is Kind.NATIVE and i.name == "settings")
+    assert b"harness hook" not in settings.files["settings.json"]
+
+
+def test_prune_removes_newly_excluded(adapter: ClaudeCodeAdapter, repo: ContentRepo):
+    adapter.run_harvest()
+    skill = repo.path("core", "skills", "deck-review")
+    assert skill.is_dir()
+    repo.config_file.update({"harvest.exclude": ["skill:deck-review"]})
+    assert adapter.prune_harvest() == ["core/skills/deck-review"]
+    assert not skill.exists()
+    assert repo.path("core", "agents", "researcher.yaml").is_file()  # untouched
+
+
+def test_prune_works_for_items_harvested_before_paths_were_recorded(adapter, repo):
+    adapter.run_harvest()
+    state = adapter.local.state("harvest", PROFILE)
+    state.set("written", {})
+    state.save()
+    repo.config_file.update({"harvest.exclude": ["skill:deck-review"]})
+    assert adapter.prune_harvest() == ["core/skills/deck-review"]

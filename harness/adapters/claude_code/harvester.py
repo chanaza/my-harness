@@ -21,9 +21,9 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ...harvest import Captured, Kind
+from .constants import HOOK_MARKER, SKILL_NAME, TOOL
 from .locations import ClaudeCodeLocations
 
-TOOL = "claude-code"
 MAX_FILE_BYTES = 5 * 1024 * 1024
 #: Settings keys that can hold secrets or machine-specific credentials helpers.
 SECRET_SETTINGS = frozenset({"env", "apiKeyHelper", "awsAuthRefresh", "awsCredentialExport",
@@ -40,11 +40,14 @@ class ClaudeCodeHarvester:
         for source in (self._instructions, self._skills, self._commands, self._agents,
                        self._memory, self._mcp_servers, self._plugins, self._native):
             items.extend(source())
-        return [i for i in items if not self._excluded(i)]
+        return [i for i in items if not self.is_excluded(i.kind.value, i.name)]
 
-    def _excluded(self, item: Captured) -> bool:
-        label = f"{item.kind.value}:{item.name}"
-        return any(fnmatch(label, pattern) for pattern in self.exclude)
+    #: Installed by the engine itself, never the user's content.
+    ENGINE_OWNED = (f"skill:{SKILL_NAME}",)
+
+    def is_excluded(self, kind: str, name: str) -> bool:
+        label = f"{kind}:{name}"
+        return any(fnmatch(label, pattern) for pattern in (*self.ENGINE_OWNED, *self.exclude))
 
     # --- scopes ---------------------------------------------------------------
 
@@ -137,7 +140,8 @@ class ClaudeCodeHarvester:
         for scope, base in self._scopes():
             settings = base / "settings.json"
             if settings.is_file():
-                clean = {k: v for k, v in _read_json(settings).items() if k not in SECRET_SETTINGS}
+                clean = _without_engine_hooks(
+                    {k: v for k, v in _read_json(settings).items() if k not in SECRET_SETTINGS})
                 if clean:
                     yield Captured(Kind.NATIVE, "settings", str(settings),
                                    {"settings.json": json.dumps(clean, indent=2).encode()}, scope=scope)
@@ -154,6 +158,17 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _without_engine_hooks(settings: dict[str, Any]) -> dict[str, Any]:
+    """Drop the hooks the engine installed; keep the user's own."""
+    hooks = {}
+    for event, groups in (settings.get("hooks") or {}).items():
+        kept = [g for g in groups if not any(HOOK_MARKER in h.get("command", "") for h in g.get("hooks", []))]
+        if kept:
+            hooks[event] = kept
+    cleaned = {k: v for k, v in settings.items() if k != "hooks"}
+    return {**cleaned, "hooks": hooks} if hooks else cleaned
 
 
 def _describe_mcp(spec: dict[str, Any]) -> str:
