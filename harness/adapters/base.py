@@ -70,6 +70,10 @@ class Adapter(ABC):
         """Prepare anything the user still has to do by hand; return those steps in plain words."""
         return []
 
+    def deliver_skill(self, target: Path | None = None) -> Path | None:
+        """Write the adapter's skill (if any) where the user can upload it; return its path."""
+        return None
+
     def skill_package(self) -> tuple[str, dict[str, bytes]] | None:
         """A skill to install in the tool's account (name, files), when the adapter offers one."""
         return None

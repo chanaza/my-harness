@@ -34,6 +34,7 @@ saving anything.
 **2. If you use claude.ai,** the installer puts a file on your desktop and opens
 claude.ai's skills page: upload the file there. Then, in Cowork, type
 `Set up my harness export`. That's all.
+(Can't find the file? Run `python -m harness skill claude-ai`: it makes it again and shows it.)
 
 From then on, everything is saved by itself. Nothing is shown while it runs.
 

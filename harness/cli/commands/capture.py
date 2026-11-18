@@ -6,7 +6,6 @@ import argparse
 import json
 import sys
 import traceback
-import zipfile
 from collections import Counter
 from pathlib import Path
 
@@ -347,29 +346,21 @@ class BackfillCommand(Command):
 
 class SkillCommand(Command):
     name = "skill"
-    help = "Create the skill a tool's account needs (a .zip to upload), e.g. `harness skill claude-ai`."
+    help = ("Create again the skill a tool's account needs, put it on the desktop and show it, "
+            "e.g. `harness skill claude-ai`.")
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
         _tool_argument(parser)
-        parser.add_argument("--output", help="Where to write the .zip (default: current folder).")
+        parser.add_argument("--output", help="Write the .zip here instead of the desktop.")
 
     def run(self, args: argparse.Namespace) -> int:
-        package = adapters.create(args.tool).skill_package()
-        if not package:
-            raise ErrorExit(f"{args.tool} has no skill to install.")
-        name, files = package
-        target = Path(args.output or f"{name}.zip").expanduser()
-        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
-            for path, content in files.items():
-                archive.writestr(path, content)
-        print(f"Skill written to {target.resolve()}")
-        print("Upload it in claude.ai: Settings > Capabilities > Skills > Upload skill.")
         adapter = adapters.create(args.tool)
-        tasks = adapter.scheduled_tasks() if hasattr(adapter, "scheduled_tasks") else []
-        if tasks:
-            print("Then create these scheduled tasks in Cowork:")
-            for when, prompt in tasks:
-                print(f"  - {when}: {prompt}")
+        target = adapter.deliver_skill(Path(args.output).expanduser() if args.output else None)
+        if target is None:
+            raise ErrorExit(f"{args.tool} has no skill to install.")
+        print(f"Skill file: {target.resolve()} (a window showing it has opened)")
+        print("Upload it on the claude.ai page that opened: Skills > Upload skill.")
+        print("Then, in Cowork, type: Set up my harness export")
         return 0
 
 

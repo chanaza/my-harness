@@ -129,16 +129,16 @@ def test_export_of_an_unconnected_account_is_reported(connected: ClaudeAiAdapter
 
 def test_export_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: ContentRepo, tmp_path: Path,
                                              capsys):
+    from harness.adapters.claude_ai import adapter as module
     from harness.cli import main
     repo.config_file.update({"claude_ai.export_every_days": 14})
-    target = tmp_path / "skill.zip"
-    assert main(["skill", "claude-ai", "--output", str(target)]) == 0
+    assert main(["skill", "claude-ai"]) == 0          # no options: to the desktop, shown
+    target = module._visible_folder() / "harness-claude-ai-export.zip"
     with zipfile.ZipFile(target) as archive:
         text = archive.read("harness-claude-ai-export/SKILL.md").decode()
     assert "every 14 days" in text and str(tmp_path / "Downloads") in text
-    assert "3 hours later" in text and "${" not in text
-    out = capsys.readouterr().out
-    assert "in request mode" in out and "in download mode" in out
+    assert "3 hours" in text and "${" not in text
+    assert "Set up my harness export" in capsys.readouterr().out
 
 
 def test_accounts_can_be_named_before_the_first_export(repo: ContentRepo, tmp_path: Path, monkeypatch):

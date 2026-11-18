@@ -65,6 +65,9 @@ claude.ai's skills page:
 1. Upload the file there (Skills > Upload skill), in each account.
 2. In Cowork, in each account, type: `Set up my harness export`.
 
+Can't find the file? `python -m harness skill claude-ai` creates it again on
+your desktop, shows it, and opens the upload page.
+
 Cowork then requests an export every week and downloads it a few hours later
 (both times are settings: `claude_ai.export_every_days`,
 `claude_ai.download_after_hours`), and your computer saves everything in it:

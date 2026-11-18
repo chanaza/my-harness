@@ -86,18 +86,24 @@ class ClaudeAiAdapter(AccountBoundAdapter):
                                            f"{len(latest.projects())} projects"))
         return accounts
 
-    def after_setup(self, profiles: list[str]) -> list[str]:
-        """Put the export skill where the user will find it and open the page to upload it."""
+    def deliver_skill(self, target: Path | None = None) -> Path:
+        """Write the export skill where the user sees it, show it, and open the upload page."""
         name, files = self.skill_package()
-        target = _visible_folder() / f"{name}.zip"
+        target = target or _visible_folder() / f"{name}.zip"
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
             for path, content in files.items():
                 archive.writestr(path, content)
         _reveal(target)
         webbrowser.open(self.SKILLS_PAGE)
+        return target
+
+    def after_setup(self, profiles: list[str]) -> list[str]:
+        """Put the export skill where the user will find it and open the page to upload it."""
+        target = self.deliver_skill()
         accounts = "each of your claude.ai accounts" if len(profiles) > 1 else "your claude.ai account"
         return [f"In {accounts}, upload the file {target} (a window showing it just opened) "
-                f"on the claude.ai page that also opened ({self.SKILLS_PAGE}): Skills > Upload skill.",
+                f"on the claude.ai page that also opened ({self.SKILLS_PAGE}): Skills > Upload skill. "
+                f"Can't find it later? Run: python -m harness skill claude-ai",
                 "Then, in Cowork (in each account), type: Set up my harness export"]
 
     def scheduled_tasks(self) -> list[tuple[str, str]]:
