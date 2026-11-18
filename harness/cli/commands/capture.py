@@ -244,12 +244,17 @@ class InboxCommand(Command):
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
         repo_argument(parser)
+        parser.add_argument("--retry-rejected", action="store_true",
+                            help="Try the files in inbox/rejected/ again (e.g. after an engine fix).")
 
     def run(self, args: argparse.Namespace) -> int:
         from ...inbox import InboxProcessor, write_connector_instructions
         repo = open_repo(args)
         git = GitSync(repo.root, repo.config.git)
         git.pull()
+        if args.retry_rejected:
+            for path in InboxProcessor(repo).retry_rejected():
+                print(f"  ~ retrying {path}")
         write_connector_instructions(repo)  # the skills' instructions follow this engine
         report = InboxProcessor(repo).run()
         for problem in report.errors:

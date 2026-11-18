@@ -129,8 +129,10 @@
                 "enum": [
                   "mine",
                   "anthropic",
-                  "plugin"
-                ]
+                  "plugin",
+                  "marketplace"
+                ],
+                "description": "mine = the user built it; anything else is kept by name only."
               },
               "files": {
                 "$ref": "#/$defs/files"
@@ -204,8 +206,11 @@
               "origin": {
                 "enum": [
                   "mine",
+                  "anthropic",
+                  "plugin",
                   "marketplace"
-                ]
+                ],
+                "description": "mine = the user built it; anything else is kept by name only."
               },
               "files": {
                 "$ref": "#/$defs/files"

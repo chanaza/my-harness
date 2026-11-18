@@ -5,4 +5,4 @@ validated and stored. A content repository (e.g. a personal harness) holds
 only data and is created and maintained exclusively through this engine.
 """
 
-__version__ = "0.17.1"
+__version__ = "0.17.2"

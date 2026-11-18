@@ -37,7 +37,8 @@ Use an empty list for nothing; put every kind you had no view of at all into
 **Full content for everything the user built** (origin `mine`): every file of each
 skill (read them where skills are kept for you, e.g. /mnt/skills/user/<skill>/), every
 file of each plugin and agent, each project's instructions and knowledge files, each
-app's code. If you cannot read an item's content, keep the item with
+app's code (read each app's source with the artifact tools when you have them, and copy
+it exactly). If you cannot read an item's content, keep the item with
 `not_readable: <why>` instead of `files`: never send an empty or made-up copy.
 Others' items (Anthropic's skills, marketplace plugins): name and description only.
 
@@ -62,7 +63,7 @@ memory:                                # name = the topic (e.g. the memory file'
 skills:                                # every skill available here
   - name: ...
     description: ...
-    origin: mine                       # mine | anthropic | plugin
+    origin: mine                       # mine | anthropic | plugin | marketplace
     files:                             # mine: every file, in full
       - {path: SKILL.md, content: "..."}
       - {path: references/x.md, content: "..."}
@@ -70,7 +71,7 @@ skills:                                # every skill available here
 agents:                                # sub-agents (e.g. from plugins)
   - {name: ..., description: ..., files: [{path: agent.md, content: "..."}]}
 plugins:
-  - {name: ..., description: ..., origin: mine, files: [{path: ..., content: "..."}]}
+  - {name: ..., description: ..., origin: mine, files: [{path: ..., content: "..."}]}   # mine | anthropic | marketplace
 connections:                           # connectors and MCP servers, names only
   - {name: ..., kind: connector, purpose: ...}         # connector | mcp
 projects:

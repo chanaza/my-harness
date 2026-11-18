@@ -174,6 +174,18 @@ class InboxProcessor:
         recorder.write(file.body, "saved through the harness connector")
         report.counts["conversations saved"] += 1
 
+    def retry_rejected(self) -> list[str]:
+        """Put rejected files back into the inbox (their problem notes are dropped)."""
+        moved = []
+        for path in sorted(self.rejected.glob("*")) if self.rejected.is_dir() else []:
+            if path.name.endswith(".problem.txt"):
+                path.unlink()
+                continue
+            self.folder.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(path), str(self.folder / path.name))
+            moved.append(path.name)
+        return moved
+
     def _reject(self, path: Path, reason: str) -> None:
         self.rejected.mkdir(parents=True, exist_ok=True)
         shutil.move(str(path), str(self.rejected / path.name))

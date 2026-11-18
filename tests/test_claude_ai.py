@@ -279,6 +279,8 @@ skills:
       - {path: references/style.md, content: "Hebrew, right to left."}
   - {name: drafts, description: Old drafts, origin: mine, not_readable: "files not visible"}
   - {name: pdf, description: PDFs, origin: anthropic}
+plugins:
+  - {name: cowork-plugin-management, description: Plugins, origin: anthropic}
 connections:
   - {name: Gmail, kind: connector, purpose: e-mail}
 projects:
@@ -336,6 +338,9 @@ def test_connector_inbox_is_saved_in_the_harness_form(connected: ClaudeAiAdapter
     assert any("'nobody' is not registered" in e for e in report.errors), report.errors
     rejected = repo.path("inbox", "rejected")
     assert (rejected / "describe-20261119-0601.yaml.problem.txt").is_file()
+    processor = InboxProcessor(repo)
+    assert "describe-20261119-0601.yaml" in processor.retry_rejected()        # e.g. after an engine fix
+    processor.run()                                                          # still wrong: back again
     assert not any(inbox.iterdir())                                            # the inbox is emptied
     profile = "claude-ai-personal-cloud"
     assert "Check sources." in repo.path("core", "skills", "deck-review", "SKILL.md").read_text()
