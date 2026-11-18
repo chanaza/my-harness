@@ -20,6 +20,12 @@ def validate(repo: ContentRepo) -> Report:
     return RepoValidator.default(repo.layout).validate(repo)
 
 
+@pytest.fixture(autouse=True)
+def isolated_harness_home(tmp_path: Path, monkeypatch) -> None:
+    """Tests never touch the real ~/.my-harness (settings, state, logs) of the machine."""
+    monkeypatch.setenv("HARNESS_HOME", str(tmp_path / "isolated-harness-home"))
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> ContentRepo:
     options = InitOptions(owner="Test", storage_paths={"transcripts": str(tmp_path / "transcripts")})

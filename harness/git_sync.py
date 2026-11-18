@@ -7,10 +7,13 @@ returned as messages for the caller to log.
 from __future__ import annotations
 
 import subprocess
+import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from .config import GitSettings
+from .local import LocalHome
 
 
 @dataclass(frozen=True)
@@ -21,10 +24,21 @@ class SyncResult:
 
 
 class GitSync:
-    def __init__(self, root: Path, settings: GitSettings, timeout: float = 60) -> None:
+    """Commit, pull and push a harness repository.
+
+    Two machines changing the same YAML file are reconciled by content (see
+    harness/merge.py), through a Git merge driver this class registers locally.
+    Failures are logged (``harness status`` shows them), never raised.
+    """
+
+    MERGE_DRIVER = "harness"
+
+    def __init__(self, root: Path, settings: GitSettings, timeout: float = 60,
+                 log: Callable[[str], None] | None = None) -> None:
         self.root = Path(root)
         self.settings = settings
         self.timeout = timeout
+        self._log = log or LocalHome().log
 
     def is_repository(self) -> bool:
         return (self.root / ".git").exists()
@@ -41,14 +55,14 @@ class GitSync:
             pushed = False
             if push and self.settings.auto_push and self._has_remote():
                 if not self._catch_up():
-                    return SyncResult(committed, False, "git failed: could not merge changes "
-                                      "from the remote; they will be retried next time")
+                    return self._failed(SyncResult(committed, False, "git failed: could not merge "
+                                                   "changes from the remote; retried next time"))
                 # -u keeps the branch linked to origin, so `git status` reports it as pushed.
                 self._git("push", "-q", "-u", "origin", "HEAD")
                 pushed = True
             return SyncResult(committed, pushed)
         except (subprocess.SubprocessError, OSError) as exc:
-            return SyncResult(False, False, f"git failed: {exc}")
+            return self._failed(SyncResult(False, False, f"git failed: {exc}"))
 
     def pull(self) -> bool:
         """Bring in what other machines pushed (settings included) before working.
@@ -59,8 +73,12 @@ class GitSync:
         if not self.is_repository() or not self._has_remote():
             return True
         try:
-            return self._catch_up()
-        except (subprocess.SubprocessError, OSError):
+            if self._catch_up():
+                return True
+            self._log(f"git: could not merge changes from the remote in {self.root}")
+            return False
+        except (subprocess.SubprocessError, OSError) as exc:
+            self._log(f"git failed while pulling {self.root}: {exc}")
             return False
 
     def _catch_up(self) -> bool:
@@ -69,6 +87,7 @@ class GitSync:
         Profiles write to separate files, so this almost never conflicts. If it does,
         the rebase is undone and nothing is lost; the push waits for a later turn.
         """
+        self._register_merge_driver()
         branch = self._git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
         if self._git("fetch", "-q", "origin", branch, check=False).returncode != 0:
             return True  # the remote does not have the branch yet: nothing to catch up on
@@ -76,6 +95,23 @@ class GitSync:
             return True
         self._git("rebase", "--abort", check=False)
         return False
+
+    def _register_merge_driver(self) -> None:
+        """Let Git merge the harness's YAML files by content (this clone only, nothing committed)."""
+        command = subprocess.list2cmdline([sys.executable, "-m", "harness", "merge-file"])
+        self._git("config", f"merge.{self.MERGE_DRIVER}.name", "harness YAML merge", check=False)
+        self._git("config", f"merge.{self.MERGE_DRIVER}.driver", f"{command} %O %A %B %P", check=False)
+        attributes = self.root / ".git" / "info" / "attributes"
+        rule = f"*.yaml merge={self.MERGE_DRIVER}"
+        existing = attributes.read_text("utf-8") if attributes.is_file() else ""
+        if rule not in existing:
+            attributes.parent.mkdir(parents=True, exist_ok=True)
+            attributes.write_text(existing + ("" if existing.endswith("\n") or not existing else "\n")
+                                  + rule + "\n", encoding="utf-8")
+
+    def _failed(self, result: SyncResult) -> SyncResult:
+        self._log(f"{result.message} ({self.root})")
+        return result
 
     def _has_remote(self) -> bool:
         return bool(self._git("remote", check=False).stdout.strip())

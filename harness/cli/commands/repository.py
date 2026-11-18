@@ -9,6 +9,7 @@ from ... import yaml_io
 from ...config import ConfigError
 from ...git_sync import GitSync
 from ...local import LocalHome
+from ...merge import StructuredMerge
 from ...migrations import run_migrations
 from ...repo import ContentRepo
 from ...scaffold import SUPPORTED_TOOLS, InitOptions, Scaffolder, ScaffoldError
@@ -162,6 +163,20 @@ def _change_config(repo: ContentRepo, key: str, value: object) -> None:
     except ConfigError as exc:
         raise ErrorExit(str(exc)) from None
     git.sync(f"config: {key}", push=True)
+
+
+class MergeFileCommand(Command):
+    name = "merge-file"
+    help = argparse.SUPPRESS  # called by Git as a merge driver, not by people
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        for name in ("base", "ours", "theirs"):
+            parser.add_argument(name)
+        parser.add_argument("path", nargs="?", default="")
+
+    def run(self, args: argparse.Namespace) -> int:
+        merged = StructuredMerge().merge_file(Path(args.base), Path(args.ours), Path(args.theirs), args.path)
+        return 0 if merged else 1
 
 
 class ConfigCommand(Command):

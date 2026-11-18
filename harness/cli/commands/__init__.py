@@ -13,14 +13,14 @@ from .capture import (
     StatusCommand,
     UpdateCommand,
 )
-from .repository import ConfigCommand, InitCommand, UpgradeCommand, ValidateCommand
+from .repository import ConfigCommand, InitCommand, MergeFileCommand, UpgradeCommand, ValidateCommand
 
 #: Commands exposed by `harness`, in help order.
 DEFAULT_COMMANDS: tuple[type[Command], ...] = (
     SetupCommand, StatusCommand, UpdateCommand,
     InitCommand, ValidateCommand, ConfigCommand, UpgradeCommand,
     ProfileCommand, InstallCommand, HarvestCommand, BackfillCommand, HookCommand,
-    SessionCommand, MemoryCommand,
+    SessionCommand, MemoryCommand, MergeFileCommand,
 )
 
 __all__ = ["DEFAULT_COMMANDS"]
