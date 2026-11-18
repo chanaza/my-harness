@@ -22,10 +22,10 @@ Your harness lives in a **private** GitHub repository.
 
 ### Windows
 
-Open **PowerShell** and run:
+Open a terminal (Command Prompt or PowerShell; either works) and run:
 
-```powershell
-irm https://raw.githubusercontent.com/chanaza/my-harness/main/scripts/install.ps1 | iex
+```
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/chanaza/my-harness/main/scripts/install.ps1 | iex"
 ```
 
 ### macOS / Linux

@@ -1,5 +1,6 @@
 # my-harness installer for Windows.
-#   irm https://raw.githubusercontent.com/chanaza/my-harness/main/scripts/install.ps1 | iex
+#   powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/chanaza/my-harness/main/scripts/install.ps1 | iex"
+#   (works from Command Prompt and from PowerShell)
 # Checks Python and Git, installs (or updates) the engine, then runs the guided setup.
 # Installs CAPTURE only: nothing from your harness is loaded into your tools.
 
