@@ -187,6 +187,8 @@ class ConnectionWriter(ItemWriter):
             action = "created"
         else:
             current.setdefault("available_in", {})[tool] = available
+            if item.meta.get("description") and not str(item.meta["description"]).startswith("Plugin '"):
+                current["description"] = item.meta["description"]  # a real description wins
             current["provenance"] = Provenance.updated(current.get("provenance"), origin)
             action = "updated"
         self._save(path, connections)

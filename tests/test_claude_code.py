@@ -52,6 +52,7 @@ def test_harvester_finds_everything_and_strips_secrets(claude: ClaudeCodeLocatio
     assert "Bearer" not in json.dumps(monday.meta)
     assert (Kind.CONNECTION, "my-plugin") in items
     assert (Kind.CONNECTION, ".staging") not in items and (Kind.CONNECTION, "data") not in items
+    assert items[(Kind.CONNECTION, "my-plugin")].meta["description"] == "Does useful things"
     assert b"secret" not in items[(Kind.NATIVE, "settings")].files["settings.json"]
 
 

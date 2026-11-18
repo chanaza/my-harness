@@ -56,7 +56,8 @@ def claude(tmp_path: Path) -> ClaudeCodeLocations:
     (home / "plugins" / "synced" / "bucket" / ".staging").mkdir()  # internal folders, not plugins
     (home / "plugins" / "synced" / "bucket" / "data").mkdir()
     (home / "plugins" / "synced" / "bucket" / "manifest.json").write_text(
-        json.dumps({"plugins": [{"name": "my-plugin", "pluginId": "p1"}]}))
+        json.dumps({"plugins": [{"name": "my-plugin", "pluginId": "p1",
+                                 "description": "Does useful things"}]}))
     user_config = tmp_path / ".claude.json"
     user_config.write_text(json.dumps({"mcpServers": {"monday": {
         "type": "http", "url": "https://mcp.monday.com/sse", "headers": {"Authorization": "Bearer x"}}}}))

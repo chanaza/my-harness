@@ -124,18 +124,20 @@ class ClaudeCodeHarvester:
 
     def _plugins(self) -> Iterator[Captured]:
         plugins_dir = self.locations.config_dir / "plugins"
-        names: dict[str, str] = {}
+        found: dict[str, tuple[str, str]] = {}  # name -> (origin, description)
         installed = _read_json(plugins_dir / "installed_plugins.json")
         for key in (installed.get("plugins") or {}):
-            names[key.split("@", 1)[0]] = str(plugins_dir / "installed_plugins.json")
-        # Plugins synced from the account: listed by name in a manifest.
+            name = key.split("@", 1)[0]
+            found[name] = (str(plugins_dir / "installed_plugins.json"), f"Plugin '{name}'")
+        # Plugins synced from the account: listed, with a description, in a manifest.
         for manifest in plugins_dir.glob("*/*/manifest.json") if plugins_dir.is_dir() else []:
             for plugin in _read_json(manifest).get("plugins") or []:
                 if isinstance(plugin, dict) and plugin.get("name"):
-                    names.setdefault(plugin["name"], str(manifest))
-        for name, origin in sorted(names.items()):
+                    description = plugin.get("description") or f"Plugin '{plugin['name']}'"
+                    found.setdefault(plugin["name"], (str(manifest), description))
+        for name, (origin, description) in sorted(found.items()):
             yield Captured(Kind.CONNECTION, name, origin, meta={
-                "tool": TOOL, "kind": "plugin", "description": f"Plugin '{name}'"})
+                "tool": TOOL, "kind": "plugin", "description": description})
 
     def _native(self) -> Iterator[Captured]:
         for scope, base in self._scopes():
