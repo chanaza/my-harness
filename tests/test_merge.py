@@ -62,3 +62,15 @@ def test_two_machines_change_the_settings_file_at_once(tmp_path: Path):
     assert merged.harvest_exclude == ["skill:pdf", "skill:docx"] or \
         sorted(merged.harvest_exclude) == ["skill:docx", "skill:pdf"]
     assert "# A checkpoint refreshes" in (second / "harness.config.yaml").read_text()  # comments kept
+
+
+def test_merge_driver_command_survives_a_posix_shell(tmp_path: Path, monkeypatch):
+    """Windows paths must keep their separators when Git runs the driver through sh."""
+    import sys
+
+    monkeypatch.setattr(sys, "executable", r"C:\Users\me\AppData\Python312\python.exe")
+    git(tmp_path, "init", "-q")
+    GitSync(tmp_path, GitSettings(True, True), log=lambda m: None)._register_merge_driver()
+    driver = git(tmp_path, "config", "merge.harness.driver").strip()
+    assert driver.startswith("C:/Users/me/AppData/Python312/python.exe -m harness merge-file")
+    assert "\\" not in driver
