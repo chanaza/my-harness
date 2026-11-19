@@ -180,6 +180,7 @@ def test_setup_prepares_the_skill_and_says_what_is_left(repo: ContentRepo, tmp_p
     assert Path(target).is_file() and target.endswith("harness-account-me-example-com.zip")
     assert "as me@example.com" in result.next_steps[1]
     assert "Set up harness-account" in result.next_steps[2]
+    assert any("personal preferences" in s and "After each of your replies" in s for s in result.next_steps)
 
 
 def test_claude_ai_can_be_skipped_and_is_not_asked_again(repo: ContentRepo, tmp_path: Path):

@@ -53,6 +53,7 @@ class ClaudeAiAdapter(ConnectorAdapter):
     account_question = ("The e-mail address of your claude.ai account (several: separate them with "
                         "commas). If you don't use claude.ai, just press Enter")
     offered_everywhere = True
+    ALWAYS_ON = "claude.ai Settings > General > personal preferences (they apply in Cowork too)"
     #: What is particular to the Claude account, filled into the engine's save instructions.
     TOOL_NOTES = {
         "TOOL_TITLE": "Claude account",
@@ -134,6 +135,7 @@ class ClaudeAiAdapter(ConnectorAdapter):
             target = self.deliver_skill(account=email)
             steps.append(f"Signed in to claude.ai as {email}: upload {target} on {settings.skills_page}.")
             steps.append("Then, in Cowork (same account), type: Set up harness-account")
+            steps.append(f"Required, once: add to {self.ALWAYS_ON}: {self.always_on_line()}")
         steps.append("Can't find a skill file later? Run: python -m harness skill claude-ai")
         return steps
 

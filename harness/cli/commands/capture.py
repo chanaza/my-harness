@@ -479,8 +479,11 @@ class SkillCommand(Command):
             if target is None:
                 raise ErrorExit(f"{args.tool} has no skill to install.")
             print(f"Skill file{f' for {account}' if account else ''}: {target.resolve()}")
-        print("Upload it on the claude.ai page that opened (signed in as that account).")
-        print("Then, in Cowork (same account), type: Set up harness-account")
+        print("Upload it in the tool (signed in as that account); for claude.ai the page opened.")
+        if hasattr(adapter, "always_on_line"):
+            print(f"Required, once, in {adapter.ALWAYS_ON}: {adapter.always_on_line()}")
+        if args.tool == "claude-ai":
+            print("Then, in Cowork (same account), type: Set up harness-account")
         return 0
 
 
