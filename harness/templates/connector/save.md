@@ -1,4 +1,4 @@
-# Harness instructions: Claude account (instructions version ${VERSION})
+# Harness instructions: ${TOOL_TITLE} (instructions version ${VERSION})
 
 The user's harness saves everything they build with AI outside any single tool, in
 one shared form, so it can move between tools. You send ONE file per run with the
@@ -7,9 +7,7 @@ It checks the file against its form: if it answers with a problem, fix the file 
 send it again. Never include passwords, API keys or tokens. Work quietly: do not
 mention the saving in your answer unless it failed.
 
-**Not in Claude Code:** Claude Code is saved by the harness itself (completely, with
-its own hooks). If you are running as Claude Code (a coding agent in a terminal, IDE
-or Claude Code on the web), do nothing with this skill.
+${NOT_HERE}
 
 If the harness connector is not available here, say so in one sentence once per
 conversation and continue normally.
@@ -29,9 +27,7 @@ project mode once per conversation (projects can only be read from inside them).
 
 ## Setup mode (once per account)
 
-Create one Cowork scheduled task: name "Harness - describe account", every day,
-prompt: "Run the harness-account skill in describe mode." Then run describe mode
-once now.
+${SETUP}
 
 ## Describe mode
 
@@ -41,22 +37,19 @@ Use an empty list for nothing; put every kind you had no view of at all into
 `cannot_see`. Add no other fields.
 
 **Full content for everything the user built** (origin `mine`): every file of each
-skill (read them where skills are kept for you, e.g. /mnt/skills/user/<skill>/), every
+skill${WHERE_SKILLS}, every
 file of each plugin and agent, each project's instructions and knowledge files, each
 app's code (see **Apps** below). If you cannot read an item's content, keep the item with
 `not_readable: <why>` instead of `files`: never send an empty or made-up copy.
 Others' items (Anthropic's skills, marketplace plugins): name and description only.
 
-**Apps** (artifacts): list every app with its `link` and `version` (as the artifact
-tools report it). Copy its files ONLY when the app is not in this list of apps already
+**Apps** (${APPS_NAME}): list every app with its `link` and `version` (as this tool
+reports it). Copy its files ONLY when the app is not in this list of apps already
 saved, or its version is different:
 
 ${SAVED_APPS}
 
-Read the files with the artifact tools and copy them exactly: for a plain page its HTML
-as `index.html`; for an artifact made from a type (slides, docs...) only its own files
-under `project/` (never the type's files such as `artifact-type/` or the type's
-`index.html`). The artifact's own database is not copied.
+${APPS_HOW}
 
 **Large:** if the file would be over 800 KB, split it into parts named
 `describe-<time>-1of3.yaml`, `-2of3`, ... Every part starts with the same `schema`,
@@ -68,8 +61,8 @@ schema: harness-describe/1
 profile: ${PROFILE}
 tool: ${TOOL}
 captured_at: 2026-11-19T06:00:00Z     # now, UTC
-surface: cowork                        # cowork | claude-ai | desktop
-user_profile:                          # what Claude knows about the user (name, role, work)
+surface: ${SURFACE}                        # ${SURFACES}
+user_profile:                          # what you know about the user (name, role, work)
   text: "..."
 instructions:                          # always-on instructions
   - {name: personal-preferences, text: "..."}
@@ -97,14 +90,14 @@ projects:
     knowledge: [{path: file name, content: "..."}]
 workflows:                             # scheduled tasks
   - {name: ..., schedule: ..., prompt: "..."}
-apps:                                  # artifacts the user built (pages, apps)
+apps:                                  # ${APPS_NAME} the user built (pages, apps)
   - {name: ..., description: ..., link: ..., version: ..., files: [{path: index.html, content: "..."}]}
 native:                                # settings with no equivalent elsewhere (model, features on)
   - {name: ..., value: ...}
 cannot_see: []                         # kinds you had no view of at all, e.g. [apps]
 ```
 
-## Project mode (inside a project)
+## Project mode (inside a ${PROJECT_NAME})
 
 Send `describe-<time>-project-<short-name>.yaml` with ONLY this project, in full:
 
@@ -113,7 +106,7 @@ schema: harness-describe/1
 profile: ${PROFILE}
 tool: ${TOOL}
 captured_at: 2026-11-19T06:00:00Z
-surface: claude-ai
+surface: ${SURFACE}
 partial: true                          # only this project; nothing else is touched
 projects:
   - name: <the project's name>
@@ -139,7 +132,7 @@ conversation: conversation-<started>-<short-title>
 number: <n>
 at: <now, UTC>
 title: <the conversation's title>
-surface: claude-ai            # cowork | claude-ai | desktop
+surface: ${SURFACE}            # ${SURFACES}
 ---
 ## User
 
@@ -163,7 +156,7 @@ conversation; the newest replaces the earlier one):
 schema: harness-conversation/1
 profile: ${PROFILE}
 tool: ${TOOL}
-surface: claude-ai            # cowork | claude-ai | desktop
+surface: ${SURFACE}            # ${SURFACES}
 title: <the conversation's title>
 project: <the project's name, or empty>
 saved_at: <now, UTC>

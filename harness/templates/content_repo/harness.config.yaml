@@ -28,6 +28,7 @@ capture_modes:
   cowork: {mode: on_demand}    # Cowork now runs in the cloud: saved by the account skill; this reads local files
   claude-ai: {mode: scheduled, every_minutes: 30}
   monday: {mode: on_demand}
+  genspark: {mode: push}       # Genspark's own model sends through the harness connector
 
 checkpoints:
   # A checkpoint refreshes the rolling session summary (sessions/<tool>/<id>/summary.md).

@@ -23,6 +23,10 @@ summary sections as Claude Code). Not yet run for real:
 Fallback for history: the data export, downloaded once into the watch folder.
 - Full content in descriptions (skills, plugins, agents, projects' knowledge, apps):
   whether Claude can read every file (`not_readable` / `cannot_see` in the first runs).
+### Genspark - built, not verified in Genspark
+Saves through the connector with the engine's shared instructions (`ConnectorAdapter`).
+Not yet tried: adding the MCP server in Genspark, following the instruction after every reply.
+
 ### Reading from other tools - built, not verified in a tool
 `harness_find` / `harness_read` on the connector, an engine index of every file, and
 reading instructions served to any tool. Not yet tried in Genspark (adding an MCP server

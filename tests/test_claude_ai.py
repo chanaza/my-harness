@@ -496,3 +496,29 @@ def test_everything_in_the_harness_can_be_found(connected: ClaudeAiAdapter, repo
     assert talk["log"].endswith("log.md") and talk["summary"].endswith("summary.md")
     assert any(e["kind"] == "connection" and e["name"] == "gmail" for e in index)
     assert any(e["kind"] == "file" and e["name"] == "style.md" for e in index)   # a single file
+
+
+def test_genspark_saves_through_the_same_engine(repo: ContentRepo, tmp_path: Path):
+    """A tool with no export or API: one adapter with only its own notes; the saving and
+    reading instructions are the engine's, the same as for the Claude account."""
+    from harness.inbox import InboxProcessor, write_connector_instructions
+    result = SetupWizard(Answers("me@example.com", "work", str(tmp_path / "f")), LocalHome()).run(
+        SetupOptions(tool="genspark", repo=str(repo.root), environment="local"))
+    assert result.profiles == ["genspark-work-cloud"]
+    line = "harness_instructions with tool: genspark and profile: genspark-work-cloud"
+    assert line in result.next_steps[-1]
+    write_connector_instructions(repo)
+    served = repo.path("connector", "instructions", "genspark.md").read_text()
+    claude = repo.path("connector", "instructions", "claude-ai.md").read_text()
+    for shared in ("## Exchange mode", "## Save mode", "## Describe mode", "harness_find", "## Goal"):
+        assert shared in served and shared in claude                      # one engine, every tool
+    assert "Hub" in served and "Cowork" not in served and "Cowork" in claude
+    inbox = repo.path("inbox", "connector")
+    inbox.mkdir(parents=True)
+    (inbox / "exchange-20261119-0900-ideas-1.md").write_text(
+        exchange(1, "an idea").replace("claude-ai-personal-cloud", "genspark-work-cloud")
+        .replace("tool: claude-ai", "tool: genspark").replace("conversation-20261119-0700-plan",
+                                                               "conversation-20261119-0900-ideas"))
+    InboxProcessor(repo).run()
+    log = repo.path("sessions", "genspark-work-cloud", "conversation-20261119-0900-ideas", "log.md")
+    assert "an idea" in log.read_text()

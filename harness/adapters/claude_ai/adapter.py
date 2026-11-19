@@ -38,22 +38,17 @@ from ...repo import ContentRepo
 from ...sessions import SessionRecord
 from ...storage import Storage
 from ...text import slugify
-from ..base import Account, AccountBoundAdapter, HarnessNotConfigured, adapters
+from ..base import Account, HarnessNotConfigured, adapters
+from ..connector import ConnectorAdapter
 from .export import ClaudeAiExport, Conversation
 
 TOOL = "claude-ai"
 #: Skill names may not contain "claude" (reserved by claude.ai).
 SKILL_NAME = "harness-account"
-#: connector.transcript -> what the skill sends after every reply (said to the model).
-AFTER_EVERY_REPLY = {
-    "exchange": ("after EVERY reply you give, as its last step, send that exchange (exchange mode); "
-                 "and every ${EVERY} replies, a summary of the whole conversation (save mode)"),
-    "off": "every ${EVERY} replies, a summary of the whole conversation (save mode)",
-}
 
 
 @adapters.register
-class ClaudeAiAdapter(AccountBoundAdapter):
+class ClaudeAiAdapter(ConnectorAdapter):
     tool = TOOL
     capture_modes = ("scheduled", "on_demand")
     capture_reason = ("the account skill sends through the harness connector; the inbox is "
@@ -62,6 +57,24 @@ class ClaudeAiAdapter(AccountBoundAdapter):
     account_question = ("The e-mail address of your claude.ai account (several: separate them with "
                         "commas). If you don't use claude.ai, just press Enter")
     offered_everywhere = True
+    #: What is particular to the Claude account, filled into the engine's save instructions.
+    TOOL_NOTES = {
+        "TOOL_TITLE": "Claude account",
+        "NOT_HERE": ("**Not in Claude Code:** Claude Code is saved by the harness itself (completely, "
+                     "with its own hooks). If you are running as Claude Code (a coding agent in a "
+                     "terminal, IDE or Claude Code on the web), do nothing with this skill."),
+        "SETUP": ('Create one Cowork scheduled task: name "Harness - describe account", every day, '
+                  'prompt: "Run the harness-account skill in describe mode." Then run describe mode '
+                  "once now."),
+        "WHERE_SKILLS": " (read them where skills are kept for you, e.g. /mnt/skills/user/<skill>/)",
+        "APPS_NAME": "artifacts",
+        "APPS_HOW": ("Read the files with the artifact tools and copy them exactly: for a plain page its "
+                     "HTML as `index.html`; for an artifact made from a type (slides, docs...) only its "
+                     "own files under `project/` (never the type's files such as `artifact-type/` or the "
+                     "type's `index.html`). The artifact's own database is not copied."),
+        "SURFACE": "claude-ai",
+        "SURFACES": "cowork | claude-ai | desktop",
+    }
 
     def __init__(self, local: LocalHome | None = None, watch_folder: Path | None = None) -> None:
         super().__init__(local)
@@ -142,23 +155,6 @@ class ClaudeAiAdapter(AccountBoundAdapter):
         text = Template(template).safe_substitute(
             PROFILE=self.bindings().get(account, "<the profile id>"), TOOL=self.tool)
         return SKILL_NAME, {f"{SKILL_NAME}/SKILL.md": text.encode("utf-8")}
-
-    def connector_instructions(self, repo: ContentRepo) -> str:
-        """The skill's full instructions, from this engine, the harness's settings and what is
-        already saved (${PROFILE} is filled in by the connector for each account)."""
-        from ...inbox import saved_apps
-        config = repo.config
-        apps = saved_apps(repo)
-        saved = "\n".join(f"- {a['url']} version {a['version']}" for a in apps.values()
-                          if a.get("url") and a.get("version")) or "- (none yet)"
-        from ... import __version__
-        from ...digest import summary_request
-        template = resources.files(__package__).joinpath("skill", "INSTRUCTIONS.md").read_text("utf-8")
-        return Template(template).safe_substitute(
-            VERSION=__version__, TOOL=self.tool, SAVED_APPS=saved,
-            AFTER_EVERY_REPLY=Template(AFTER_EVERY_REPLY[config.connector.transcript]).substitute(
-                EVERY=config.connector.summary_every_replies),
-            SUMMARY_REQUEST=summary_request(config.checkpoints.summary_max_words, config.working_language))
 
     # --- what an export holds ----------------------------------------------------------------
 
