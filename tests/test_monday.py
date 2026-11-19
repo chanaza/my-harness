@@ -152,5 +152,6 @@ def test_every_agent_the_user_owns_is_read_even_when_the_listing_leaves_it_out()
     reader = MondayReader(Client())
     reader.schema.selection = lambda type_name: "id agent_user_id"
     reader._each = lambda *args: []
+    reader._jobs = lambda agent_id: []
     assert sorted(agent.definition["id"] for agent in reader.agents()) == ["1", "2"]
     assert reader.problems == ["agent agent u4: yours, but monday did not return it"]

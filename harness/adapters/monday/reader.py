@@ -49,7 +49,7 @@ class MondayReader:
             agent.skills = [s.get("name") for s in self._each("agent_skill_names", "AgentSkillCatalogEntry",
                                                                agent.id) or [] if s.get("name")]
             agent.knowledge = self._each("agent_knowledge", "AgentKnowledge", agent.id) or {}
-            agent.jobs = self._each("agent_jobs", "AgentJob", agent.id) or []
+            agent.jobs = self._jobs(agent.id)
         return agents
 
     def _custom_agents(self) -> list[dict[str, Any]]:
@@ -105,6 +105,17 @@ class MondayReader:
             self.problems.append(f"runs of {agent.name}: {exc}")
             return []
         return list(found.get("agent_runs") or [])
+
+    def _jobs(self, agent_id: str) -> list[Any]:
+        """An agent's scheduled jobs. monday retired `agent_jobs` (11/2026) and moves jobs into
+        workflows (read by `workflows`); while it migrates, `jobs_migration_preview` lists them."""
+        queries = {name for name, _, _ in self.schema.fields("Query")}
+        if "agent_jobs" in queries:
+            return self._each("agent_jobs", "AgentJob", agent_id) or []
+        if "jobs_migration_preview" in queries:
+            preview = self._each("jobs_migration_preview", "JobsMigrationPreview", agent_id) or {}
+            return list(preview.get("jobs") or [])
+        return []
 
     def _each(self, query: str, type_name: str, agent_id: str) -> Any:
         try:
