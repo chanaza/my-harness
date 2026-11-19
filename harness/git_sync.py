@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import process
 from .config import GitSettings
 from .local import LocalHome
 
@@ -130,5 +131,5 @@ class GitSync:
         return bool(self._git("remote", check=False).stdout.strip())
 
     def _git(self, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(["git", *args], cwd=self.root, capture_output=True, text=True,
+        return process.run(["git", *args], cwd=self.root, capture_output=True, text=True,
                               timeout=self.timeout, check=check)

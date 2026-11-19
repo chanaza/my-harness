@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
+from . import process
+
 
 @dataclass(frozen=True)
 class RepoState:
@@ -54,7 +56,7 @@ class WorkspaceScanner:
 
     def _git(self, path: Path, *args: str) -> str | None:
         try:
-            result = subprocess.run(["git", *args], cwd=path, capture_output=True, text=True,
+            result = process.run(["git", *args], cwd=path, capture_output=True, text=True,
                                     timeout=self.timeout)
         except (OSError, subprocess.SubprocessError):
             return None

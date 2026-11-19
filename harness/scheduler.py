@@ -12,6 +12,8 @@ import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from . import process
+
 
 def background_python() -> str:
     """The interpreter to schedule: pythonw on Windows (no console window flashes)."""
@@ -39,14 +41,14 @@ class WindowsTaskScheduler(Scheduler):
     def install(self, name: str, args: list[str], minutes: int) -> str:
         command = subprocess.list2cmdline([background_python(), "-m", "harness", *args])
         task = f"{self.FOLDER}\\{name}"
-        result = subprocess.run(["schtasks", "/Create", "/F", "/SC", "MINUTE", "/MO", str(minutes),
+        result = process.run(["schtasks", "/Create", "/F", "/SC", "MINUTE", "/MO", str(minutes),
                                  "/TN", task, "/TR", command], capture_output=True, text=True)
         if result.returncode != 0:
             raise SchedulerError(result.stderr.strip() or result.stdout.strip())
         return f"Task Scheduler: '{task}' every {minutes} minutes"
 
     def remove(self, name: str) -> None:
-        subprocess.run(["schtasks", "/Delete", "/F", "/TN", f"{self.FOLDER}\\{name}"],
+        process.run(["schtasks", "/Delete", "/F", "/TN", f"{self.FOLDER}\\{name}"],
                        capture_output=True, text=True)
 
 
@@ -65,12 +67,12 @@ class CronScheduler(Scheduler):
 
     @staticmethod
     def _read() -> list[str]:
-        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+        result = process.run(["crontab", "-l"], capture_output=True, text=True)
         return result.stdout.splitlines() if result.returncode == 0 else []
 
     @staticmethod
     def _write(lines: list[str]) -> None:
-        result = subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n",
+        result = process.run(["crontab", "-"], input="\n".join(lines) + "\n",
                                 capture_output=True, text=True)
         if result.returncode != 0:
             raise SchedulerError(result.stderr.strip())

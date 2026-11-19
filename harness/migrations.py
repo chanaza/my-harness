@@ -10,7 +10,7 @@ import shutil
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from . import yaml_io
+from . import process, yaml_io
 from .digest import session_part
 from .documents import MarkdownDocument
 from .repo import ContentRepo
@@ -145,11 +145,10 @@ class UniformLineEndings(Migration):
     description = "Store every text file with the same line endings on every computer"
 
     def apply(self, repo: ContentRepo) -> list[str]:
-        import subprocess
         if not (repo.root / ".git").exists() or not (repo.root / ".gitattributes").is_file():
             return []
-        subprocess.run(["git", "add", "--renormalize", "."], cwd=repo.root, capture_output=True, check=False)
-        changed = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=repo.root,
+        process.run(["git", "add", "--renormalize", "."], cwd=repo.root, capture_output=True, check=False)
+        changed = process.run(["git", "diff", "--cached", "--name-only"], cwd=repo.root,
                                  capture_output=True, text=True, check=False).stdout.split()
         return changed
 

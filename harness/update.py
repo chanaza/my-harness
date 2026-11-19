@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import process
 from .local import LocalHome
 
 ENGINE_URL = os.environ.get("HARNESS_ENGINE_URL", "git+https://github.com/chanaza/my-harness")
@@ -30,7 +31,7 @@ class UpdateReport:
 
 class Updater:
     def __init__(self, local: LocalHome | None = None,
-                 run: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run) -> None:
+                 run: Callable[..., subprocess.CompletedProcess[str]] = process.run) -> None:
         self.local = local or LocalHome()
         self._run = run
 

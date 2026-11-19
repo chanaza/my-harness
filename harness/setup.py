@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import os
 import platform
-import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import process
 from .adapters import Account, Adapter, adapters
 from .git_sync import GitSync
 from .local import LocalHome
@@ -207,7 +207,7 @@ class SetupWizard:
         target = Path.home() / url.rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
         if not (target / ".git").is_dir():
             self.prompter.say(f"Downloading {url} to {target} ...")
-            result = subprocess.run(["git", "clone", url, str(target)], capture_output=True, text=True)
+            result = process.run(["git", "clone", url, str(target)], capture_output=True, text=True)
             if result.returncode != 0:
                 hint = ""
                 if "not found" in result.stderr.lower():

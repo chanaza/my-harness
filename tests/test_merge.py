@@ -117,3 +117,12 @@ def test_windows_line_endings_are_stored_like_everywhere_else(tmp_path):
     assert "note.md" in UniformLineEndings().apply(ContentRepo(repo.root))
     run("commit", "-q", "-m", "normalized")
     assert b"\r\n" not in run("show", "HEAD:note.md").stdout.encode()
+
+
+def test_commands_run_without_a_window_on_windows(monkeypatch):
+    """Every command the engine starts (git above all) runs hidden on Windows: no flashing windows."""
+    from harness import process
+    monkeypatch.setattr(process.os, "name", "nt")
+    assert process.hidden({"cwd": "x"})["creationflags"] & process.CREATE_NO_WINDOW
+    monkeypatch.setattr(process.os, "name", "posix")
+    assert "creationflags" not in process.hidden({})

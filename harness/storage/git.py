@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from .. import process
 from ..local import LocalHome
 from .base import Storage, StorageError
 from .filesystem import FilesystemStorage
@@ -135,7 +136,7 @@ class GitStorage(Storage):
     def _run(command: list[str], cwd: Path, check: bool = True,
              timeout: float = 120) -> subprocess.CompletedProcess[str]:
         try:
-            return subprocess.run(command, cwd=cwd, capture_output=True, text=True,
+            return process.run(command, cwd=cwd, capture_output=True, text=True,
                                   timeout=timeout, check=check)
         except subprocess.CalledProcessError as exc:
             raise StorageError(f"{' '.join(command)} failed: {exc.stderr.strip()}") from None

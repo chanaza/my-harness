@@ -13,13 +13,16 @@ import sys
 import time
 from pathlib import Path
 
+from .process import CREATE_NO_WINDOW
+
 
 def spawn_detached(args: list[str], stdin_text: str) -> None:
     """Run ``python -m harness <args>`` in the background, fed ``stdin_text``."""
     options: dict = {"stdin": subprocess.PIPE, "stdout": subprocess.DEVNULL,
                      "stderr": subprocess.DEVNULL, "close_fds": True}
     if os.name == "nt":
-        options["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        # No window, and a hidden console that what it starts (git) inherits: nothing flashes.
+        options["creationflags"] = CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
     else:
         options["start_new_session"] = True
     process = subprocess.Popen([sys.executable, "-m", "harness", *args], **options)
