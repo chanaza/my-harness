@@ -197,6 +197,8 @@ class InboxProcessor:
                      project=data.get("project") or None, activity_at=to_iso(data.get("saved_at")))
         recorder = CheckpointRecorder(self.local, self.repo, record)
         recorder.write(file.body, "saved through the harness connector")
+        # The reply the summary was written at, so the connector knows when the next is due.
+        record.touch(summary_reply=int(record.meta().get("log_last") or 0) or None)
         report.counts["conversations saved"] += 1
 
     def add(self, source: Path) -> Path:

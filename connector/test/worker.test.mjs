@@ -123,3 +123,11 @@ test("a write that meets another one at the same moment (409) is tried again", a
   assert.equal(result.isError, false, result.content[0].text);
   assert.equal(puts, 2);
 });
+
+test("after enough replies without a summary, the connector asks for one", async () => {
+  const content = "---\nschema: harness-exchange/1\nprofile: p1\ntool: genspark\nconversation: conversation-1-x\nnumber: 13\n---\n## User\nq\n";
+  const text = (await save("exchange-1-x-13.md", content)).content[0].text;
+  assert.match(text, /A summary of the whole conversation is due now: send conversation-1-x\.md/);
+  const early = content.replace("number: 13", "number: 3");
+  assert.doesNotMatch((await save("exchange-1-x-3.md", early)).content[0].text, /summary of the whole conversation is due/);
+});

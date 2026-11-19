@@ -154,6 +154,7 @@ async function save({ file_name: name, content }, env) {
   if (!written.ok) return answer(`Not saved: GitHub answered ${written.status}. Send the same file again.`, true);
   await startInboxRun(env, branch);
   const missing = name.startsWith("exchange-") ? await missingReplies(name, content, env, branch) : [];
+  const due = name.startsWith("exchange-") ? await summaryDue(name, content, env, branch) : null;
   const tool = (content.match(/^tool:\s*(\S+)/m) || [])[1];
   const profile = (content.match(/^profile:\s*(\S+)/m) || [])[1];
   const current = tool ? await currentInstructions(tool, profile, env, branch) : null;
@@ -162,6 +163,7 @@ async function save({ file_name: name, content }, env) {
     ? `Saved ${name}. Replies ${missing.join(", ")} of this conversation are missing in the harness: ` +
       "send each of them now the same way (word for word, as you still see them), oldest first."
     : `Saved ${name}.`) +
+    (due ? ` A summary of the whole conversation is due now: send ${due} (save mode).` : "") +
     (current && theirs !== current.version
       // Older or unknown instructions: hand over the current ones now, instead of asking the
       // tool to fetch them (a tool may not act on a mere note).
@@ -179,6 +181,31 @@ async function currentInstructions(tool, profile, env, branch) {
   const text = await file.text();
   const match = text.match(/version ([0-9][0-9.]*)/);
   return match ? { version: match[1], text: profile ? text.replaceAll("${PROFILE}", profile) : text } : null;
+}
+
+// A summary is due every connector.summary_every_replies replies; the connector checks whether
+// the conversation has one recent enough, instead of relying on the tool to count.
+async function summaryDue(name, content, env, branch) {
+  const number = Number((name.match(/-(\d+)\.md$/) || [])[1]);
+  const conversation = (content.match(/^conversation:\s*(\S+)/m) || [])[1];
+  const profile = (content.match(/^profile:\s*(\S+)/m) || [])[1];
+  const every = await summaryEvery(env, branch);
+  if (!number || !conversation || !profile || number < every) return null;
+  const waiting = await github(env, "GET", `contents/inbox/connector/${conversation}.md?ref=${branch}`);
+  if (waiting.ok) return null;                                  // one is already on its way
+  const meta = await github(env, "GET", `contents/sessions/${profile}/${conversation}/meta.yaml?ref=${branch}`, null, "raw");
+  const text = meta.ok ? await meta.text() : "";
+  const summarized = Number((text.match(/^summary_reply:\s*(\d+)/m) || [])[1] || 0);
+  return number - summarized >= every ? `${conversation}.md` : null;
+}
+
+async function summaryEvery(env, branch) {
+  const config = await github(env, "GET", `contents/harness.config.yaml?ref=${branch}`, null, "raw");
+  if (config.ok) {
+    const match = (await config.text()).match(/^connector:\s*\n(?:[ \t]+.*\n)*?[ \t]+summary_every_replies:\s*(\d+)/m);
+    if (match) return Math.max(1, Number(match[1]));
+  }
+  return 10;
 }
 
 // Which earlier replies of a conversation never arrived: neither saved (sessions/.../replies/)

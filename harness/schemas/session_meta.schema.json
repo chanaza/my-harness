@@ -133,6 +133,11 @@
     "conversation": {
       "type": "string",
       "description": "The tool's id of the conversation this record belongs to (e.g. several monday runs of one chat)."
+    },
+    "summary_reply": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The last reply covered by summary.md (conversations saved through the harness connector)."
     }
   },
   "additionalProperties": false
