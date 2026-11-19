@@ -186,8 +186,9 @@ class InboxProcessor:
         state = StateFile(self.repo.path("inbox", ".state", f"{file.profile}-{scope}.json"))
         part = HarvestSync(self.repo, state).run(items, Origin.now(file.profile, None))
         report.counts.update(part.counts)
-        report.errors += part.errors
         report.conflicts += part.conflicts
+        if part.errors:   # an item that could not be saved: keep the file (rejected), never drop it
+            raise ValueError("not everything could be saved: " + "; ".join(part.errors))
 
     def _conversation(self, file: InboxFile, report: HarvestReport) -> None:
         data = file.data

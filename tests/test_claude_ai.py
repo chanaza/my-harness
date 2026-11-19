@@ -547,3 +547,22 @@ def test_what_is_built_is_saved_when_it_is_built(repo: ContentRepo):
     for tool in ("claude-ai", "genspark"):
         served = repo.path("connector", "instructions", f"{tool}.md").read_text()
         assert "## Built mode" in served and "Nobody has to\nask for it" in served
+
+
+def test_a_skill_with_loose_front_matter_is_saved_and_nothing_is_dropped(connected: ClaudeAiAdapter,
+                                                                         repo: ContentRepo):
+    """Tools accept a description with an unquoted ': ' in SKILL.md; so does the harness. And a file
+    whose items cannot all be saved is kept (rejected with the reason), never deleted."""
+    from harness.inbox import InboxProcessor
+    inbox = repo.path("inbox", "connector")
+    inbox.mkdir(parents=True)
+    skill = "---\nname: emily-monday\ndescription: Works on boards. Triggers: RFI, tenders\n---\nBody.\n"
+    (inbox / "describe-20261119-0755-built-emily-monday.yaml").write_text(
+        "schema: harness-describe/1\nprofile: claude-ai-personal-cloud\ntool: claude-ai\n"
+        "captured_at: 2026-11-19T07:55:00Z\npartial: true\nskills:\n  - name: emily-monday\n"
+        "    origin: mine\n    files:\n      - path: SKILL.md\n        content: |\n"
+        + "".join(f"          {line}\n" for line in skill.splitlines()), encoding="utf-8")
+    report = InboxProcessor(repo).run()
+    assert not report.errors, report.errors
+    saved = repo.path("core", "skills", "emily-monday", "SKILL.md").read_text()
+    assert "Triggers: RFI" in saved and "Body." in saved
