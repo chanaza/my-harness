@@ -104,7 +104,22 @@ test("after an exchange, the connector names the replies still missing", async (
   const content = "---\nschema: harness-exchange/1\nprofile: p1\ntool: genspark\nconversation: conversation-1-x\nnumber: 5\n---\n## User\nq\n";
   const text = (await save("exchange-1-x-5.md", content)).content[0].text;
   assert.match(text, /Replies 2, 4 of this conversation are missing/);
-  assert.match(text, /instructions: version 0\.25\.0/);       // older instructions are re-read
-  assert.match(text, /Built mode: if in this conversation you created/); // built things are sent
+  assert.match(text, /yours: unknown, current: 0\.25\.0/);       // no version stated: handed over
+  assert.match(text, /Harness instructions: Genspark/);
+  const up = (await save("exchange-1-x-5.md", content.replace("number: 5", "number: 5\ninstructions_version: 0.25.0"))).content[0].text;
+  assert.doesNotMatch(up, /instructions changed/);                  // current: nothing more
   globalThis.inbox = [];
+});
+
+test("a write that meets another one at the same moment (409) is tried again", async () => {
+  const original = globalThis.fetch;
+  let puts = 0;
+  globalThis.fetch = async (url, init = {}) => {
+    if (init.method === "PUT" && ++puts === 1) return new Response("{}", { status: 409 });
+    return original(url, init);
+  };
+  const result = await save("conversation-20261119-0700-plan.md", GOOD);
+  globalThis.fetch = original;
+  assert.equal(result.isError, false, result.content[0].text);
+  assert.equal(puts, 2);
 });

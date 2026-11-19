@@ -12,7 +12,8 @@ ${NOT_HERE}
 If the harness connector is not available here, say so in one sentence once per
 conversation and continue normally.
 
-Profile: ${PROFILE} (tool: ${TOOL}). File names use the current UTC time, e.g. 20261119-0600.
+Profile: ${PROFILE} (tool: ${TOOL}). Every file you send states `instructions_version: ${VERSION}`;
+when `save_to_harness` answers with newer instructions, follow those from then on. File names use the current UTC time, e.g. 20261119-0600.
 
 **What to send in a conversation:** ${AFTER_EVERY_REPLY}. Also send a summary when the
 user says "save to harness" and when the conversation wraps up. Together they let the
@@ -69,6 +70,7 @@ lists; a list may continue in the next part. Send every part.
 schema: harness-describe/1
 profile: ${PROFILE}
 tool: ${TOOL}
+instructions_version: ${VERSION}       # the version of these instructions
 captured_at: 2026-11-19T06:00:00Z     # now, UTC
 surface: ${SURFACE}                        # ${SURFACES}
 user_profile:                          # what you know about the user (name, role, work)
@@ -114,6 +116,7 @@ Send `describe-<time>-project-<short-name>.yaml` with ONLY this project, in full
 schema: harness-describe/1
 profile: ${PROFILE}
 tool: ${TOOL}
+instructions_version: ${VERSION}       # the version of these instructions
 captured_at: 2026-11-19T06:00:00Z
 surface: ${SURFACE}
 partial: true                          # only this project; nothing else is touched
@@ -137,6 +140,7 @@ just gave:
 schema: harness-exchange/1
 profile: ${PROFILE}
 tool: ${TOOL}
+instructions_version: ${VERSION}       # the version of these instructions
 conversation: conversation-<started>-<short-title>
 number: <n>
 at: <now, UTC>
@@ -168,6 +172,7 @@ conversation; the newest replaces the earlier one):
 schema: harness-conversation/1
 profile: ${PROFILE}
 tool: ${TOOL}
+instructions_version: ${VERSION}       # the version of these instructions
 surface: ${SURFACE}            # ${SURFACES}
 title: <the conversation's title>
 project: <the project's name, or empty>

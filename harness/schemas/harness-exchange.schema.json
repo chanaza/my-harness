@@ -52,6 +52,13 @@
         "string",
         "null"
       ]
+    },
+    "instructions_version": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "The version of the harness instructions the tool followed (the connector hands over newer ones)."
     }
   }
 }

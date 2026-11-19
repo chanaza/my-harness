@@ -44,6 +44,13 @@
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]*$",
       "description": "The tool that wrote it, e.g. claude-ai, cowork, chatgpt."
+    },
+    "instructions_version": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "The version of the harness instructions the tool followed (the connector hands over newer ones)."
     }
   }
 }

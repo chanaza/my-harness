@@ -39,12 +39,6 @@ const INSTRUCTIONS_TOOL = {
 };
 
 const READ_CHUNK = 60_000;
-// Said after every saved exchange: what the user built must not wait for anyone to ask.
-const BUILT_REMINDER =
-  "Built mode: if in this conversation you created or changed something the user keeps (a skill, " +
-  "agent, project, page, instructions, scheduled task or workflow) and have not sent it yet, send it " +
-  "now in full as describe-<time>-built-<short-name>.yaml (partial: true, only that item, every file " +
-  "word for word).";
 
 const FIND_TOOL = {
   name: "harness_find",
@@ -147,32 +141,44 @@ async function save({ file_name: name, content }, env) {
   if (problem) return answer(`Not saved: ${problem}`, true);
   const branch = env.BRANCH || "main";
   const path = `inbox/connector/${name}`;
-  const existing = await github(env, "GET", `contents/${path}?ref=${branch}`);
-  const body = { message: `connector: ${name}`, content: base64(content), branch };
-  if (existing.ok) body.sha = (await existing.json()).sha; // the same conversation, saved again
-  const written = await github(env, "PUT", `contents/${path}`, body);
-  if (!written.ok) return answer(`Not saved: GitHub answered ${written.status}.`, true);
+  // 409 = another write reached the repository at the same moment: read again and retry.
+  let written;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const existing = await github(env, "GET", `contents/${path}?ref=${branch}`);
+    const body = { message: `connector: ${name}`, content: base64(content), branch };
+    if (existing.ok) body.sha = (await existing.json()).sha; // the same conversation, saved again
+    written = await github(env, "PUT", `contents/${path}`, body);
+    if (written.status !== 409) break;
+    await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+  }
+  if (!written.ok) return answer(`Not saved: GitHub answered ${written.status}. Send the same file again.`, true);
   await startInboxRun(env, branch);
   const missing = name.startsWith("exchange-") ? await missingReplies(name, content, env, branch) : [];
   const tool = (content.match(/^tool:\s*(\S+)/m) || [])[1];
-  const version = tool ? await instructionsVersion(tool, env, branch) : null;
+  const profile = (content.match(/^profile:\s*(\S+)/m) || [])[1];
+  const current = tool ? await currentInstructions(tool, profile, env, branch) : null;
+  const theirs = (content.match(/^instructions_version:\s*([0-9][0-9.]*)/m) || [])[1];
   return answer((missing.length
     ? `Saved ${name}. Replies ${missing.join(", ")} of this conversation are missing in the harness: ` +
       "send each of them now the same way (word for word, as you still see them), oldest first."
     : `Saved ${name}.`) +
-    (version ? ` Current harness instructions: version ${version}; if yours are older, call ` +
-      "harness_instructions again and follow the new ones from now on." : "") +
-    (name.startsWith("exchange-") ? " " + BUILT_REMINDER : ""), false);
+    (current && theirs !== current.version
+      // Older or unknown instructions: hand over the current ones now, instead of asking the
+      // tool to fetch them (a tool may not act on a mere note).
+      ? `\n\nThe harness instructions changed (yours: ${theirs || "unknown"}, current: ${current.version}). ` +
+        "From now on follow these instead of the ones you have:\n\n" + current.text
+      : ""), false);
 }
 
-// The version line of the instructions the connector serves for a tool, so a conversation that
-// fetched older instructions picks up the new ones without the user doing anything.
-async function instructionsVersion(tool, env, branch) {
+// The instructions the connector serves for a tool, with their version: a tool states the version
+// it follows in every file it sends; when that is older (or missing) the current ones are handed over.
+async function currentInstructions(tool, profile, env, branch) {
   if (!SLUG.test(tool)) return null;
-  let file = await github(env, "GET", `contents/connector/instructions/${tool}.md?ref=${branch}`, null, "raw");
+  const file = await github(env, "GET", `contents/connector/instructions/${tool}.md?ref=${branch}`, null, "raw");
   if (!file.ok) return null;
-  const match = (await file.text()).match(/version ([0-9][0-9.]*)/);
-  return match ? match[1] : null;
+  const text = await file.text();
+  const match = text.match(/version ([0-9][0-9.]*)/);
+  return match ? { version: match[1], text: profile ? text.replaceAll("${PROFILE}", profile) : text } : null;
 }
 
 // Which earlier replies of a conversation never arrived: neither saved (sessions/.../replies/)

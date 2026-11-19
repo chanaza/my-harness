@@ -384,6 +384,13 @@
     "partial": {
       "type": "boolean",
       "description": "true: describes only what is listed (e.g. one project, from inside it); nothing else is touched."
+    },
+    "instructions_version": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "The version of the harness instructions the tool followed (the connector hands over newer ones)."
     }
   }
 }
