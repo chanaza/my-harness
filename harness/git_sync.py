@@ -33,6 +33,9 @@ class GitSync:
     """
 
     MERGE_DRIVER = "harness"
+    GENERATED_DRIVER = "harness-generated"
+    #: Paths the engine generates from the content (merged by keeping either side).
+    GENERATED = ("connector/**",)
 
     def __init__(self, root: Path, settings: GitSettings, timeout: float = 60,
                  log: Callable[[str], None] | None = None) -> None:
@@ -98,16 +101,22 @@ class GitSync:
         return False
 
     def _register_merge_driver(self) -> None:
-        """Let Git merge the harness's YAML files by content (this clone only, nothing committed)."""
+        """Let Git merge the harness's YAML and Markdown files by content, and never stop on a
+        generated file (this clone only, nothing committed)."""
         # Git runs drivers through a POSIX shell, also on Windows: a path with backslashes would
         # lose them, so the interpreter is given with forward slashes, quoted for that shell.
         command = f"{shlex.quote(sys.executable.replace(chr(92), '/'))} -m harness merge-file"
         self._git("config", f"merge.{self.MERGE_DRIVER}.name", "harness YAML merge", check=False)
         self._git("config", f"merge.{self.MERGE_DRIVER}.driver", f"{command} %O %A %B %P", check=False)
+        # Files the engine generates (connector/: index, served instructions) are never merged:
+        # either side is kept, and the engine writes them again from the content on its next run.
+        self._git("config", f"merge.{self.GENERATED_DRIVER}.name", "harness generated file", check=False)
+        self._git("config", f"merge.{self.GENERATED_DRIVER}.driver", "true", check=False)
         attributes = self.root / ".git" / "info" / "attributes"
         existing = attributes.read_text("utf-8") if attributes.is_file() else ""
-        missing = [f"{pattern} merge={self.MERGE_DRIVER}" for pattern in ("*.yaml", "*.md")
-                   if f"{pattern} merge={self.MERGE_DRIVER}" not in existing]
+        wanted = [f"{pattern} merge={self.MERGE_DRIVER}" for pattern in ("*.yaml", "*.md")]
+        wanted += [f"{pattern} merge={self.GENERATED_DRIVER}" for pattern in self.GENERATED]  # last wins
+        missing = [line for line in wanted if line not in existing]
         if missing:
             attributes.parent.mkdir(parents=True, exist_ok=True)
             attributes.write_text(existing + ("" if existing.endswith("\n") or not existing else "\n")

@@ -392,3 +392,36 @@ def test_claude_code_transcript_becomes_the_engines_log(tmp_path):
     text = ConversationLog.render("Plan", replies)
     assert "שלום" in text and "Hello" in text and "- *Bash: List files*" in text
     assert "also this" in text and "[image]" in text and "injected" not in text and "thinking" not in text
+
+
+def test_generated_files_never_stop_a_sync(tmp_path: Path):
+    """Two machines both regenerate connector/index.json: the sync goes on (either side is kept;
+    the engine writes it again), and the real content of both machines arrives."""
+    from harness.config import GitSettings
+    from harness.git_sync import GitSync
+
+    def git(cwd, *args):
+        subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", *args], cwd=cwd,
+                       check=True, capture_output=True)
+
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(remote))
+    cloud, office = tmp_path / "cloud", tmp_path / "office"
+    for clone in (cloud, office):
+        git(tmp_path, "clone", "-q", str(remote), str(clone))
+    (cloud / "connector").mkdir()
+    (cloud / "connector" / "index.json").write_text('[{"kind": "agent"}]\n')
+    for args in (("add", "-A"), ("commit", "-q", "-m", "first"), ("push", "-q", "-u", "origin", "HEAD")):
+        git(cloud, *args)
+    git(office, "pull", "-q", "origin", "main")
+    (cloud / "connector" / "index.json").write_text('[{"kind": "agent"}, {"kind": "app"}]\n')
+    (cloud / "a.yaml").write_text("from: cloud\n")
+    for args in (("add", "-A"), ("commit", "-q", "-m", "cloud"), ("push", "-q", "origin", "HEAD")):
+        git(cloud, *args)
+    (office / "connector" / "index.json").write_text('[{"kind": "skill"}]\n')   # the same file, elsewhere
+    (office / "b.yaml").write_text("from: office\n")
+    result = GitSync(office, GitSettings(auto_commit=True, auto_push=True)).sync("office", push=True)
+    assert result.pushed, result.message
+    files = subprocess.run(["git", "ls-tree", "-r", "--name-only", "main"], cwd=remote,
+                           capture_output=True, text=True).stdout.split()
+    assert {"a.yaml", "b.yaml", "connector/index.json"} <= set(files)
