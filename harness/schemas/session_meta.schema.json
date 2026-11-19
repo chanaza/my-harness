@@ -129,6 +129,10 @@
       "type": "integer",
       "minimum": 1,
       "description": "The last reply number in log.md (conversations saved through the harness connector)."
+    },
+    "conversation": {
+      "type": "string",
+      "description": "The tool's id of the conversation this record belongs to (e.g. several monday runs of one chat)."
     }
   },
   "additionalProperties": false

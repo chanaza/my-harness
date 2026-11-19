@@ -144,6 +144,10 @@ class MondayAdapter(AccountBoundAdapter):
         return done
 
 
+from ...conversation_log import ConversationLog  # noqa: E402
+from .run_replies import run_reply  # noqa: E402
+
+
 class RunImporter:
     """One agent run (a conversation) -> a session record + the full run in transcript storage."""
 
@@ -158,9 +162,13 @@ class RunImporter:
     def run(self, agent: MondayAgent, run: dict[str, Any]) -> str | None:
         run_id = str(run.get("run_id") or "")
         status = str(run.get("status") or "")
-        if not run_id or (self.state.get(run_id) == status and status in self.FINAL):
-            return None
         session = SessionRecord(self.repo, self.profile, f"run-{run_id}")
+        log = ConversationLog(session)
+        if not run_id or (self.state.get(run_id) == status and status in self.FINAL):
+            if run_id and session.meta_path.is_file() and not log.path.is_file():
+                log.write(str(run.get("title") or agent.name), [run_reply(run)])   # runs saved before logs
+                return "updated"
+            return None
         new = not session.meta_path.is_file()
         ended = _when(run.get("completed_at")) or _when(run.get("started_at"))
         if new:
@@ -169,7 +177,8 @@ class RunImporter:
         key = session.storage_key("run.json")
         self.storage.write_text(key, json.dumps(run, ensure_ascii=False, indent=1))
         session.touch(activity_at=ended, topic=run.get("title") or None, transcript=key,
-                      agent=slugify(agent.name))
+                      agent=slugify(agent.name), conversation=run.get("conversation_id") or None)
+        log.write(str(run.get("title") or agent.name), [run_reply(run)])   # the engine's readable log
         self.state.set(run_id, status)
         return "imported" if new else "updated"
 

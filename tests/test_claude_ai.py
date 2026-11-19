@@ -139,7 +139,7 @@ def test_account_skill_is_built_from_settings(connected: ClaudeAiAdapter, repo: 
     assert "profile: claude-ai-personal-cloud" in text and "${" not in text
     assert "harness_instructions" in text and "Not for Claude Code" in text   # thin: fetches the rest
     from harness.inbox import write_connector_instructions
-    assert write_connector_instructions(repo) == ["connector/instructions/claude-ai.md"]
+    assert "connector/instructions/claude-ai.md" in write_connector_instructions(repo)
     full = repo.path("connector", "instructions", "claude-ai.md").read_text()
     assert "every 7 replies" in full and "exchange mode" in full            # connector settings
     for section in ("## Goal", "## Open thread", "## Connections in use"):   # the one summary language
@@ -464,3 +464,35 @@ def test_apps_are_copied_by_version_and_whole(connected: ClaudeAiAdapter, repo: 
     bad.write_text("schema: harness-describe/1\n")
     with pytest.raises(ValueError):
         InboxProcessor(repo).add(bad)
+
+
+def test_everything_in_the_harness_can_be_found(connected: ClaudeAiAdapter, repo: ContentRepo):
+    """Every file of the repository is in the index (nothing can be missed), and a conversation
+    is found by what a person remembers of it, not by its id."""
+    import json
+
+    from harness.inbox import InboxProcessor, write_connector_instructions
+    inbox = repo.path("inbox", "connector")
+    inbox.mkdir(parents=True)
+    (inbox / "describe-20261119-0600.yaml").write_text(DESCRIBE, encoding="utf-8")
+    (inbox / "conversation-20261119-0700-plan.md").write_text(
+        CONVERSATION.replace("Planning the harness", "Plan"), encoding="utf-8")
+    (inbox / "exchange-20261119-0700-plan-1.md").write_text(exchange(1, "first"), encoding="utf-8")
+    InboxProcessor(repo).run()
+    write_connector_instructions(repo)
+    index = json.loads(repo.path("connector", "index.json").read_text())
+    listed = {e["path"] for e in index}
+    for path in repo.root.rglob("*"):
+        rel = path.relative_to(repo.root).as_posix()
+        if path.is_file() and not rel.startswith((".git", "inbox/.state", "connector/")) \
+                and not any(rel.startswith(e["path"] + "/") for e in index if e["kind"] == "conversation"):
+            assert rel in listed, f"{rel} cannot be found"
+    kinds = {e["kind"] for e in index}
+    assert {"skill", "memory", "instruction", "project", "app", "workflow", "connection", "profile",
+            "conversation", "file"} <= kinds
+    talk = next(e for e in index if e["kind"] == "conversation" and e["name"] == "Plan")
+    assert talk["date"] == "2026-11-19" and talk["tool"] == "claude-ai" and talk["account"] == "personal"
+    assert "Plan it." in talk["description"] and talk["first_message"] == "q1"
+    assert talk["log"].endswith("log.md") and talk["summary"].endswith("summary.md")
+    assert any(e["kind"] == "connection" and e["name"] == "gmail" for e in index)
+    assert any(e["kind"] == "file" and e["name"] == "style.md" for e in index)   # a single file

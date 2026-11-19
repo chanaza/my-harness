@@ -60,6 +60,13 @@ From then on, everything is saved by itself. Nothing is shown while it runs.
 How each tool is captured is one setting per tool (`capture_modes` in your
 harness settings); `python -m harness sources` shows it.
 
+### Use it in any tool
+
+Any tool that can add an MCP server (Genspark, ChatGPT, Cursor...) can read your whole
+harness through your connector: it finds agents, skills, projects, apps, memory and
+conversations (by title, date, tool, agent...) and reads them. See
+[docs/connector.md](docs/connector.md#using-your-harness-in-another-tool-eg-genspark).
+
 ### Continue anywhere
 
 Every conversation, from any tool, ends up in the same form in
@@ -69,7 +76,8 @@ state, open thread, standing instructions, preferences, connections) and
 new tool the latest summary and the log after it, and continue from exactly
 where you stopped.
 
-Saving only: nothing from the harness is loaded back into your tools yet.
+Reading back: any tool with MCP can read the harness through the connector; nothing is
+written into a tool automatically yet.
 What is finished and what is not: [ROADMAP.md](ROADMAP.md).
 
 ---
@@ -139,7 +147,7 @@ are marked with ★.
 | `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it |
 | `SummaryDigest`, `summary_request` | `harness/digest.py` | The one summary language for every tool; its sections -> instructions, memory, connections |
 | `ConversationLog`, `Reply` | `harness/conversation_log.py` | The one readable `log.md` per conversation, for every tool |
-| `InboxProcessor` | `harness/inbox.py` | Saves what the harness connector dropped into `inbox/connector/` (`harness inbox`) |
+| `InboxProcessor`, `HarnessIndex` | `harness/inbox.py` | Saves what the connector dropped into `inbox/connector/`; the index of everything, for reading |
 | `WorkspaceScanner` | `harness/workspace.py` | Repositories, branches and commits a session works in |
 | `MemoryStore` | `harness/memory.py` | Memory entries with conflict tracking |
 | `Captured`, `HarvestSync`, `ItemWriter` ★ | `harness/harvest/` | Turning what a tool holds into harness content |

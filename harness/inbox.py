@@ -240,20 +240,155 @@ INSTRUCTIONS_FOLDER = ("connector", "instructions")
 
 
 def write_connector_instructions(repo: ContentRepo) -> list[str]:
-    """connector/instructions/<tool>.md for every tool with a skill: what the connector serves,
-    so a skill in a tool account always follows this engine's current instructions."""
+    """What the harness connector serves, kept current by the engine:
+      connector/instructions/<tool>.md  a tool's skill instructions (saving)
+      connector/instructions/reader.md  how any tool reads the harness (served when a tool
+                                        has no instructions of its own)
+      connector/index.json              everything in the harness, for harness_find"""
+    from string import Template
+
+    from . import __version__
     from .adapters import adapters
-    written = []
+    files: dict[str, str] = {}
     for tool in adapters.names():
         text = adapters.create(tool).connector_instructions(repo)
-        if text is None:
-            continue
-        path = repo.path(*INSTRUCTIONS_FOLDER, f"{tool}.md")
-        if not path.is_file() or path.read_text("utf-8") != text:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
-            written.append(path.relative_to(repo.root).as_posix())
-    return written
+        if text is not None:
+            files[f"{tool}.md"] = text
+    reader = resources.files("harness.templates").joinpath("connector", "reader.md").read_text("utf-8")
+    files["reader.md"] = Template(reader).safe_substitute(VERSION=__version__)
+    written = []
+    for name, text in files.items():
+        written += _write_if_changed(repo, repo.path(*INSTRUCTIONS_FOLDER, name), text)
+    index = json.dumps(HarnessIndex(repo).entries(), ensure_ascii=False, indent=0)
+    return written + _write_if_changed(repo, repo.path("connector", "index.json"), index)
+
+
+def _write_if_changed(repo: ContentRepo, path: Path, text: str) -> list[str]:
+    if path.is_file() and path.read_text("utf-8") == text:
+        return []
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return [path.relative_to(repo.root).as_posix()]
+
+
+class HarnessIndex:
+    """Everything in the harness, so another tool can find it in its own words.
+
+    Every file of the repository is listed (nothing can be missed: a file the index does not
+    describe more richly is still listed by its path); items the engine knows are described
+    by name and description; conversations by what a person remembers of them - title, date,
+    tool and account, project, agent, the goal from their summary and their first message;
+    single connections and profiles by name; files kept in transcript storage by their
+    `transcripts:` path."""
+
+    SKIPPED = (".git", "inbox/.state", "connector")
+
+    def __init__(self, repo: ContentRepo) -> None:
+        self.repo = repo
+        self.profiles = {p.id: p for p in ProfileRegistry(repo).all()}
+
+    def entries(self) -> list[dict[str, Any]]:
+        rich: dict[str, dict[str, Any]] = {}
+        for entry in self._items() + self._conversations():
+            rich.setdefault(entry["path"], entry)
+        found = list(rich.values())
+        described = set(rich)
+        for path in sorted(p for p in self.repo.root.rglob("*") if p.is_file()):
+            rel = path.relative_to(self.repo.root).as_posix()
+            if rel in described or any(rel == s or rel.startswith(f"{s}/") for s in self.SKIPPED):
+                continue
+            found.append({"kind": "file", "name": path.name, "path": rel, "in": rel.rsplit("/", 1)[0]})
+        return found + self._connections() + self._profile_entries()
+
+    def _items(self) -> list[dict[str, Any]]:
+        found = []
+        for kind, pattern in (("agent", "core/agents/*.yaml"), ("project", "core/projects/*/project.yaml"),
+                              ("plugin", "core/plugins/*/plugin.yaml"), ("app", "apps/*/app.yaml"),
+                              ("workflow", "core/workflows/*.yaml")):
+            for path in sorted(self.repo.root.glob(pattern)):
+                data = self._yaml(path)
+                name = data.get("title") or data.get("name") or path.parent.name
+                about = data.get("description") or data.get("purpose")
+                found.append(self._entry(kind, name, about, path, data))
+        for path in sorted(self.repo.root.glob("core/skills/*/SKILL.md")):
+            meta = MarkdownDocument.parse(path.read_text("utf-8")).meta
+            name = meta.get("name") or path.parent.name
+            found.append(self._entry("skill", name, meta.get("description"), path, meta))
+        for kind, pattern in (("instruction", "core/instructions/**/*.md"), ("memory", "memory/*.md")):
+            for path in sorted(self.repo.root.glob(pattern)):
+                document = MarkdownDocument.parse(path.read_text("utf-8"))
+                first = next((x.strip("# ").strip() for x in document.body.splitlines() if x.strip()), "")
+                about = document.meta.get("subject") or first
+                found.append(self._entry(kind, path.stem, about, path, document.meta))
+        return found
+
+    def _conversations(self) -> list[dict[str, Any]]:
+        found = []
+        for meta_path in sorted(self.repo.root.glob("sessions/*/*/meta.yaml")):
+            data, folder = self._yaml(meta_path), meta_path.parent
+            profile = self.profiles.get(folder.parent.name)
+            title = data.get("topic") or folder.name
+            entry = self._entry("conversation", title, self._goal(folder), folder, data)
+            started = str(data.get("started_at") or "")
+            extra = {"date": started[:10], "tool": profile.tool if profile else None,
+                     "account": profile.label if profile else None, "project": data.get("project"),
+                     "agent": data.get("agent"), "first_message": self._first_message(folder),
+                     "summary": self._rel(folder / "summary.md"), "log": self._rel(folder / "log.md"),
+                     "raw": f"transcripts:{data['transcript']}" if data.get("transcript") else None,
+                     "files": [f"transcripts:{folder.parent.name}/{folder.name}/files/{f['path']}"
+                               for f in data.get("files") or [] if f.get("path")] or None}
+            entry.update({k: v for k, v in extra.items() if v})
+            found.append(entry)
+        return found
+
+    def _connections(self) -> list[dict[str, Any]]:
+        path = self.repo.path("core", "connections.yaml")
+        data = self._yaml(path) if path.is_file() else {}
+        return [{"kind": "connection", "name": c.get("id"), "description": c.get("description"),
+                 "tools": sorted(c.get("available_in") or {}), "path": "core/connections.yaml"}
+                for c in data.get("connections") or []]
+
+    def _profile_entries(self) -> list[dict[str, Any]]:
+        return [{"kind": "profile", "name": p.id, "tool": p.tool, "account": p.label,
+                 "path": "core/profiles.yaml"} for p in self.profiles.values()]
+
+    @staticmethod
+    def _goal(folder: Path) -> str | None:
+        summary = folder / "summary.md"
+        if not summary.is_file():
+            return None
+        from .digest import split_sections
+        body = MarkdownDocument.parse(summary.read_text("utf-8")).body
+        return (split_sections(body).get("Goal") or "").strip()
+
+    @staticmethod
+    def _first_message(folder: Path) -> str | None:
+        log = folder / "log.md"
+        if not log.is_file():
+            return None
+        text = log.read_text("utf-8")
+        start = text.find("## User")
+        if start < 0:
+            return None
+        body = text[start + len("## User"):].split("## Assistant", 1)[0]
+        return " ".join(body.split())[:200] or None
+
+    def _entry(self, kind: str, name: Any, description: Any, path: Path,
+               data: dict[str, Any]) -> dict[str, Any]:
+        source = (data.get("provenance") or {}).get("source") or {}
+        entry = {"kind": kind, "name": str(name), "path": self._rel(path)}
+        if description:
+            entry["description"] = " ".join(str(description).split())[:300]
+        if data.get("profile") or source.get("profile"):
+            entry["profile"] = data.get("profile") or source.get("profile")
+        return entry
+
+    def _rel(self, path: Path) -> str | None:
+        return path.relative_to(self.repo.root).as_posix() if path.exists() else None
+
+    @staticmethod
+    def _yaml(path: Path) -> dict[str, Any]:
+        return dict(yaml_io.load(path.read_text("utf-8")) or {})
 
 
 def _files(entries: list[dict[str, Any]] | None, folder: str = "") -> dict[str, bytes]:

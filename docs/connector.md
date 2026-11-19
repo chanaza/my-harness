@@ -2,10 +2,17 @@
 
 Tools that cannot write to your harness themselves (claude.ai, Claude Desktop,
 Cowork, and later any tool that supports connectors) save through **one small
-connector of your own**. It can do exactly two things: put a file into the
-`inbox/connector/` folder of your harness repository, and hand a tool's skill its
-current instructions (`connector/instructions/<tool>.md`, written by the engine). It
-cannot read, change or delete anything else, and nothing is stored on it.
+connector of your own**. It does four things, and nothing is stored on it:
+
+| Action | What it does |
+|---|---|
+| `save_to_harness` | puts one file into `inbox/connector/` (checked at the door) |
+| `harness_instructions` | hands a tool its current instructions (`connector/instructions/`, written by the engine; a tool without its own gets the reading instructions) |
+| `harness_find` | finds anything in the harness: agents, skills, instructions, memory, projects, apps, workflows, connections, profiles, single files, and conversations by title, date, tool, account, project, agent, goal or first message (`connector/index.json`, written by the engine, lists every file) |
+| `harness_read` | reads one file, in parts when it is long; `transcripts:` paths read raw records |
+
+It cannot change or delete anything. **Whoever has its address can read your
+harness:** keep the address private.
 
 **Skills update themselves:** the skill you upload is a few lines that ask the
 connector for its instructions. When the engine improves, `harness inbox` (GitHub
@@ -65,6 +72,15 @@ Desktop and Cowork of that account. Repeat for each account.
 `python -m harness skill claude-ai` makes one skill file per account; upload
 it on claude.ai (signed in as that account), then in Cowork type
 `Set up harness-account`.
+
+## Using your harness in another tool (e.g. Genspark)
+
+1. In the tool, add an MCP server: type Streamable HTTP, the connector's address.
+2. Add one instruction (custom instructions / a skill): *"Before anything about my work,
+   call the harness connector's `harness_instructions` with tool: genspark and profile:
+   genspark; follow what it returns."*
+3. Ask, e.g.: *"Read about my agent Emily in my harness and build me an agent that works
+   the same way."* It finds Emily's definition and the logs of her runs, and works from them.
 
 ## Settings (`connector:` in harness.config.yaml)
 

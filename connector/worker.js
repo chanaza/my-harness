@@ -1,6 +1,7 @@
-// The harness connector: a tiny MCP server with two tools: save_to_harness (write one file
-// into the inbox) and harness_instructions (what a tool's harness skill should do, kept up
-// to date by the engine in connector/instructions/<tool>.md, so skills never need re-uploading).
+// The harness connector: a tiny MCP server. save_to_harness writes one file into the inbox;
+// harness_instructions serves what a tool should do (kept current by the engine in
+// connector/instructions/, so skills never need re-uploading); harness_find and harness_read
+// let any tool find and read everything in the harness (index: connector/index.json).
 //
 // Tools that cannot write to the harness directly (claude.ai, Cowork, ...) call it from
 // their harness skill. It checks the file at the door, writes it to inbox/connector/ in
@@ -34,6 +35,40 @@ const INSTRUCTIONS_TOOL = {
       profile: { type: "string", description: "The profile, as the skill names it" },
     },
     required: ["tool", "profile"],
+  },
+};
+
+const READ_CHUNK = 60_000;
+
+const FIND_TOOL = {
+  name: "harness_find",
+  description:
+    "Find anything in the user's harness: agents, skills, instructions, memory, projects, apps, " +
+    "workflows, connections, profiles, single files, and conversations (by title, date, tool, " +
+    "account, project, agent, goal or first message). Returns entries with a path to read.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Words to look for (any field). Empty: list everything of a kind." },
+      kind: { type: "string", description: "agent, skill, instruction, memory, project, app, workflow, connection, profile, conversation or file" },
+      date: { type: "string", description: "A day or month, e.g. 2026-11-18 or 2026-11 (conversations)" },
+      limit: { type: "integer", description: "At most this many results (default 30)" },
+    },
+  },
+};
+
+const READ_TOOL = {
+  name: "harness_read",
+  description:
+    "Read one file of the user's harness by the path harness_find gave (a path starting with " +
+    "'transcripts:' is a raw record). Long files come in parts: pass the offset it returns.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "The path from harness_find" },
+      offset: { type: "integer", description: "Where to continue a long file (default 0)" },
+    },
+    required: ["path"],
   },
 };
 
@@ -84,12 +119,15 @@ export default {
       case "ping":
         return rpcResult(message.id, {});
       case "tools/list":
-        return rpcResult(message.id, { tools: [TOOL, INSTRUCTIONS_TOOL] });
+        return rpcResult(message.id, { tools: [TOOL, INSTRUCTIONS_TOOL, FIND_TOOL, READ_TOOL] });
       case "tools/call": {
         const args = message.params?.arguments || {};
-        const result = message.params?.name === INSTRUCTIONS_TOOL.name
-          ? await instructions(args, env)
-          : await save(args, env);
+        const handlers = {
+          [INSTRUCTIONS_TOOL.name]: instructions, [FIND_TOOL.name]: find,
+          [READ_TOOL.name]: read, [TOOL.name]: save,
+        };
+        const handler = handlers[message.params?.name];
+        const result = handler ? await handler(args, env) : answer(`Unknown tool ${message.params?.name}`, true);
         return rpcResult(message.id, result);
       }
       default:
@@ -117,9 +155,46 @@ async function instructions({ tool, profile }, env) {
     return answer("tool and profile are needed, exactly as the harness skill names them.", true);
   }
   const branch = env.BRANCH || "main";
-  const file = await github(env, "GET", `contents/connector/instructions/${tool}.md?ref=${branch}`, null, "raw");
-  if (!file.ok) return answer(`No harness instructions for ${tool} yet (run \`harness upgrade\`).`, true);
+  let file = await github(env, "GET", `contents/connector/instructions/${tool}.md?ref=${branch}`, null, "raw");
+  if (!file.ok) file = await github(env, "GET", `contents/connector/instructions/reader.md?ref=${branch}`, null, "raw");
+  if (!file.ok) return answer("No harness instructions yet (run `harness upgrade`).", true);
   return answer((await file.text()).replaceAll("${PROFILE}", profile), false);
+}
+
+async function find({ query = "", kind, date, limit = 30 }, env) {
+  const branch = env.BRANCH || "main";
+  const file = await github(env, "GET", `contents/connector/index.json?ref=${branch}`, null, "raw");
+  if (!file.ok) return answer("The harness has no index yet (run `harness upgrade`).", true);
+  const words = String(query).toLowerCase().split(/\s+/).filter(Boolean);
+  const results = (await file.json()).filter((entry) => {
+    if (kind && entry.kind !== kind) return false;
+    if (date && !String(entry.date || "").startsWith(date)) return false;
+    const text = JSON.stringify(entry).toLowerCase();
+    return words.every((word) => text.includes(word));
+  });
+  const shown = results.slice(0, Math.max(1, Math.min(Number(limit) || 30, 200)));
+  const more = results.length > shown.length ? `\n(${results.length - shown.length} more: narrow the query)` : "";
+  return answer(shown.length ? JSON.stringify(shown, null, 1) + more : "Nothing found.", false);
+}
+
+async function read({ path, offset = 0 }, env) {
+  const raw = String(path || "");
+  const fromTranscripts = raw.startsWith("transcripts:");
+  const clean = fromTranscripts ? raw.slice("transcripts:".length) : raw;
+  if (!clean || clean.startsWith("/") || clean.split("/").includes("..") || clean.startsWith(".git")) {
+    return answer("path must be a path from harness_find", true);
+  }
+  const ref = fromTranscripts ? env.TRANSCRIPTS_BRANCH || "transcripts" : env.BRANCH || "main";
+  const encoded = clean.split("/").map(encodeURIComponent).join("/");
+  const file = await github(env, "GET", `contents/${encoded}?ref=${ref}`, null, "raw");
+  if (!file.ok) return answer(`Not found: ${raw}`, true);
+  const text = await file.text();
+  const start = Math.max(0, Number(offset) || 0);
+  const part = text.slice(start, start + READ_CHUNK);
+  const next = start + READ_CHUNK < text.length
+    ? `\n\n[part ${start}-${start + part.length} of ${text.length} characters; continue with offset ${start + READ_CHUNK}]`
+    : "";
+  return answer(part + next, false);
 }
 
 // The full form is checked by the engine; here only what makes a file unusable.
