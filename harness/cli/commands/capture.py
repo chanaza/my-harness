@@ -262,8 +262,8 @@ class InboxCommand(Command):
                 print(f"  + {InboxProcessor(repo).add(Path(source)).name}")
             except ValueError as exc:
                 raise ErrorExit(f"{source}: {exc}") from None
-        write_connector_instructions(repo)  # the skills' instructions follow this engine
         report = InboxProcessor(repo).run()
+        write_connector_instructions(repo)  # this engine's instructions, with what is saved now
         for problem in report.errors:
             print(f"  x {problem}")
         git.sync(f"inbox: {report.summary()}", push=True)
