@@ -505,8 +505,11 @@ def test_genspark_saves_through_the_same_engine(repo: ContentRepo, tmp_path: Pat
     result = SetupWizard(Answers("me@example.com", "work", str(tmp_path / "f")), LocalHome()).run(
         SetupOptions(tool="genspark", repo=str(repo.root), environment="local"))
     assert result.profiles == ["genspark-work-cloud"]
-    line = "harness_instructions with tool: genspark and profile: genspark-work-cloud"
-    assert line in result.next_steps[-1]
+    skill_file = Path(result.next_steps[-1].split("Upload: ")[1])
+    with zipfile.ZipFile(skill_file) as archive:
+        skill = archive.read("harness-account/SKILL.md").decode()
+    assert "`tool: genspark` and `profile: genspark-work-cloud`" in skill   # the same thin skill
+    assert "Once per conversation" in skill and "Claude Code" not in skill
     write_connector_instructions(repo)
     served = repo.path("connector", "instructions", "genspark.md").read_text()
     claude = repo.path("connector", "instructions", "claude-ai.md").read_text()

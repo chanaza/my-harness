@@ -9,6 +9,8 @@ the reading instructions). A subclass only says what is particular to its tool, 
 
 from __future__ import annotations
 
+import webbrowser
+import zipfile
 from importlib import resources
 from pathlib import Path
 from string import Template
@@ -17,6 +19,7 @@ from typing import Any
 from ..harvest import Captured, HarvestReport
 from ..profiles import ProfileRegistry
 from ..repo import ContentRepo
+from ..text import slugify
 from .base import AccountBoundAdapter, HarnessNotConfigured
 
 #: connector.transcript -> what the tool sends after every reply (said to its model).
@@ -33,8 +36,47 @@ class ConnectorAdapter(AccountBoundAdapter):
     capture_reason = ("the tool's own model sends through the harness connector; the inbox is "
                       "processed in GitHub (Actions)")
     offered_everywhere = True
-    #: What is particular to this tool, filled into the engine's save instructions.
+    #: What is particular to this tool, filled into the engine's save instructions and skill.
     TOOL_NOTES: dict[str, str] = {}
+    #: The page where the tool's skills are uploaded (opened when the skill file is written).
+    SKILLS_PAGE: str | None = None
+    SKILL_NAME = "harness-account"
+
+    # --- the skill (the same thin skill for every such tool) ------------------------------------
+
+    def notes(self) -> dict[str, str]:
+        return {"TOOL_TITLE": self.tool, "SCOPE": f"this {self.tool} account", "NOT_HERE_SHORT": "",
+                "NOT_HERE_LONG": "", "NOT_HERE": "", "SETUP": "Nothing to set up.", "WHERE_SKILLS": "",
+                "APPS_NAME": "apps", "PROJECT_NAME": "project", "SURFACE": self.tool,
+                "SURFACES": self.tool,
+                "APPS_HOW": "Copy each app's files exactly, with this tool's own means."} | self.TOOL_NOTES
+
+    def skill_package(self, account: str = "") -> tuple[str, dict[str, bytes]]:
+        """A few lines that ask the connector for the instructions, so improvements reach every
+        account without uploading the skill again."""
+        template = resources.files("harness.templates").joinpath("connector", "SKILL.md").read_text("utf-8")
+        text = Template(template).safe_substitute(
+            self.notes(), PROFILE=self.bindings().get(account, "<the profile id>"), TOOL=self.tool)
+        return self.SKILL_NAME, {f"{self.SKILL_NAME}/SKILL.md": text.encode("utf-8")}
+
+    def skill_folder(self) -> Path:
+        return Path.home() / "Downloads"
+
+    def deliver_skill(self, target: Path | None = None, account: str = "") -> Path:
+        """Write the skill for one account where the user finds it, and open the upload page."""
+        name, files = self.skill_package(account)
+        if target is None:
+            folder = self.skill_folder()
+            folder.mkdir(parents=True, exist_ok=True)
+            suffix = f"-{slugify(account)}" if account else ""
+            target = folder / f"{name}-{self.tool}{suffix}.zip" if self.tool != "claude-ai" else \
+                folder / f"{name}{suffix}.zip"
+        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+            for path, content in files.items():
+                archive.writestr(path, content)
+        if self.SKILLS_PAGE:
+            webbrowser.open(self.SKILLS_PAGE)
+        return target
 
     # --- what the connector serves ------------------------------------------------------------
 
@@ -45,10 +87,7 @@ class ConnectorAdapter(AccountBoundAdapter):
         config = repo.config
         saved = "\n".join(f"- {a['url']} version {a['version']}" for a in saved_apps(repo).values()
                           if a.get("url") and a.get("version")) or "- (none yet)"
-        notes = {"TOOL_TITLE": self.tool, "NOT_HERE": "", "SETUP": "Nothing to set up.",
-                 "WHERE_SKILLS": "", "APPS_NAME": "apps", "PROJECT_NAME": "project",
-                 "SURFACE": self.tool, "SURFACES": self.tool,
-                 "APPS_HOW": "Copy each app's files exactly, with this tool's own means."} | self.TOOL_NOTES
+        notes = self.notes()
         templates = resources.files("harness.templates").joinpath("connector")
         text = templates.joinpath("save.md").read_text("utf-8") + "\n\n---\n\n" + \
             templates.joinpath("reader.md").read_text("utf-8")
@@ -57,11 +96,6 @@ class ConnectorAdapter(AccountBoundAdapter):
             AFTER_EVERY_REPLY=Template(AFTER_EVERY_REPLY[config.connector.transcript]).substitute(
                 EVERY=config.connector.summary_every_replies),
             SUMMARY_REQUEST=summary_request(config.checkpoints.summary_max_words, config.working_language))
-
-    def instruction_line(self, profile: str) -> str:
-        """The one line the user puts into the tool (its custom instructions)."""
-        return (f"Before anything about my work, call the harness connector's harness_instructions "
-                f"with tool: {self.tool} and profile: {profile}, and follow what it returns.")
 
     # --- nothing is pulled: the tool sends -------------------------------------------------------
 
@@ -99,8 +133,9 @@ class ConnectorAdapter(AccountBoundAdapter):
         return steps
 
     def setup_steps(self, account: str, profile: str) -> list[str]:
-        return [f"In {self.tool} ({account}): add the harness connector as an MCP server, and add to "
-                f"its custom instructions: {self.instruction_line(profile)}"]
+        target = self.deliver_skill(account=account)
+        return [f"In {self.tool} ({account}): add the harness connector as an MCP server, and upload "
+                f"the skill {target}."]
 
     def handle_hook(self, event: dict[str, Any], deferred: bool = False) -> dict[str, Any] | None:
         return None

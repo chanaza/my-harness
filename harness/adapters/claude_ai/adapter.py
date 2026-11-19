@@ -23,12 +23,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import webbrowser
-import zipfile
 from fnmatch import fnmatch
-from importlib import resources
 from pathlib import Path
-from string import Template
 
 from ...harvest import Captured, HarvestReport, HarvestSync, Kind
 from ...local import LocalHome, StateFile
@@ -60,6 +56,10 @@ class ClaudeAiAdapter(ConnectorAdapter):
     #: What is particular to the Claude account, filled into the engine's save instructions.
     TOOL_NOTES = {
         "TOOL_TITLE": "Claude account",
+        "SCOPE": "this Claude account (claude.ai, Claude Desktop, Cowork)",
+        "NOT_HERE_SHORT": "Not for Claude Code (it saves itself). ",
+        "NOT_HERE_LONG": ("Not in Claude Code (a coding agent in a terminal, IDE or Claude Code on the "
+                          "web): there, do nothing with this skill."),
         "NOT_HERE": ("**Not in Claude Code:** Claude Code is saved by the harness itself (completely, "
                      "with its own hooks). If you are running as Claude Code (a coding agent in a "
                      "terminal, IDE or Claude Code on the web), do nothing with this skill."),
@@ -115,20 +115,13 @@ class ClaudeAiAdapter(ConnectorAdapter):
                                            f"{len(latest.projects())} projects"))
         return accounts
 
-    def deliver_skill(self, target: Path | None = None, account: str = "") -> Path:
-        """Write the account skill (for one account) where the user sees it, and open the
-        upload page."""
-        name, files = self.skill_package(account)
-        if target is None:
-            configured = self._settings().skill_folder
-            folder = Path(configured).expanduser() if configured else _visible_folder()
-            folder.mkdir(parents=True, exist_ok=True)
-            target = folder / (f"{name}-{slugify(account)}.zip" if account else f"{name}.zip")
-        with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
-            for path, content in files.items():
-                archive.writestr(path, content)
-        webbrowser.open(self._settings().skills_page)
-        return target
+    def skill_folder(self) -> Path:
+        configured = self._settings().skill_folder
+        return Path(configured).expanduser() if configured else _visible_folder()
+
+    @property
+    def SKILLS_PAGE(self) -> str:  # noqa: N802 - the base's setting, from this harness's config
+        return self._settings().skills_page
 
     def after_setup(self, profiles: list[str]) -> list[str]:
         """One skill file per account, and the steps for each account by its e-mail."""
@@ -147,14 +140,6 @@ class ClaudeAiAdapter(ConnectorAdapter):
     def scheduled_tasks(self) -> list[tuple[str, str]]:
         """The Cowork scheduled task the skill's setup mode creates: (when, what it runs)."""
         return [("every day", f"Run the {SKILL_NAME} skill in describe mode.")]
-
-    def skill_package(self, account: str = "") -> tuple[str, dict[str, bytes]]:
-        """The thin account skill: it fetches its instructions from the harness connector, so
-        improvements reach every account without uploading it again."""
-        template = resources.files(__package__).joinpath("skill", "SKILL.md").read_text("utf-8")
-        text = Template(template).safe_substitute(
-            PROFILE=self.bindings().get(account, "<the profile id>"), TOOL=self.tool)
-        return SKILL_NAME, {f"{SKILL_NAME}/SKILL.md": text.encode("utf-8")}
 
     # --- what an export holds ----------------------------------------------------------------
 

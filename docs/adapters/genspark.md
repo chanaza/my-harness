@@ -8,10 +8,12 @@ engine's (`harness/templates/connector/`), the same for every such tool.
 
 Setting up (once per Genspark account):
 
-1. `python -m harness setup genspark` names the account (its e-mail) and prints the
-   instruction line for it.
+1. `python -m harness setup genspark` names the account (its e-mail) and writes the skill
+   file for it to your Downloads folder.
 2. In Genspark: add an MCP server (Streamable HTTP) with your connector's address.
-3. In Genspark, Settings > Personalization: add the instruction line. From then on every
+3. In Genspark: Skills > + New Skill > Upload the skill file. It is the same thin skill as
+   for the Claude account: once per conversation it asks the connector for its
+   instructions, so improvements arrive without uploading it again. From then on every
    exchange is saved word for word, a summary every 10 replies, and "describe my Genspark
    to the harness" saves what the account has built.
 

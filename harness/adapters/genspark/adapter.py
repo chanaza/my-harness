@@ -1,6 +1,7 @@
 """``GensparkAdapter``: only what is particular to Genspark; everything else is the engine's
-``ConnectorAdapter``. Genspark keeps its custom instructions in Settings > Personalization
-(and per Hub); its Hubs are what the harness calls projects, its GenTeam agents are agents."""
+``ConnectorAdapter``. Genspark has Skills (uploaded as a file) and custom instructions
+(Settings > Personalization, and per Hub); its Hubs are what the harness calls projects,
+its GenTeam agents are agents."""
 
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ class GensparkAdapter(ConnectorAdapter):
                         "commas). If you don't use Genspark, just press Enter")
     TOOL_NOTES = {
         "TOOL_TITLE": "Genspark",
+        "SCOPE": "this Genspark account",
         "SETUP": ("Nothing to set up: describe mode runs when the user asks (\"describe my Genspark "
                   "to the harness\"), and once a day if this account can schedule a task."),
         "PROJECT_NAME": "Hub (a Genspark project)",
@@ -25,6 +27,9 @@ class GensparkAdapter(ConnectorAdapter):
         "SURFACES": "genspark",
     }
 
+    SKILLS_PAGE = "https://www.genspark.ai/"
+
     def setup_steps(self, account: str, profile: str) -> list[str]:
+        target = self.deliver_skill(account=account)
         return [f"In Genspark ({account}): add an MCP server (Streamable HTTP) with your connector's "
-                f"address, then in Settings > Personalization add: {self.instruction_line(profile)}"]
+                f"address; then Skills > + New Skill > Upload: {target}"]

@@ -32,6 +32,14 @@ def isolated_harness_home(tmp_path_factory, monkeypatch) -> None:
     desktop.mkdir()
     monkeypatch.setattr("harness.adapters.claude_ai.adapter._visible_folder", lambda: desktop)
     monkeypatch.setattr("webbrowser.open", lambda url: True)
+    monkeypatch.setattr("harness.adapters.connector.ConnectorAdapter.skill_folder", lambda self: desktop)
+    from harness.adapters.claude_ai.adapter import ClaudeAiAdapter
+    real_folder = ClaudeAiAdapter.skill_folder
+
+    def claude_folder(self):   # a folder the test configured, else the isolated desktop
+        configured = self._settings().skill_folder
+        return real_folder(self) if configured and not configured.startswith("~") else desktop
+    monkeypatch.setattr("harness.adapters.claude_ai.adapter.ClaudeAiAdapter.skill_folder", claude_folder)
 
 
 @pytest.fixture
