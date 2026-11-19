@@ -105,5 +105,6 @@ test("after an exchange, the connector names the replies still missing", async (
   const text = (await save("exchange-1-x-5.md", content)).content[0].text;
   assert.match(text, /Replies 2, 4 of this conversation are missing/);
   assert.match(text, /instructions: version 0\.25\.0/);       // older instructions are re-read
+  assert.match(text, /Built mode: if in this conversation you created/); // built things are sent
   globalThis.inbox = [];
 });
