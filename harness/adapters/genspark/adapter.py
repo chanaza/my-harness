@@ -17,8 +17,8 @@ class GensparkAdapter(ConnectorAdapter):
     TOOL_NOTES = {
         "TOOL_TITLE": "Genspark",
         "SCOPE": "this Genspark account",
-        "SETUP": ("Nothing to set up: describe mode runs when the user asks (\"describe my Genspark "
-                  "to the harness\"), and once a day if this account can schedule a task."),
+        "SETUP": ("Nothing to set up: what you build is saved when it is built (built mode); describe "
+                  "mode runs when the user asks, and once a day if this account can schedule a task."),
         "PROJECT_NAME": "Hub (a Genspark project)",
         "APPS_NAME": "pages, slides, sheets and other things the user made",
         "APPS_HOW": ("Copy each one's content exactly as text (e.g. a page's HTML as `index.html`); a "

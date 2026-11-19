@@ -148,10 +148,24 @@ async function save({ file_name: name, content }, env) {
   if (!written.ok) return answer(`Not saved: GitHub answered ${written.status}.`, true);
   await startInboxRun(env, branch);
   const missing = name.startsWith("exchange-") ? await missingReplies(name, content, env, branch) : [];
-  return answer(missing.length
+  const tool = (content.match(/^tool:\s*(\S+)/m) || [])[1];
+  const version = tool ? await instructionsVersion(tool, env, branch) : null;
+  return answer((missing.length
     ? `Saved ${name}. Replies ${missing.join(", ")} of this conversation are missing in the harness: ` +
       "send each of them now the same way (word for word, as you still see them), oldest first."
-    : `Saved ${name}.`, false);
+    : `Saved ${name}.`) +
+    (version ? ` Current harness instructions: version ${version}; if yours are older, call ` +
+      "harness_instructions again and follow the new ones from now on." : ""), false);
+}
+
+// The version line of the instructions the connector serves for a tool, so a conversation that
+// fetched older instructions picks up the new ones without the user doing anything.
+async function instructionsVersion(tool, env, branch) {
+  if (!SLUG.test(tool)) return null;
+  let file = await github(env, "GET", `contents/connector/instructions/${tool}.md?ref=${branch}`, null, "raw");
+  if (!file.ok) return null;
+  const match = (await file.text()).match(/version ([0-9][0-9.]*)/);
+  return match ? match[1] : null;
 }
 
 // Which earlier replies of a conversation never arrived: neither saved (sessions/.../replies/)

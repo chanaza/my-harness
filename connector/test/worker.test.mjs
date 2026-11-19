@@ -14,6 +14,7 @@ globalThis.fetch = async (url, init = {}) => {
     { kind: "conversation", name: "Plan", date: "2026-11-19", first_message: "q1", log: "sessions/p/c/log.md", path: "sessions/p/c" }]);
   if (url.includes("contents/sessions/p/c/log.md")) return new Response("x".repeat(70000));
   if (url.includes("connector/instructions/claude-ai.md")) return new Response("Profile: ${PROFILE}. Save after every reply.");
+  if (url.includes("connector/instructions/genspark.md")) return new Response("# Harness instructions: Genspark (instructions version 0.25.0)");
   if (url.includes("connector/instructions/reader.md")) return new Response("Reader for ${PROFILE}");
   if (url.includes("connector/instructions/")) return new Response("{}", { status: 404 });
   if (url.includes("harness.config.yaml")) return new Response("connector:\n  transcript: exchange\n  run_every_minutes: 45\n");
@@ -95,7 +96,7 @@ test("find by what a person remembers, read in parts, never outside the harness"
   assert.match(first, /continue with offset 60000/);
   assert.equal((await callTool("harness_read", { path: "../secrets" })).isError, true);
   assert.equal((await callTool("harness_read", { path: ".git/config" })).isError, true);
-  assert.equal((await callTool("harness_instructions", { tool: "genspark", profile: "genspark-x" })).content[0].text, "Reader for genspark-x");
+  assert.equal((await callTool("harness_instructions", { tool: "cursor", profile: "cursor-x" })).content[0].text, "Reader for cursor-x");
 });
 
 test("after an exchange, the connector names the replies still missing", async () => {
@@ -103,5 +104,6 @@ test("after an exchange, the connector names the replies still missing", async (
   const content = "---\nschema: harness-exchange/1\nprofile: p1\ntool: genspark\nconversation: conversation-1-x\nnumber: 5\n---\n## User\nq\n";
   const text = (await save("exchange-1-x-5.md", content)).content[0].text;
   assert.match(text, /Replies 2, 4 of this conversation are missing/);
+  assert.match(text, /instructions: version 0\.25\.0/);       // older instructions are re-read
   globalThis.inbox = [];
 });

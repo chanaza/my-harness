@@ -29,6 +29,15 @@ project mode once per conversation (projects can only be read from inside them).
 
 ${SETUP}
 
+## Built mode (whenever you build something)
+
+Whenever, in a conversation, you create or change something the user keeps - a skill, an
+agent, a ${PROJECT_NAME}, ${APPS_NAME}, instructions, a scheduled task or workflow - send it
+right away, in full, as `describe-<time>-built-<short-name>.yaml`: the describe form below
+with `partial: true` and only that item (every file of it, word for word). If you built
+something earlier in this conversation and did not send it yet, send it now. Nobody has to
+ask for it: what the user builds is saved when it is built.
+
 ## Describe mode
 
 Send `describe-<time>.yaml` with EXACTLY this structure. Fill every field from what

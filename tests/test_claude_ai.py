@@ -538,3 +538,11 @@ def test_missing_replies_are_reported(connected: ClaudeAiAdapter, repo: ContentR
     InboxProcessor(repo).run()
     folder = "sessions/claude-ai-personal-cloud/conversation-20261119-0700-plan"
     assert conversation_gaps(repo) == {folder: [2, 3]}
+
+
+def test_what_is_built_is_saved_when_it_is_built(repo: ContentRepo):
+    from harness.inbox import write_connector_instructions
+    write_connector_instructions(repo)
+    for tool in ("claude-ai", "genspark"):
+        served = repo.path("connector", "instructions", f"{tool}.md").read_text()
+        assert "## Built mode" in served and "Nobody has to\nask for it" in served
