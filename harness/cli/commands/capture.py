@@ -246,6 +246,8 @@ class InboxCommand(Command):
         repo_argument(parser)
         parser.add_argument("--retry-rejected", action="store_true",
                             help="Try the files in inbox/rejected/ again (e.g. after an engine fix).")
+        parser.add_argument("--add", nargs="+", metavar="FILE", default=[],
+                            help="First put these files into the inbox (checked against their form).")
 
     def run(self, args: argparse.Namespace) -> int:
         from ...inbox import InboxProcessor, write_connector_instructions
@@ -255,6 +257,11 @@ class InboxCommand(Command):
         if args.retry_rejected:
             for path in InboxProcessor(repo).retry_rejected():
                 print(f"  ~ retrying {path}")
+        for source in args.add:
+            try:
+                print(f"  + {InboxProcessor(repo).add(Path(source)).name}")
+            except ValueError as exc:
+                raise ErrorExit(f"{source}: {exc}") from None
         write_connector_instructions(repo)  # the skills' instructions follow this engine
         report = InboxProcessor(repo).run()
         for problem in report.errors:

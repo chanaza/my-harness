@@ -143,14 +143,19 @@ class ClaudeAiAdapter(AccountBoundAdapter):
             PROFILE=self.bindings().get(account, "<the profile id>"), TOOL=self.tool)
         return SKILL_NAME, {f"{SKILL_NAME}/SKILL.md": text.encode("utf-8")}
 
-    def connector_instructions(self, config) -> str:
-        """The skill's full instructions, from this engine and the harness's settings
-        (${PROFILE} is filled in by the connector for each account)."""
+    def connector_instructions(self, repo: ContentRepo) -> str:
+        """The skill's full instructions, from this engine, the harness's settings and what is
+        already saved (${PROFILE} is filled in by the connector for each account)."""
+        from ...inbox import saved_apps
+        config = repo.config
+        apps = saved_apps(repo)
+        saved = "\n".join(f"- {a['url']} version {a['version']}" for a in apps.values()
+                          if a.get("url") and a.get("version")) or "- (none yet)"
         from ... import __version__
         from ...digest import summary_request
         template = resources.files(__package__).joinpath("skill", "INSTRUCTIONS.md").read_text("utf-8")
         return Template(template).safe_substitute(
-            VERSION=__version__, TOOL=self.tool,
+            VERSION=__version__, TOOL=self.tool, SAVED_APPS=saved,
             AFTER_EVERY_REPLY=Template(AFTER_EVERY_REPLY[config.connector.transcript]).substitute(
                 EVERY=config.connector.summary_every_replies),
             SUMMARY_REQUEST=summary_request(config.checkpoints.summary_max_words, config.working_language))

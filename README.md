@@ -51,7 +51,7 @@ From then on, everything is saved by itself. Nothing is shown while it runs.
 | Tool | What | How |
 |---|---|---|
 | Claude Code (computer and cloud) | Instructions, skills, agents, memory, connections; every conversation in full (raw transcript + readable log) and its summary | Every turn, in the background |
-| claude.ai and Cowork (your Claude account) | Profile, instructions, memory, your skills and plugins with their files, projects (from inside each project), scheduled tasks, apps, connections | The account skill: a full description every day; a project when you work in it |
+| claude.ai and Cowork (your Claude account) | Profile, instructions, memory, your skills and plugins with their files, projects (from inside each project), scheduled tasks, apps (artifacts, new or changed versions), connections | The account skill: a full description every day; a project when you work in it |
 | — conversations there | Every exchange word for word, and a summary every 10 replies | The account skill, after every reply |
 | — history from before | Every chat with its attachments | Once, from claude.ai's data export (Settings > Privacy > Export data) |
 | Cowork sessions kept on a computer | Every conversation and its files | When you ask: `python -m harness harvest cowork` |

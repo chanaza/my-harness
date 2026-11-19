@@ -77,7 +77,7 @@ class Adapter(ABC):
         """Write the adapter's skill (if any) where the user can upload it; return its path."""
         return None
 
-    def connector_instructions(self, config: Any) -> str | None:
+    def connector_instructions(self, repo: ContentRepo) -> str | None:
         """Instructions the harness connector serves to this tool's skill (None: no skill)."""
         return None
 

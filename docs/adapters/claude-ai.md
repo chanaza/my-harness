@@ -17,6 +17,9 @@ way to read them from outside for a single person. So the account saves itself:
      profile, instructions, memory, skills, agents, plugins, connections,
      projects, workflows (scheduled tasks), apps (artifacts), native settings,
      and `cannot_see` for anything it had no view of.
+   - **apps (artifacts)**: copied by version. The served instructions list the apps
+     already saved with their version; only new or changed apps are copied (a page's
+     HTML, or a typed artifact's own `project/` files). An incomplete copy is not saved.
 2. **GitHub Actions** in the repository runs `harness inbox`: each file is checked
    against its form and saved like any other capture (no computer needed).
 3. **A data export** (Settings > Privacy > Export data), downloaded to

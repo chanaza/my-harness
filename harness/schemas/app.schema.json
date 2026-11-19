@@ -82,6 +82,10 @@
     },
     "provenance": {
       "$ref": "provenance.schema.json"
+    },
+    "version": {
+      "type": "string",
+      "description": "The tool's version of the app when it was saved (only changed versions are copied again)."
     }
   },
   "additionalProperties": false

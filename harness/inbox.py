@@ -177,7 +177,7 @@ class InboxProcessor:
     def _describe(self, file: InboxFile, tool: str, report: HarvestReport) -> None:
         exclude = self.repo.config.harvest_exclude
         from fnmatch import fnmatch
-        items = [i for i in describe_items(file, tool)
+        items = [i for i in describe_items(file, tool, self.repo)
                  if not any(fnmatch(f"{i.kind.value}:{i.name}", p) for p in exclude)]
         # A partial description (e.g. one project, from inside it) keeps its own records, so it
         # neither removes nor replaces what the full daily description saved.
@@ -197,6 +197,15 @@ class InboxProcessor:
         recorder = CheckpointRecorder(self.local, self.repo, record)
         recorder.write(file.body, "saved through the harness connector")
         report.counts["conversations saved"] += 1
+
+    def add(self, source: Path) -> Path:
+        """Put a file into the inbox after the same form check the processing does (for content
+        read by other means, e.g. files copied exactly from a tool; never by hand)."""
+        self._read(source)  # raises ValueError when it does not match its form
+        self.folder.mkdir(parents=True, exist_ok=True)
+        target = self.folder / source.name
+        shutil.copyfile(source, target)
+        return target
 
     def retry_rejected(self) -> list[str]:
         """Put rejected files back into the inbox (their problem notes are dropped)."""
@@ -236,7 +245,7 @@ def write_connector_instructions(repo: ContentRepo) -> list[str]:
     from .adapters import adapters
     written = []
     for tool in adapters.names():
-        text = adapters.create(tool).connector_instructions(repo.config)
+        text = adapters.create(tool).connector_instructions(repo)
         if text is None:
             continue
         path = repo.path(*INSTRUCTIONS_FOLDER, f"{tool}.md")
@@ -257,7 +266,30 @@ def _memory_name(entry: dict[str, Any]) -> str:
     return slugify(Path(topic).stem if topic.startswith("/") else topic) or "memory"
 
 
-def describe_items(describe: InboxFile, tool: str) -> list[Captured]:
+def saved_apps(repo: ContentRepo) -> dict[str, dict[str, Any]]:
+    """apps/<name>/app.yaml of every saved app: its link and version (so unchanged apps are not
+    copied again)."""
+    found = {}
+    for descriptor in sorted(repo.path("apps").glob("*/app.yaml")):
+        data = yaml_io.load(descriptor.read_text("utf-8")) or {}
+        found[descriptor.parent.name] = {k: data.get(k) for k in ("url", "version")}
+    return found
+
+
+def _complete(path: str, content: str) -> bool:
+    """A copied file is whole: a full HTML page ends its document, JSON parses."""
+    text = content.strip().lower()
+    if path.endswith((".html", ".htm")) and "<html" in text:
+        return text.endswith("</html>")
+    if path.endswith(".json"):
+        try:
+            json.loads(content)
+        except ValueError:
+            return False
+    return True
+
+
+def describe_items(describe: InboxFile, tool: str, repo: ContentRepo | None = None) -> list[Captured]:
     """A describe file -> harness items, each kind in its own place, with full content.
     Things that are not the user's (e.g. Anthropic's skills), or whose content could not be
     read, are only recorded in the account's native file, never saved as empty copies."""
@@ -301,13 +333,22 @@ def describe_items(describe: InboxFile, tool: str) -> list[Captured]:
     for entry in data.get("workflows") or []:
         items.append(Captured(Kind.WORKFLOW, entry["name"], origin, meta={
             "description": entry["name"], "prompt": entry.get("prompt"), "trigger": entry.get("schedule")}))
+    saved = saved_apps(repo) if repo else {}
     for entry in data.get("apps") or []:
         if not entry.get("files"):
+            same = saved.get(slugify(entry["name"]), {}).get("version") == str(entry.get("version"))
+            if entry.get("version") and same:
+                continue   # unchanged since it was saved: nothing to copy
             unreadable.append(f"apps: {entry['name']} ({entry.get('not_readable') or 'no content sent'})")
             continue
+        broken = [f["path"] for f in entry["files"] if not _complete(f["path"], f["content"])]
+        if broken:
+            unreadable.append(f"apps: {entry['name']} (incomplete copy of {', '.join(broken)}; not saved)")
+            continue
+        fields = {k: str(entry[k]) for k in ("link", "version") if entry.get(k)}
         items.append(Captured(Kind.APP, entry["name"], origin, _files(entry["files"]),
                               meta={"description": entry.get("description") or entry["name"],
-                                    "fields": {"link": entry.get("link")} if entry.get("link") else {}}))
+                                    "fields": fields}))
     if data.get("partial"):   # only what is listed: the account's own file is left as it is
         return items
     rest = {key: data[key] for key in ("user_profile", "native", "cannot_see", "surface") if data.get(key)}

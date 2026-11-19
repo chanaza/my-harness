@@ -433,3 +433,34 @@ def test_exchanges_make_a_word_for_word_log(connected: ClaudeAiAdapter, repo: Co
     assert log.count("Reply 2 ") == 1                                       # sent twice: kept once
     from conftest import validate
     assert validate(repo).ok, validate(repo).problems
+
+
+def test_apps_are_copied_by_version_and_whole(connected: ClaudeAiAdapter, repo: ContentRepo, tmp_path: Path):
+    from harness.inbox import InboxProcessor, write_connector_instructions
+    head = ("schema: harness-describe/1\nprofile: claude-ai-personal-cloud\ntool: claude-ai\n"
+            "captured_at: 2026-11-19T06:00:00Z\npartial: true\napps:\n")
+    page = "<!doctype html><html><body>Map</body></html>"
+    first = tmp_path / "describe-20261119-0600-apps.yaml"
+    first.write_text(head + f"  - {{name: Map, link: https://claude.ai/artifact/a, version: v1, "
+                     f"files: [{{path: index.html, content: '{page}'}}]}}\n"
+                     "  - {name: Cut, link: https://claude.ai/artifact/b, version: v1, "
+                     "files: [{path: index.html, content: '<html><body>Cu'}]}\n")
+    InboxProcessor(repo).add(first)                     # checked like a connector file
+    InboxProcessor(repo).run()
+    descriptor = repo.path("apps", "map", "app.yaml").read_text()
+    assert "version: v1" in descriptor and repo.path("apps", "map", "index.html").read_text() == page
+    assert not repo.path("apps", "cut").exists()       # an incomplete copy is never saved
+    write_connector_instructions(repo)
+    served = repo.path("connector", "instructions", "claude-ai.md").read_text()
+    assert "https://claude.ai/artifact/a version v1" in served           # not copied again
+    again = tmp_path / "describe-20261120-0600.yaml"
+    again.write_text(head.replace("partial: true\n", "") +
+                     "  - {name: Map, link: https://claude.ai/artifact/a, version: v1}\n")
+    InboxProcessor(repo).add(again)
+    InboxProcessor(repo).run()
+    native = next(repo.path("native", "claude-ai-personal-cloud").rglob("account.yaml")).read_text()
+    assert "Map" not in native                          # unchanged: not reported as missing
+    bad = tmp_path / "describe-20261121-0600.yaml"
+    bad.write_text("schema: harness-describe/1\n")
+    with pytest.raises(ValueError):
+        InboxProcessor(repo).add(bad)

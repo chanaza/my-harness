@@ -43,10 +43,20 @@ Use an empty list for nothing; put every kind you had no view of at all into
 **Full content for everything the user built** (origin `mine`): every file of each
 skill (read them where skills are kept for you, e.g. /mnt/skills/user/<skill>/), every
 file of each plugin and agent, each project's instructions and knowledge files, each
-app's code (read each app's source with the artifact tools when you have them, and copy
-it exactly). If you cannot read an item's content, keep the item with
+app's code (see **Apps** below). If you cannot read an item's content, keep the item with
 `not_readable: <why>` instead of `files`: never send an empty or made-up copy.
 Others' items (Anthropic's skills, marketplace plugins): name and description only.
+
+**Apps** (artifacts): list every app with its `link` and `version` (as the artifact
+tools report it). Copy its files ONLY when the app is not in this list of apps already
+saved, or its version is different:
+
+${SAVED_APPS}
+
+Read the files with the artifact tools and copy them exactly: for a plain page its HTML
+as `index.html`; for an artifact made from a type (slides, docs...) only its own files
+under `project/` (never the type's files such as `artifact-type/` or the type's
+`index.html`). The artifact's own database is not copied.
 
 **Large:** if the file would be over 800 KB, split it into parts named
 `describe-<time>-1of3.yaml`, `-2of3`, ... Every part starts with the same `schema`,
@@ -88,7 +98,7 @@ projects:
 workflows:                             # scheduled tasks
   - {name: ..., schedule: ..., prompt: "..."}
 apps:                                  # artifacts the user built (pages, apps)
-  - {name: ..., description: ..., link: ..., files: [{path: index.html, content: "..."}]}
+  - {name: ..., description: ..., link: ..., version: ..., files: [{path: index.html, content: "..."}]}
 native:                                # settings with no equivalent elsewhere (model, features on)
   - {name: ..., value: ...}
 cannot_see: []                         # kinds you had no view of at all, e.g. [apps]

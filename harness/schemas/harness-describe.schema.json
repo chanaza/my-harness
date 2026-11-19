@@ -333,6 +333,9 @@
               },
               "not_readable": {
                 "type": "string"
+              },
+              "version": {
+                "type": "string"
               }
             }
           }

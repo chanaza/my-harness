@@ -309,6 +309,8 @@ class AppWriter(FolderWriter):
                       "purpose": item.meta.get("description", item.name)}
         if fields.get("link"):
             descriptor["url"] = fields["link"]
+        if fields.get("version"):
+            descriptor["version"] = str(fields["version"])
         return {**descriptor, "provenance": Provenance.updated(previous, origin)}
 
 
