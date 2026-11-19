@@ -137,8 +137,25 @@ class DescribeBeforeFullContent(Migration):
         return changes
 
 
+class UniformLineEndings(Migration):
+    """Files once saved from Windows with CRLF line endings are stored with LF, like the rest
+    (with .gitattributes from the template, every later save is stored that way by Git)."""
+
+    id = "uniform-line-endings"
+    description = "Store every text file with the same line endings on every computer"
+
+    def apply(self, repo: ContentRepo) -> list[str]:
+        import subprocess
+        if not (repo.root / ".git").exists() or not (repo.root / ".gitattributes").is_file():
+            return []
+        subprocess.run(["git", "add", "--renormalize", "."], cwd=repo.root, capture_output=True, check=False)
+        changed = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=repo.root,
+                                 capture_output=True, text=True, check=False).stdout.split()
+        return changed
+
+
 MIGRATIONS: tuple[Migration, ...] = (SimplifySessionRecords(), RemoveEngineArtifacts(),
-                                     DescribeBeforeFullContent())
+                                     DescribeBeforeFullContent(), UniformLineEndings())
 
 
 def run_migrations(repo: ContentRepo) -> dict[str, list[str]]:

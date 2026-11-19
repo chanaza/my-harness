@@ -96,3 +96,24 @@ def test_different_text_on_both_sides_is_a_real_conflict(tmp_path: Path):
     ours.write_text("---\nname: x\n---\nMine\n")
     theirs.write_text("---\nname: x\n---\nTheirs\n")
     assert not StructuredMerge().merge_file(base, ours, theirs, "memory/x.md")
+
+
+def test_windows_line_endings_are_stored_like_everywhere_else(tmp_path):
+    import subprocess
+
+    from harness.migrations import UniformLineEndings
+    from harness.repo import ContentRepo
+    from harness.scaffold import InitOptions, Scaffolder
+    repo = Scaffolder().create(tmp_path / "c", InitOptions(owner="t"))
+    assert (repo.root / ".gitattributes").is_file()               # new harnesses get it
+    run = lambda *a: subprocess.run(["git", "-c", "user.email=a@b", "-c", "user.name=a", *a],  # noqa: E731
+                                    cwd=repo.root, capture_output=True, text=True, check=True)
+    (repo.root / ".gitattributes").unlink()
+    run("init", "-q")
+    (repo.root / "note.md").write_bytes(b"line one\r\nline two\r\n")   # saved on Windows, before
+    run("add", "-A")
+    run("commit", "-q", "-m", "windows")
+    Scaffolder().ensure_structure(ContentRepo(repo.root))          # harness upgrade adds it
+    assert "note.md" in UniformLineEndings().apply(ContentRepo(repo.root))
+    run("commit", "-q", "-m", "normalized")
+    assert b"\r\n" not in run("show", "HEAD:note.md").stdout.encode()

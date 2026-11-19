@@ -1,0 +1,3 @@
+# Every computer (Windows, macOS, Linux) stores text files the same way (LF line endings),
+# so a save from Windows does not "change" whole files. Binary files are detected and kept as-is.
+* text=auto eol=lf
