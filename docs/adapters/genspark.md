@@ -17,5 +17,14 @@ Setting up (once per Genspark account):
    exchange is saved word for word, a summary every 10 replies, and "describe my Genspark
    to the harness" saves what the account has built.
 
+4. **Required, once:** Settings > Personalization: add the line `harness setup genspark`
+   prints ("After each of your replies, save the exchange to my harness..."). A skill is
+   only read when Genspark finds it relevant; Personalization goes with every reply, so
+   this is what makes saving happen after every reply.
+
+Missed replies: after every saved exchange the connector says which earlier replies of
+the conversation are missing, and the model sends them too. `harness status` lists
+conversations that still have gaps.
+
 Not verified yet in Genspark itself: adding the MCP server, and how reliably it follows
 the instruction after every reply (the log marks any reply that did not arrive).

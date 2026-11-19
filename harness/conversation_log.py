@@ -72,6 +72,12 @@ class ConversationLog:
         self.write(title, replies)
         return max(r.number for r in replies)
 
+    def missing(self) -> list[int]:
+        """Reply numbers that never arrived (only for replies that arrive one by one)."""
+        numbers = sorted(int(p.stem) for p in self.replies_folder.glob("*.yaml")) \
+            if self.replies_folder.is_dir() else []
+        return sorted(set(range(1, numbers[-1] + 1)) - set(numbers)) if numbers else []
+
     @staticmethod
     def render(title: str, replies: Iterable[Reply]) -> str:
         """The log: a title, then each reply in order; missing numbers are marked, so a gap

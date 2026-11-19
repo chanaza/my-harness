@@ -505,7 +505,9 @@ def test_genspark_saves_through_the_same_engine(repo: ContentRepo, tmp_path: Pat
     result = SetupWizard(Answers("me@example.com", "work", str(tmp_path / "f")), LocalHome()).run(
         SetupOptions(tool="genspark", repo=str(repo.root), environment="local"))
     assert result.profiles == ["genspark-work-cloud"]
-    skill_file = Path(result.next_steps[-1].split("Upload: ")[1])
+    upload = next(step for step in result.next_steps if "Upload: " in step)
+    skill_file = Path(upload.split("Upload: ")[1])
+    assert any("Personalization" in s and "After each of your replies" in s for s in result.next_steps)
     with zipfile.ZipFile(skill_file) as archive:
         skill = archive.read("harness-account/SKILL.md").decode()
     assert "`tool: genspark` and `profile: genspark-work-cloud`" in skill   # the same thin skill
@@ -525,3 +527,14 @@ def test_genspark_saves_through_the_same_engine(repo: ContentRepo, tmp_path: Pat
     InboxProcessor(repo).run()
     log = repo.path("sessions", "genspark-work-cloud", "conversation-20261119-0900-ideas", "log.md")
     assert "an idea" in log.read_text()
+
+
+def test_missing_replies_are_reported(connected: ClaudeAiAdapter, repo: ContentRepo):
+    from harness.inbox import InboxProcessor, conversation_gaps
+    inbox = repo.path("inbox", "connector")
+    inbox.mkdir(parents=True)
+    for number in (1, 4):
+        (inbox / f"exchange-20261119-0700-plan-{number}.md").write_text(exchange(number, "x"))
+    InboxProcessor(repo).run()
+    folder = "sessions/claude-ai-personal-cloud/conversation-20261119-0700-plan"
+    assert conversation_gaps(repo) == {folder: [2, 3]}

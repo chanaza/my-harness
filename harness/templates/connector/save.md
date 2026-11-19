@@ -143,7 +143,10 @@ surface: ${SURFACE}            # ${SURFACES}
 <your reply, word for word>
 ```
 
-Copy both word for word, nothing shortened. Files attached to the message: list their
+Copy both word for word, nothing shortened. If `save_to_harness` answers that earlier
+replies of this conversation are missing, send each of them now the same way (word for
+word, as you still see them in the conversation), oldest first; skip any you can no longer
+see. Files attached to the message: list their
 names only.
 
 ## Save mode

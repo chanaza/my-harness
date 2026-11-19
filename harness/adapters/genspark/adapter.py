@@ -29,7 +29,10 @@ class GensparkAdapter(ConnectorAdapter):
 
     SKILLS_PAGE = "https://www.genspark.ai/"
 
+    ALWAYS_ON = "Settings > Personalization"
+
     def setup_steps(self, account: str, profile: str) -> list[str]:
         target = self.deliver_skill(account=account)
         return [f"In Genspark ({account}): add an MCP server (Streamable HTTP) with your connector's "
-                f"address; then Skills > + New Skill > Upload: {target}"]
+                f"address; then Skills > + New Skill > Upload: {target}",
+                f"Required, once: add to {self.ALWAYS_ON}: {self.always_on_line()}"]

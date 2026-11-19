@@ -132,10 +132,20 @@ class ConnectorAdapter(AccountBoundAdapter):
                 steps += self.setup_steps(email, profile)
         return steps
 
+    #: Where the tool keeps instructions that go with every reply (its custom instructions).
+    ALWAYS_ON = "its custom instructions"
+
+    def always_on_line(self) -> str:
+        """The one line that makes saving happen after EVERY reply. A skill is only read when the
+        model finds it relevant; custom instructions go with every reply."""
+        return ("After each of your replies, save the exchange to my harness: send it with the harness "
+                "connector's save_to_harness, as the harness-account skill says (exchange mode).")
+
     def setup_steps(self, account: str, profile: str) -> list[str]:
         target = self.deliver_skill(account=account)
         return [f"In {self.tool} ({account}): add the harness connector as an MCP server, and upload "
-                f"the skill {target}."]
+                f"the skill {target}.",
+                f"Required, once: add to {self.ALWAYS_ON}: {self.always_on_line()}"]
 
     def handle_hook(self, event: dict[str, Any], deferred: bool = False) -> dict[str, Any] | None:
         return None

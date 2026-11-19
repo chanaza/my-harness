@@ -230,6 +230,12 @@ class StatusCommand(Command):
             print(f"Repository check: {'OK' if report.ok else f'{len(report.problems)} problem(s)'}")
             for problem in report.problems[:args.problems]:
                 print(f"  x {problem}")
+            from ...inbox import conversation_gaps
+            gaps = conversation_gaps(repo)
+            print(f"Conversations with missing replies: {len(gaps) or 'none'}")
+            for path, numbers in list(gaps.items())[:args.problems]:
+                shown = ", ".join(map(str, numbers[:10])) + ("..." if len(numbers) > 10 else "")
+                print(f"  ! {path}: replies {shown} did not arrive")
         problems = local.recent_problems(args.problems)
         print(f"Recent capture problems: {len(problems) or 'none'}")
         for line in problems:

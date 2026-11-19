@@ -6,7 +6,7 @@ connector of your own**. It does four things, and nothing is stored on it:
 
 | Action | What it does |
 |---|---|
-| `save_to_harness` | puts one file into `inbox/connector/` (checked at the door) |
+| `save_to_harness` | puts one file into `inbox/connector/` (checked at the door); after an exchange it names the conversation's replies still missing, so they are sent too |
 | `harness_instructions` | hands a tool its current instructions (`connector/instructions/`, written by the engine; a tool without its own gets the reading instructions) |
 | `harness_find` | finds anything in the harness: agents, skills, instructions, memory, projects, apps, workflows, connections, profiles, single files, and conversations by title, date, tool, account, project, agent, goal or first message (`connector/index.json`, written by the engine, lists every file) |
 | `harness_read` | reads one file, in parts when it is long; `transcripts:` paths read raw records |

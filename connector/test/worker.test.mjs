@@ -7,6 +7,8 @@ const env = { GITHUB_TOKEN: "t", REPO: "me/harness", BRANCH: "main", SECRET_PATH
 const calls = [];
 globalThis.fetch = async (url, init = {}) => {
   calls.push({ url, method: init.method, body: init.body && JSON.parse(init.body) });
+  if (url.includes("sessions/p1/conversation-1-x/replies")) return Response.json([{ name: "00001.yaml" }]);
+  if (url.includes("contents/inbox/connector?")) return Response.json(globalThis.inbox || []);
   if (url.includes("connector/index.json")) return Response.json([
     { kind: "agent", name: "emily", path: "core/agents/emily.yaml" },
     { kind: "conversation", name: "Plan", date: "2026-11-19", first_message: "q1", log: "sessions/p/c/log.md", path: "sessions/p/c" }]);
@@ -94,4 +96,12 @@ test("find by what a person remembers, read in parts, never outside the harness"
   assert.equal((await callTool("harness_read", { path: "../secrets" })).isError, true);
   assert.equal((await callTool("harness_read", { path: ".git/config" })).isError, true);
   assert.equal((await callTool("harness_instructions", { tool: "genspark", profile: "genspark-x" })).content[0].text, "Reader for genspark-x");
+});
+
+test("after an exchange, the connector names the replies still missing", async () => {
+  globalThis.inbox = [{ type: "file", name: "exchange-1-x-3.md" }];
+  const content = "---\nschema: harness-exchange/1\nprofile: p1\ntool: genspark\nconversation: conversation-1-x\nnumber: 5\n---\n## User\nq\n";
+  const text = (await save("exchange-1-x-5.md", content)).content[0].text;
+  assert.match(text, /Replies 2, 4 of this conversation are missing/);
+  globalThis.inbox = [];
 });

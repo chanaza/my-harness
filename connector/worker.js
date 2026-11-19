@@ -147,7 +147,33 @@ async function save({ file_name: name, content }, env) {
   const written = await github(env, "PUT", `contents/${path}`, body);
   if (!written.ok) return answer(`Not saved: GitHub answered ${written.status}.`, true);
   await startInboxRun(env, branch);
-  return answer(`Saved ${name}.`, false);
+  const missing = name.startsWith("exchange-") ? await missingReplies(name, content, env, branch) : [];
+  return answer(missing.length
+    ? `Saved ${name}. Replies ${missing.join(", ")} of this conversation are missing in the harness: ` +
+      "send each of them now the same way (word for word, as you still see them), oldest first."
+    : `Saved ${name}.`, false);
+}
+
+// Which earlier replies of a conversation never arrived: neither saved (sessions/.../replies/)
+// nor waiting in the inbox. Asked after every exchange, so a missed reply is sent on the next one.
+async function missingReplies(name, content, env, branch) {
+  const number = Number((name.match(/-(\d+)\.md$/) || [])[1]);
+  const conversation = (content.match(/^conversation:\s*(\S+)/m) || [])[1];
+  const profile = (content.match(/^profile:\s*(\S+)/m) || [])[1];
+  if (!number || number < 2 || !conversation || !profile) return [];
+  const have = new Set([number]);
+  const saved = await github(env, "GET", `contents/sessions/${profile}/${conversation}/replies?ref=${branch}`);
+  if (saved.ok) for (const f of await saved.json()) have.add(Number(f.name.split(".")[0]));
+  const prefix = `exchange-${conversation.replace(/^conversation-/, "")}-`;
+  const waiting = await github(env, "GET", `contents/inbox/connector?ref=${branch}`);
+  if (waiting.ok) {
+    for (const f of await waiting.json()) {
+      if (f.name.startsWith(prefix)) have.add(Number(f.name.slice(prefix.length).replace(/\.md$/, "")));
+    }
+  }
+  const missing = [];
+  for (let n = 1; n < number; n++) if (!have.has(n)) missing.push(n);
+  return missing;
 }
 
 async function instructions({ tool, profile }, env) {

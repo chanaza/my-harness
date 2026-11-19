@@ -239,6 +239,17 @@ class InboxProcessor:
 INSTRUCTIONS_FOLDER = ("connector", "instructions")
 
 
+def conversation_gaps(repo: ContentRepo) -> dict[str, list[int]]:
+    """Conversations saved reply by reply in which replies are missing: path -> numbers."""
+    gaps = {}
+    for meta_path in sorted(repo.root.glob("sessions/*/*/meta.yaml")):
+        folder = meta_path.parent
+        missing = ConversationLog(SessionRecord(repo, folder.parent.name, folder.name)).missing()
+        if missing:
+            gaps[folder.relative_to(repo.root).as_posix()] = missing
+    return gaps
+
+
 def write_connector_instructions(repo: ContentRepo) -> list[str]:
     """What the harness connector serves, kept current by the engine:
       connector/instructions/<tool>.md  a tool's skill instructions (saving)
@@ -330,7 +341,9 @@ class HarnessIndex:
             title = data.get("topic") or folder.name
             entry = self._entry("conversation", title, self._goal(folder), folder, data)
             started = str(data.get("started_at") or "")
+            missing = ConversationLog(SessionRecord(self.repo, folder.parent.name, folder.name)).missing()
             extra = {"date": started[:10], "tool": profile.tool if profile else None,
+                     "replies_saved": data.get("log_last"), "replies_missing": missing or None,
                      "account": profile.label if profile else None, "project": data.get("project"),
                      "agent": data.get("agent"), "first_message": self._first_message(folder),
                      "summary": self._rel(folder / "summary.md"), "log": self._rel(folder / "log.md"),
