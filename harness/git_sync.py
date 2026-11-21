@@ -36,7 +36,7 @@ class GitSync:
     MERGE_DRIVER = "harness"
     GENERATED_DRIVER = "harness-generated"
     #: Paths the engine generates from the content (merged by keeping either side).
-    GENERATED = ("connector/**", "/README.md", "/sessions/README.md")
+    GENERATED = ("connector/**", "/README.md")
 
     def __init__(self, root: Path, settings: GitSettings, timeout: float = 60,
                  log: Callable[[str], None] | None = None) -> None:
@@ -71,7 +71,7 @@ class GitSync:
             return self._failed(SyncResult(False, False, f"git failed: {exc}"))
 
     def _write_guide(self) -> None:
-        """Every save carries an up-to-date guide (README.md, sessions/README.md) and connector index:
+        """Every save carries an up-to-date guide (README.md) and connector index:
         both are built from the content, so they are rebuilt here, not by each command that saves."""
         if not (self.root / "harness.config.yaml").is_file():
             return

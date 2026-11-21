@@ -76,7 +76,10 @@ def agent() -> Superagent:
                 "files": [
                     {
                         "path": "main.ts",
-                        "content": "const token = Deno.env.get('T');\nasync function f(token: string) {}",
+                        "content": (
+                            "const token = Deno.env.get('T'); TaskItem.create({});\n"
+                            "async function f(token: string) {}"
+                        ),
                     }
                 ],
             },
@@ -180,26 +183,28 @@ def test_the_guide_and_the_connector_index_show_every_part_of_an_agent(repo: Con
     adapter.install("base44-personal-cloud", "personal", repo.root, hooks=False)
     adapter.run_harvest()
     RepoGuide(repo).write()
+    assert validate(repo).ok
     readme = repo.path("README.md").read_text()
-    section = readme.split("### Agent `business-dev`", 1)[1]
-    for part in (
-        "core/agents/business-dev.yaml",
-        "delete-requires-approval.md",
-        "core/skills/hms-time-report/",
-        "core/workflows/business-dev-weekly.yaml",
-        "core/plugins/business-dev-mcp-hms-report/",
-        "apps/business-dev/",
-        "`TaskItem`",
-        "Backend function `yemotBridgeWebhook`",
-    ):
-        assert part in section, part
-    assert "called by: `core/workflows/business-dev-weekly.yaml`" in section  # the link, found by name
-    assert "HMS_PORTAL_PASSWORD" in readme  # a setting to set up again, by name only
-    assert "conversation-c1" in repo.path("sessions", "README.md").read_text()
+    # the logic, with one real example of each kind - not a list of everything
+    assert "## The logic of the structure" in readme and "connector/index.json" in readme
+    assert (
+        "`business-dev` (from `base44-personal-cloud`) is defined in `core/agents/business-dev.yaml`"
+        in readme
+    )
+    assert (
+        "a rule only it follows: `core/instructions/base44-personal-cloud/"
+        "business-dev-delete-requires-approval.md`" in readme
+    )
+    assert "names the backend function `yemotBridgeWebhook`" in readme  # what calls what, found by name
+    assert "table rows" in readme  # what stays in the tool, per tool
+    before = len(readme)
+    for n in range(30):  # more content does not make it longer
+        repo.path("memory", f"extra-{n}.md").write_text("---\nsubject: more\n---\n\nMore.\n")
+    RepoGuide(repo).write()
+    assert abs(len(repo.path("README.md").read_text()) - before) < 200
     index = {e["path"]: e for e in HarnessIndex(repo).entries()}
     assert index["README.md"]["kind"] == "guide"
     function = index["apps/business-dev/functions/yemotBridgeWebhook/main.ts"]
     assert function["kind"] == "function" and function["agent"] == "business-dev"
     assert function["used_by"] == ["core/workflows/business-dev-weekly.yaml"]
     assert index["core/workflows/business-dev-weekly.yaml"]["uses"] == ["function:yemotBridgeWebhook"]
-    assert validate(repo).ok

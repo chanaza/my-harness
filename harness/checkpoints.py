@@ -5,6 +5,7 @@ All thresholds come from the ``checkpoints`` section of harness.config.yaml.
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 
 from .config import CheckpointSettings
@@ -137,6 +138,11 @@ class CheckpointRecorder:
         digest = SummaryDigest(self.repo, self.session).apply(text)
         number = self.session.write_summary(session_part(text), reason, percent,
                                             progress.user_messages_since)
+        log = self.session.folder / "log.md"
+        text = log.read_text("utf-8") if log.is_file() else ""
+        replies = re.findall(r"^### Reply (\d+)", text, re.MULTILINE)
+        if replies:  # where the summary stands in the log: continue with the replies after it
+            self.session.touch(summary_reply=max(int(n) for n in replies))
         self._save(CheckpointPolicy(self.repo.config.checkpoints).reset(progress, percent))
         self.state.set("pending", None)
         self.state.save()

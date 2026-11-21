@@ -56,7 +56,7 @@ From then on, everything is saved by itself. Nothing is shown while it runs.
 | — history from before | Every chat with its attachments | Once, from claude.ai's data export (Settings > Privacy > Export data) |
 | Cowork sessions kept on a computer | Every conversation and its files | When you ask: `python -m harness harvest cowork` |
 | monday.com | Your AI agents (with skills, knowledge, jobs), workflows, recent agent runs (each with a readable log) | When you ask: `python -m harness harvest monday` |
-| Base44 Superagents | Identity and settings, rules, skills (with scripts), automations, backend functions (server code), MCP servers, connectors, memory, table structures, conversations (each with a readable log) | When you ask: `python -m harness harvest base44` ([docs](docs/adapters/base44.md)) |
+| Base44 Superagents | Identity and settings, rules, skills (with scripts), automations (and whether they are active), backend functions (server code, and the webhooks that call them), MCP servers, connectors and channels (WhatsApp, phone...), memory, table structures, conversations (each with a readable log) | When you ask: `python -m harness harvest base44` ([docs](docs/adapters/base44.md)) |
 | Genspark | Every exchange word for word, summaries, and what the account built (Hubs, pages, instructions) | Genspark itself, through your connector ([docs](docs/adapters/genspark.md)) |
 
 How each tool is captured is one setting per tool (`capture_modes` in your
@@ -64,20 +64,18 @@ harness settings); `python -m harness sources` shows it.
 
 ### Your harness explains itself
 
-Your content repository opens with a **`README.md` written by the engine from your content**,
-rebuilt on every save, so it is never out of date. It is the map a person or an agent needs to
-find anything without knowing the repository:
+Your content repository opens with a **`README.md` written by the engine**, rebuilt on every
+save so it is never out of date, and the same size however much you save. It explains the logic
+of the structure and how files point to each other, and shows **real examples from your own
+harness, one of each kind**: an agent and where its parts are, a workflow that calls a backend
+function that writes a table, code the tool calls from outside, a rule of one agent, one agent
+built in two tools, a conversation and how to continue it, a secret a part needs. It also says
+what each tool keeps to itself (to set up again by hand) and where full transcripts are.
 
-- how it is organised, and how files refer to each other;
-- **every agent with all its parts**, wherever they are kept: definition, rules, skills,
-  workflows (and when they run), plugins, connections, app tables and backend functions, memory,
-  conversations - with what uses what (a workflow that calls a backend function, a function that
-  writes a table), what is called from outside, and where each is explained;
-- the secrets and settings each part needs (names only - secrets are never in Git), and where
-  each account's full transcripts are kept.
-
-`sessions/README.md` lists every conversation (date, topic, agent or project) and how to
-continue it.
+Everything else is in the **index** (`connector/index.json`), which the README teaches how to
+search: every item and file, with the agent it belongs to, what it uses and what uses it, what
+calls it from outside and where that is explained, the settings it needs, and for workflows
+when they run and whether they are active.
 
 ### Use it in any tool
 
@@ -168,7 +166,7 @@ are marked with ★.
 | `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it |
 | `SummaryDigest`, `summary_request` | `harness/digest.py` | The one summary language for every tool; its sections -> instructions, memory, connections |
 | `ConversationLog`, `Reply` | `harness/conversation_log.py` | The one readable `log.md` per conversation, for every tool |
-| `RepoGuide` | `harness/guide.py` | The content repo's `README.md` and `sessions/README.md`: structure, every agent's parts, links and dependencies, built from the content on every save |
+| `RepoGuide` | `harness/guide.py` | The content repo's `README.md` (the logic of the structure, real examples of each kind) and the links in the index (agent, uses, used by, called from outside), built from the content on every save |
 | `InboxProcessor`, `HarnessIndex` | `harness/inbox.py` | Saves what the connector dropped into `inbox/connector/`; the index of everything, for reading |
 | `WorkspaceScanner` | `harness/workspace.py` | Repositories, branches and commits a session works in |
 | `MemoryStore` | `harness/memory.py` | Memory entries with conflict tracking |

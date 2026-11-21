@@ -49,6 +49,12 @@ class MondayAdapter(AccountBoundAdapter):
     capture_modes = ("on_demand", "scheduled")
     capture_reason = "always reachable through its API, and reading costs no AI credits"
     environment = "cloud"  # an online service, not a machine
+    kept_in_tool = (
+        "board items (the boards' rows) and agent memory / board learnings",
+        "the contents of knowledge files (only references are saved)",
+        "files an agent keeps in its own storage (e.g. agent-config/jobs/index.json)",
+        "connector sign-ins",
+    )
 
     def __init__(self, local: LocalHome | None = None,
                  reader_factory: Callable[[str], MondayReader] | None = None) -> None:

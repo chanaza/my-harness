@@ -40,6 +40,9 @@ class Adapter(ABC):
     #: Capture modes this adapter can work in (first = default) and, in plain words, why.
     capture_modes: tuple[str, ...] = ("on_demand",)
     capture_reason: str = ""
+    #: What stays in the tool and is not saved (shown in the repository's guide, so whoever
+    #: rebuilds something knows what to set up again by hand).
+    kept_in_tool: tuple[str, ...] = ()
 
     def __init__(self, local: LocalHome | None = None) -> None:
         self.local = local or LocalHome()
@@ -174,6 +177,9 @@ class AdapterRegistry:
 
     def names(self) -> list[str]:
         return sorted(self._adapters)
+
+    def kind(self, tool: str) -> type[Adapter] | None:
+        return self._adapters.get(tool)
 
     def create(self, tool: str, local: LocalHome | None = None) -> Adapter:
         if tool not in self._adapters:

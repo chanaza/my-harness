@@ -59,6 +59,13 @@ class Base44Adapter(AccountBoundAdapter):
     environment = "cloud"
     capture_modes = ("on_demand", "scheduled")
     capture_reason = "always reachable through its API with a personal access token"
+    kept_in_tool = (
+        "table rows - including settings tables the code reads at run time (e.g. ClientSetting)",
+        "secrets and channel sign-ins (WhatsApp, phone numbers, Slack...): which channels are "
+        "connected is saved, the connection itself is not",
+        "Base44 goals and the conversations they run in, when the API does not list them",
+        "conversation messages older than the last 200 at the first pull",
+    )
 
     def __init__(
         self, local: LocalHome | None = None, reader_factory: Callable[[str], Base44Reader] | None = None
@@ -174,12 +181,16 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
         for t in (
             text(".agents/.memory/IDENTITY.md"),
             text(".agents/.memory/SOUL.md"),
-            text(".agents/BOOTSTRAP.md"),
-        )
+        )  # BOOTSTRAP.md is Base44's first-run script, not who the agent is: kept with its settings
         if t
     )
     skills = sorted({p.split("/")[2] for p in files if p.startswith(".agents/skills/") and p.count("/") >= 3})
     servers = sorted((_mcp_config(files).get("mcpServers") or {}).keys())
+    channels = [c["channel"] for c in agent.channels if c.get("connected") and c.get("channel")]
+    webhooks = [
+        {k: w.get(k) for k in ("description", "events", "target_url", "has_secret", "disabled_at")}
+        for w in agent.webhooks
+    ]
     items.append(
         Captured(
             Kind.AGENT,
@@ -193,13 +204,15 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
                     "identity": identity or None,
                     "skills": skills or None,
                     "model": config.get("model"),
-                    "requires": {"connections": servers} if servers else None,
+                    "requires": {"connections": servers + channels} if servers or channels else None,
                 },
                 "native": {
                     "definition": {k: v for k, v in config.items() if k not in ("instructions", "model")},
                     "tools_permission_config": agent.app.get("tools_permission_config"),
                     "slug": agent.profile.get("slug"),
                     "lifecycle": agent.app.get("superagent_lifecycle"),
+                    "channels": {c.get("channel"): c.get("status") for c in agent.channels} or None,
+                    "webhooks": webhooks or None,
                 },
             },
         )
@@ -221,6 +234,19 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
         skill_files = _under(files, f".agents/skills/{skill}/", skipped)
         if skill_files:
             items.append(Captured(Kind.SKILL, skill, origin, skill_files))
+    for channel in channels:
+        items.append(
+            Captured(
+                Kind.CONNECTION,
+                channel,
+                origin,
+                meta={
+                    "tool": TOOL,
+                    "kind": "channel",
+                    "description": f"{channel} channel of a Base44 Superagent (connected inside Base44)",
+                },
+            )
+        )
     for server in servers:
         code = _under(files, f".agents/mcps/{server}/", skipped)
         if code:
@@ -271,7 +297,7 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
     for path in sorted(p for p in files if p.startswith("base44/workflows/")):
         flow = _jsonc(files[path]) if _safe(path, files[path], skipped) else None
         if flow:
-            items.append(_workflow(name, origin, flow))
+            items.append(_workflow(name, origin, flow, agent.workflow_status))
     for path in sorted(p for p in files if p.startswith("base44/connectors/")):
         connector = _jsonc(files[path]) if _safe(path, files[path], skipped) else None
         if connector:
@@ -300,7 +326,18 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             if isinstance(source.get("content"), str) and _safe(path, source["content"], skipped):
                 app_files[path] = source["content"].encode("utf-8")
     if agent.functions:  # what runs each function (automations) and what it signs in to
-        manifest = [{k: v for k, v in f.items() if k != "files"} for f in agent.functions]
+        manifest = [
+            {
+                **{k: v for k, v in f.items() if k != "files"},
+                "webhooks": [  # who calls it from outside: the agent's own webhooks to this function
+                    {"events": w.get("events"), "description": w.get("description")}
+                    for w in agent.webhooks
+                    if str(w.get("target_url") or "").rstrip("/").endswith(f"/functions/{f.get('name')}")
+                ]
+                or None,
+            }
+            for f in agent.functions
+        ]
         app_files["functions.json"] = json.dumps(manifest, ensure_ascii=False, indent=1).encode("utf-8")
     app_files["entities.json"] = json.dumps(
         agent.app.get("entities") or {}, ensure_ascii=False, indent=1
@@ -321,11 +358,7 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
     rest = {
         p: t
         for p, t in files.items()
-        if p.startswith(".agents/")
-        and p.count("/") == 1
-        and p not in (".agents/BOOTSTRAP.md",)
-        and isinstance(t, str)
-        and _safe(p, t, skipped)
+        if p.startswith(".agents/") and p.count("/") == 1 and isinstance(t, str) and _safe(p, t, skipped)
     }
     if rest:
         items.append(
@@ -355,9 +388,12 @@ def _jsonc(text: Any) -> dict[str, Any] | None:
     return None
 
 
-def _workflow(agent_name: str, origin: str, flow: dict[str, Any]) -> Captured:
-    """A Base44 automation of the Superagent -> a harness workflow run by that agent."""
+def _workflow(agent_name: str, origin: str, flow: dict[str, Any], status: dict[str, str]) -> Captured:
+    """A Base44 automation of the Superagent -> a harness workflow run by that agent. Its status
+    comes from Base44's list of automations; one that is not listed there no longer runs
+    (a one-time run that is done, or one that was removed)."""
     title = str(flow.get("name") or "automation")
+    flow = {**flow, "status": status.get(title) or "not scheduled (done or removed)"}
     trigger = (flow.get("trigger") or {}).get("config") or {}
     when = (
         trigger.get("cron_expression")

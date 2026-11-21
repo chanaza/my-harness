@@ -11,9 +11,11 @@ Status of the engine. Saving comes first; loading comes after saving is complete
   `harness-account` skill (Drive folder); Cowork local files on demand; monday.com (API);
   Base44 Superagents (API, on demand); Genspark (through the connector).
 - One summary language for every tool (`harness/digest.py`).
-- The content repository explains itself: `README.md` (every agent with all its parts, links,
-  dependencies, settings needed) and `sessions/README.md`, rebuilt with the connector's index
-  on every save (`harness/guide.py`).
+- The content repository explains itself: `README.md` (the logic of the structure, real examples
+  of each kind, what stays in each tool) - a fixed size - and the links in the connector's index
+  (agent, uses, used by, called from outside, settings needed), rebuilt on every save
+  (`harness/guide.py`).
+- Conversation summaries record the last reply they cover (`summary_reply`).
 
 ## Not finished / not verified
 

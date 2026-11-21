@@ -1,16 +1,18 @@
-"""The repository's guide: README.md (structure, links, dependencies, every agent with all its
-parts) and sessions/README.md (every conversation), written by the engine from the content.
+"""The repository's guide: README.md, written by the engine from the content on every save.
 
-Nothing in them is typed by hand: they are rebuilt from the files on every save, so they are
-never out of date, and a person or an agent who has never seen this repository can read them
-and know where everything is and what depends on what.
+It explains the logic of the structure and shows a few real examples, one of each kind (an
+agent and its parts, a workflow that calls a backend function that writes a table, a rule of
+one agent, a conversation and how to continue it...). Its size does not grow with the content:
+the complete list of everything, with its links, is the connector's index (connector/index.json),
+which the README teaches how to search.
 
 Links between items are found from the content itself, the same way for every tool:
   - declared: an agent's ``skills`` / ``requires.connections``, a workflow step's ``agent``,
     an instruction's ``scope: agent:<name>``, a conversation's ``agent``, an app or plugin
     named after the agent, memory whose ``subject`` names the agent;
   - used: an item whose text names another item (a workflow naming a backend function, a
-    skill naming a table) - found by searching each item's files for the other items' names;
+    rule telling the agent to call one, a function naming a table); a webhook of the tool
+    calling a function;
   - settings it needs: environment variables code reads, MCP config values kept out of Git.
 """
 
@@ -52,7 +54,8 @@ class Item:
 
 class RepoGuide:
     README = "README.md"
-    SESSIONS = "sessions/README.md"
+    #: Written by engine 0.28.0 and no longer (it grew with the content): removed when found.
+    RETIRED = ("sessions/README.md",)
 
     def __init__(self, repo: ContentRepo) -> None:
         self.repo = repo
@@ -62,16 +65,18 @@ class RepoGuide:
     # --- public -------------------------------------------------------------------------------
 
     def write(self) -> list[str]:
-        """Write both guides when their content changed; returns the paths written."""
+        """Write README.md when its content changed; returns the paths written or removed."""
         self.load()
         written = []
-        for relative, text in ((self.README, self.readme()), (self.SESSIONS, self.sessions_index())):
+        for relative in self.RETIRED:
             path = self.root / relative
-            if path.is_file() and path.read_text("utf-8") == text:
-                continue
-            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.is_file() and "_Written by the engine" in path.read_text("utf-8"):
+                path.unlink()
+                written.append(relative)
+        path, text = self.root / self.README, self.readme()
+        if not (path.is_file() and path.read_text("utf-8") == text):
             path.write_text(text, encoding="utf-8")
-            written.append(relative)
+            written.append(self.README)
         return written
 
     # --- loading ------------------------------------------------------------------------------
@@ -161,7 +166,7 @@ class RepoGuide:
                     _source(data),
                     agents[0] if agents else "",
                     path.read_text("utf-8"),
-                    {"trigger": _one_line(data.get("trigger"))},
+                    {"trigger": _one_line(data.get("trigger")), "status": _status(data)},
                 )
             )
 
@@ -245,6 +250,7 @@ class RepoGuide:
                             "app": folder.name,
                             "settings": sorted(set(ENV_READS.findall(text))),
                             "automations": (manifest.get(function.name) or {}).get("automations") or [],
+                            "webhooks": (manifest.get(function.name) or {}).get("webhooks") or [],
                         },
                     )
                 )
@@ -289,6 +295,7 @@ class RepoGuide:
                         "log": (folder / "log.md").is_file(),
                         "transcript": meta.get("transcript") or "",
                         "note": meta.get("note") or "",
+                        "summary_reply": meta.get("summary_reply"),
                     },
                 )
             )
@@ -311,6 +318,11 @@ class RepoGuide:
                 entry["profile"] = item.profile
             if item.extra.get("settings"):
                 entry["needs_settings"] = item.extra["settings"]
+            if item.extra.get("webhooks"):
+                entry["called_from_outside"] = [
+                    f"webhook on {', '.join(w.get('events') or [])}: {w.get('description') or ''}".strip(": ")
+                    for w in item.extra["webhooks"]
+                ]
             entries.append(entry)
         return entries
 
@@ -322,7 +334,8 @@ class RepoGuide:
             for group in self.belongs(agent).values():
                 for item in group:
                     agent_of.setdefault(id(item), agent.name)
-        callers = self._of("workflow") + self._of("skill") + self._of("function")
+        callers = self.callers()
+        explainers = self._of("memory")
         for entry in entries:
             path = str(entry.get("path") or "")
             item = by_path.get(path) or by_path.get(path.rsplit("/", 1)[0])  # a function's / skill's file
@@ -338,6 +351,15 @@ class RepoGuide:
                 users = self.mentions(item, callers)
                 if users:
                     entry["used_by"] = [u.path for u in users]
+            if item.kind == "function":
+                explained = self.mentions(item, explainers)
+                if explained:
+                    entry["explained_in"] = [m.path for m in explained[:8]]
+            if item.kind == "workflow":
+                if item.extra["trigger"]:
+                    entry["runs"] = item.extra["trigger"]
+                if item.extra["status"]:
+                    entry["status"] = item.extra["status"]
 
     # --- links ---------------------------------------------------------------------------------
 
@@ -382,6 +404,11 @@ class RepoGuide:
             if other is not item and other.text and pattern.search(other.text)
         ]
 
+    def callers(self) -> list[Item]:
+        """What can call a function or use a table: workflows, skills, other functions, and the
+        rules that tell an agent to call it."""
+        return self._of("workflow") + self._of("skill") + self._of("function") + self._of("rule")
+
     def uses(self, item: Item) -> list[Item]:
         """The functions, tables, skills and connections ``item``'s text names."""
         targets = [i for i in self.items if i.kind in ("function", "table", "skill") and i is not item]
@@ -392,48 +419,204 @@ class RepoGuide:
     def readme(self) -> str:
         from . import __version__
 
-        owner = (
-            (self.repo.config.data.get("owner") or "").strip() if hasattr(self.repo.config, "data") else ""
-        )
+        owner = str(self.repo.config.data.get("owner") or "").strip()
         out = [
-            f"# {owner + chr(39) + 's ' if owner else ''}AI harness",
+            f"# {owner}'s AI harness" if owner else "# AI harness",
             "",
             f"_Written by the [my-harness](https://github.com/chanaza/my-harness) engine (v{__version__}) "
-            "from this repository's content, on every save. Do not edit it: it is rebuilt. "
-            "Every conversation is listed in [sessions/README.md](sessions/README.md)._",
+            "from this repository, on every save. Do not edit it: it is rebuilt. Its size stays the "
+            "same however much is saved: the full list of everything is the index (see below)._",
             "",
         ]
         out += STATIC_START.splitlines()
-        out += self._profiles_section()
-        out += STATIC_LINKS.splitlines()
-        out += self._agents_section()
-        out += self._other_section()
-        out += self._settings_section()
+        out += self._examples()
+        out += STATIC_FIND.splitlines()
+        out += self._accounts()
         out += STATIC_END.splitlines()
         return "\n".join(out).rstrip() + "\n"
 
-    def _profiles_section(self) -> list[str]:
-        out = [
-            "## Accounts (profiles)",
-            "",
-            "Every item records the profile it came from (`provenance.source.profile`). "
-            "Full transcripts are kept outside the main branch, where the last column says.",
-            "",
-            "| Profile | Tool | Account | Runs | Conversations | Full transcripts kept in |",
-            "|---|---|---|---|---|---|",
+    def _examples(self) -> list[str]:
+        """One real example of each kind of thing and link, taken from this repository."""
+        examples = [
+            self._example_agent(),
+            self._example_chain(),
+            self._example_outside(),
+            self._example_rule(),
+            self._example_two_tools(),
+            self._example_conversation(),
+            self._example_setting(),
         ]
-        counts = defaultdict(int)
-        for c in self._of("conversation"):
-            counts[c.profile] += 1
-        for p in self.profiles:
-            pid = p.get("id")
-            where = p.get("environment") or ""
-            if p.get("machine"):
-                where += f" ({p['machine']})"
-            out.append(
-                f"| `{pid}` | {p.get('tool')} | {p.get('label')} | {where} | {counts.get(pid, 0)} | "
-                f"{self._transcripts_place(pid)} |"
+        examples = [e for e in examples if e]
+        if not examples:
+            return []
+        out = [
+            "## Examples from this harness",
+            "",
+            "Real items, one of each kind, to show how the pieces fit. Everything else of the "
+            "same kind follows the same pattern.",
+            "",
+        ]
+        for number, lines in enumerate(examples, 1):
+            out += [f"{number}. {lines[0]}"] + [f"   {line}" for line in lines[1:]] + [""]
+        return out
+
+    def _example_agent(self) -> list[str]:
+        agents = self._of("agent")
+        if not agents:
+            return []
+        agent = max(agents, key=lambda a: (len(self.belongs(a)), a.name))
+        parts = self.belongs(agent)
+        lines = [
+            f"**An agent and its parts.** `{agent.name}` (from `{agent.profile}`) is defined in "
+            f"`{agent.path}`. Its other parts sit in the shared folders and point back to it:"
+        ]
+        labels = (
+            ("rule", "a rule only it follows"),
+            ("skill", "a skill it lists"),
+            ("workflow", "a workflow it runs"),
+            ("plugin", "a plugin it runs"),
+            ("connection", "a connection it needs"),
+            ("app", "its app"),
+            ("memory", "memory about it"),
+            ("conversation", "a conversation with it"),
+        )
+        for kind, label in labels:
+            group = parts.get(kind) or []
+            if group:
+                more = f" (and {len(group) - 1} more)" if len(group) > 1 else ""
+                where = (
+                    f"`{group[0].name}` in `{group[0].path}`"
+                    if kind == "connection"
+                    else f"`{group[0].path}`"
+                )
+                lines.append(f"- {label}: {where}{more}")
+        if len(str(self._yaml(agent.path).get("instructions") or "")) < 200:
+            lines.append(
+                "- its `instructions` field is short: what it really does is in its "
+                "identity, rules and memory."
             )
+        lines.append(f'To list all its parts: search the index for `"agent": "{agent.name}"`.')
+        return lines
+
+    def _example_chain(self) -> list[str]:
+        callers = self._of("workflow") + self._of("skill")
+        for function in self._of("function"):
+            users = self.mentions(function, callers)
+            tables = [u for u in self.uses(function) if u.kind == "table"]
+            if users and tables:
+                caller = users[0]
+                runs = f" (runs {caller.extra['trigger']})" if caller.extra.get("trigger") else ""
+                return [
+                    f"**What calls what.** The {caller.kind} `{caller.path}`{runs} names the backend "
+                    f"function `{function.name}` (`{function.path}/`), which writes the table "
+                    f"`{tables[0].name}` (`{tables[0].path}`; its rows stay in the tool).",
+                    "In the index this is `uses` on the workflow and `used_by` on the function.",
+                ]
+        return []
+
+    def _example_outside(self) -> list[str]:
+        for function in self._of("function"):
+            if self.mentions(function, self.callers()):
+                continue
+            explained = self.mentions(function, self._of("memory"))
+            hooks = function.extra.get("webhooks") or []
+            if hooks or explained:
+                how = (
+                    f"the tool calls it (a webhook on {', '.join(hooks[0].get('events') or [])})"
+                    if hooks
+                    else "something outside this repository calls it"
+                )
+                lines = [
+                    f"**Called from outside.** Nothing here calls `{function.name}` "
+                    f"(`{function.path}/`): {how}."
+                ]
+                if explained:
+                    lines.append(
+                        f"How it fits is explained in `{explained[0].path}`. In the index: "
+                        "`called_from_outside`, `explained_in`."
+                    )
+                return lines
+        return []
+
+    def _example_rule(self) -> list[str]:
+        rules = [r for r in self._of("rule") if r.agent]
+        for rule in rules:
+            used = [u for u in self.uses(rule) if u.kind == "function"]
+            calls = f" It tells the agent to call `{used[0].name}`." if used else ""
+            return [
+                f"**A rule of one agent.** `{rule.path}` has `scope: {rule.extra['scope']}`: only "
+                f"that agent follows it.{calls} Rules for a whole account have `scope: global`."
+            ]
+        return []
+
+    def _example_two_tools(self) -> list[str]:
+        for agent in self._of("agent"):
+            for other in self.items:
+                if (
+                    other.kind in ("skill", "agent", "workflow")
+                    and other is not agent
+                    and agent.name.lower() in other.name.lower()
+                    and other.profile
+                    and other.profile != agent.profile
+                ):
+                    return [
+                        f"**One agent, two tools.** `{agent.name}` was defined in `{agent.profile}` "
+                        f"(`{agent.path}`); the {other.kind} `{other.path}` (from `{other.profile}`) "
+                        "does its work in another tool. Search for the name to find both."
+                    ]
+        return []
+
+    def _example_conversation(self) -> list[str]:
+        conversations = [c for c in self._of("conversation") if c.extra["summary"] and c.extra["log"]]
+        if not conversations:
+            return []
+        c = max(conversations, key=lambda c: (bool(c.extra.get("summary_reply")), c.extra["last"]))
+        upto = (
+            f"the state up to reply {c.extra['summary_reply']} (`summary_reply` in `meta.yaml`)"
+            if c.extra.get("summary_reply")
+            else "the state when it was written"
+        )
+        return [
+            f"**A conversation, and how to continue it.** `{c.path}/` ({c.extra['last']}): "
+            f"`summary.md` is {upto}; `log.md` has every reply word for word - read the replies "
+            "after that. Files made in it and the full raw transcript are on the transcripts "
+            "branch (see below)."
+        ]
+
+    def _example_setting(self) -> list[str]:
+        for function in self._of("function"):
+            if function.extra.get("settings"):
+                names = ", ".join(f"`{s}`" for s in function.extra["settings"][:3])
+                return [
+                    f"**A secret a part needs.** `{function.path}/` reads {names}. The value is never "
+                    "in Git: set it again in the tool. In the index: `needs_settings`."
+                ]
+        return []
+
+    def _accounts(self) -> list[str]:
+        from .adapters import adapters
+
+        out = [
+            "## Accounts",
+            "",
+            "Every item records the account it came from (`provenance.source.profile`).",
+            "",
+            "| Account (profile) | Tool | Runs on | Full transcripts and conversation files |",
+            "|---|---|---|---|",
+        ]
+        tools: list[str] = []
+        for p in self.profiles:
+            where = str(p.get("environment") or "") + (f" ({p['machine']})" if p.get("machine") else "")
+            out.append(
+                f"| `{p.get('id')}` | {p.get('tool')} | {where} | {self._transcripts_place(p.get('id'))} |"
+            )
+            if p.get("tool") not in tools:
+                tools.append(p.get("tool"))
+        kept = [(tool, getattr(adapters.kind(tool), "kept_in_tool", ())) for tool in tools]
+        kept = [(tool, notes) for tool, notes in kept if notes]
+        if kept:
+            out += ["", "**Not saved - stays in the tool** (to rebuild there, set these up again by hand):"]
+            out += [f"- {tool}: " + "; ".join(notes) + "." for tool, notes in kept]
         return out + [""]
 
     def _transcripts_place(self, profile: str) -> str:
@@ -444,242 +627,6 @@ class RepoGuide:
         if settings.get("backend") == "git":
             return f"branch `{settings.get('branch', 'transcripts')}` of this repository"
         return f"folder `{settings.get('path')}` (on that computer)"
-
-    def _agents_section(self) -> list[str]:
-        agents = self._of("agent")
-        out = [
-            "## Agents, with everything that belongs to them",
-            "",
-            "Each agent's parts live in the shared folders (so a skill or a connection can serve "
-            "several agents); this section gathers them per agent. **Declared** = the file says it "
-            "belongs to the agent. **Uses** = its text names that function / table / skill / "
-            "connection. **Mentioned in** = other files that name it (often the explanation of why "
-            "or how). To rebuild an agent in another tool, take every path in its section.",
-            "",
-            "Agents: " + ", ".join(f"[{a.name}](#agent-{a.name})" for a in agents),
-            "",
-        ]
-        for agent in agents:
-            out += self._agent(agent)
-        return out
-
-    def _agent(self, agent: Item) -> list[str]:
-        parts = self.belongs(agent)
-        out = [f'<a id="agent-{agent.name}"></a>', f"### Agent `{agent.name}`", ""]
-        if agent.description:
-            out.append(agent.description)
-            out.append("")
-        out.append(
-            f"- **Definition** (instructions, identity, model, native settings): `{agent.path}` "
-            f"- from `{agent.profile}`"
-            + (f", originally {agent.extra['origin']}" if agent.extra["origin"] else "")
-        )
-        for rule in parts.get("rule", []):
-            out.append(f"- **Rule** (always on for this agent): `{rule.path}` - {rule.description}")
-        for skill in parts.get("skill", []):
-            out.append(f"- **Skill**: `{skill.path}/` - {skill.description[:160]}" + self._uses(skill))
-        for workflow in parts.get("workflow", []):
-            trigger = f" - runs {workflow.extra['trigger']}" if workflow.extra["trigger"] else ""
-            out.append(f"- **Workflow**: `{workflow.path}`{trigger}" + self._uses(workflow))
-        for plugin in parts.get("plugin", []):
-            settings = (
-                f"; needs settings {', '.join(plugin.extra['settings'])}" if plugin.extra["settings"] else ""
-            )
-            out.append(f"- **Plugin / MCP server**: `{plugin.path}/` - {plugin.description}{settings}")
-        for connection in parts.get("connection", []):
-            out.append(
-                f"- **Connection**: `{connection.name}` ({connection.extra['kind']}) - {connection.description}"
-            )
-        for app in parts.get("app", []):
-            out.append(
-                f"- **App**: `{app.path}/` - {app.description}"
-                + (f" ({app.extra['url']})" if app.extra["url"] else "")
-            )
-            tables = parts.get("table", [])
-            if tables:
-                out.append("  - Tables (`entities/`: structure only; the rows stay in the tool):")
-                code = self._of("function") + self._of("workflow") + self._of("skill")
-                for table in tables:
-                    users = self.mentions(table, code)
-                    used = (
-                        ", ".join(f"`{u.name}`" for u in users)
-                        if users
-                        else "nothing here names it (the agent uses it directly)"
-                    )
-                    out.append(f"    - `{table.name}` - used by {used}")
-            for function in parts.get("function", []):
-                out += self._function(function)
-        out += self._related(agent, parts)
-        memory = parts.get("memory", [])
-        if memory:
-            out.append(f"- **Memory** ({len(memory)} files, what the agent learned):")
-            out += [f"  - `{m.path}` - {_first_line(m.text)[:110]}" for m in memory]
-        conversations = sorted(parts.get("conversation", []), key=lambda c: c.extra["last"], reverse=True)
-        if conversations:
-            out.append(
-                f"- **Conversations / runs** ({len(conversations)}; all listed in "
-                f"[sessions/README.md](sessions/README.md)). Latest:"
-            )
-            out += [f"  - {c.extra['last']} `{c.path}/` - {c.description}" for c in conversations[:5]]
-        return out + [""]
-
-    def _function(self, function: Item) -> list[str]:
-        callers = [
-            i
-            for i in self.mentions(function, self._of("workflow") + self._of("skill") + self._of("function"))
-        ]
-        described = self.mentions(function, self._of("memory"))
-        line = f"  - Backend function `{function.name}`: `{function.path}/`"
-        if function.description:
-            line += f" - {function.description[:150]}"
-        out = [line]
-        if callers:
-            out.append("    - called by: " + ", ".join(f"`{c.path}`" for c in callers))
-        elif function.extra["automations"]:
-            out.append(f"    - run by the tool's automations: {function.extra['automations']}")
-        else:
-            out.append(
-                "    - not called by any workflow here: it is called from outside (a webhook or "
-                "the agent itself) - see where it is described below"
-            )
-        if described:
-            out.append("    - described in: " + ", ".join(f"`{d.path}`" for d in described[:6]))
-        if function.extra["settings"]:
-            out.append(
-                "    - needs settings (kept in the tool, not in Git): "
-                + ", ".join(f"`{s}`" for s in function.extra["settings"])
-            )
-        used = [u for u in self.uses(function) if u.kind == "table"]
-        if used:
-            out.append("    - reads/writes tables: " + ", ".join(f"`{u.name}`" for u in used))
-        return out
-
-    def _related(self, agent: Item, parts: dict[str, list[Item]]) -> list[str]:
-        own = {id(i) for group in parts.values() for i in group}
-        related = [
-            i
-            for i in self.mentions(agent)
-            if id(i) not in own and i.kind in ("skill", "rule", "workflow", "plugin")
-        ]
-        related += [i for i in self.mentions(agent, self._of("memory")) if id(i) not in own]
-        if not related:
-            return []
-        return ["- **Related** (not declared as its part, but names it):"] + [
-            f"  - {i.kind} `{i.path}` (from `{i.profile}`) - {i.description[:120]}" for i in related[:12]
-        ]
-
-    def _uses(self, item: Item) -> str:
-        used = self.uses(item)
-        return f"; uses {', '.join(f'{u.kind} `{u.name}`' for u in used)}" if used else ""
-
-    def _other_section(self) -> list[str]:
-        claimed = {
-            id(i) for agent in self._of("agent") for group in self.belongs(agent).values() for i in group
-        }
-        out = ["## Everything not tied to an agent", ""]
-        rules = [r for r in self._of("rule") if not r.agent]
-        if rules:
-            out.append(
-                "**Instructions** (how every agent of that account should behave; scope `global` = the "
-                "whole account, `project:<name>` = one project):"
-            )
-            out += [f"- `{r.path}` - `{r.profile}`, scope `{r.extra['scope']}`" for r in rules]
-            out.append("")
-        for kind, title in (
-            ("skill", "Skills"),
-            ("workflow", "Workflows"),
-            ("plugin", "Plugins"),
-            ("app", "Apps"),
-        ):
-            loose = [i for i in self._of(kind) if id(i) not in claimed]
-            if loose:
-                out.append(f"**{title}:**")
-                out += [f"- `{i.path}` - {i.description[:140]} (from `{i.profile}`)" for i in loose]
-                out.append("")
-        connections = [c for c in self._of("connection") if id(c) not in claimed]
-        if connections:
-            out.append(
-                "**Connections** (`core/connections.yaml`; what each tool can connect to; sign-ins stay in the tool):"
-            )
-            out += [
-                f"- `{c.name}` ({c.extra['kind']}) - {c.description[:100]} - in {c.extra['where']}"
-                for c in connections
-            ]
-            out.append("")
-        memory = [m for m in self._of("memory") if id(m) not in claimed]
-        if memory:
-            out.append(
-                f"**Memory** ({len(memory)} files not tied to one agent): `memory/`, one fact or "
-                "decision per file; its `provenance` says which account and conversation it came from."
-            )
-            out.append("")
-        return out
-
-    def _settings_section(self) -> list[str]:
-        needed: dict[str, set[str]] = defaultdict(set)
-        for item in self._of("function") + self._of("plugin"):
-            for name in item.extra.get("settings") or []:
-                needed[name].add(item.path)
-        out = [
-            "## Secrets and settings (never in Git)",
-            "",
-            "Passwords, tokens and keys are never stored here, not even in this private repository. "
-            "Only their names are, so you know what to set up again:",
-            "",
-            "- In the tool itself (for example a Base44 Superagent's secrets, a monday agent's connectors): "
-            "the code below reads them by name.",
-            "- For the harness engine: on a computer, the system's password store (Windows Credential "
-            "Manager); in a cloud session, the environment's network secrets; the harness connector's "
-            "keys are Cloudflare Worker secrets.",
-            "",
-        ]
-        if needed:
-            out += ["| Setting | Needed by |", "|---|---|"]
-            out += [
-                f"| `{name}` | {', '.join(f'`{p}`' for p in sorted(paths))} |"
-                for name, paths in sorted(needed.items())
-            ]
-            out.append("")
-        return out
-
-    # --- sessions/README.md ---------------------------------------------------------------------
-
-    def sessions_index(self) -> str:
-        out = [
-            "# Conversations",
-            "",
-            "_Written by the engine on every save; do not edit._",
-            "",
-            "Every conversation and agent run saved in this harness, newest first, per account. "
-            "To continue one anywhere: read its `summary.md` (the state at that point), then the "
-            "replies in its `log.md` after that summary. The full original transcript is outside the "
-            "main branch (see the account table in [README.md](../README.md)); its path is "
-            "`transcript:` in the conversation's `meta.yaml`.",
-            "",
-        ]
-        by_profile: dict[str, list[Item]] = defaultdict(list)
-        for c in self._of("conversation"):
-            by_profile[c.profile].append(c)
-        for profile in sorted(by_profile):
-            out += [
-                f"## `{profile}` ({len(by_profile[profile])})",
-                "",
-                "| Last active | Started | Topic | Agent / project | Summary | Folder |",
-                "|---|---|---|---|---|---|",
-            ]
-            for c in sorted(
-                by_profile[profile], key=lambda c: (c.extra["last"], c.extra["started"]), reverse=True
-            ):
-                topic = (c.description or "-").replace("|", "/")
-                if c.extra["note"]:
-                    topic += f" _({c.extra['note']})_"
-                owner = c.agent or c.extra["project"] or ""
-                out.append(
-                    f"| {c.extra['last']} | {c.extra['started']} | {topic} | {owner} | "
-                    f"{'yes' if c.extra['summary'] else '-'} | [{c.name}]({Path(c.path).relative_to('sessions').as_posix()}/) |"
-                )
-            out.append("")
-        return "\n".join(out).rstrip() + "\n"
 
     # --- helpers --------------------------------------------------------------------------------
 
@@ -724,6 +671,17 @@ class RepoGuide:
         return match.group(1) if match else ""
 
 
+def _status(data: dict[str, Any]) -> str:
+    """A workflow's status as its tool keeps it (native.<profile>.status / enabled)."""
+    for record in (data.get("native") or {}).values():
+        if isinstance(record, dict):
+            if record.get("status"):
+                return str(record["status"])
+            if "enabled" in record:
+                return "active" if record["enabled"] else "off"
+    return ""
+
+
 def _source(meta: dict[str, Any]) -> str:
     return str(((meta.get("provenance") or {}).get("source") or {}).get("profile") or "")
 
@@ -762,79 +720,112 @@ def _json(path: Path) -> Any:
 
 
 STATIC_START = """\
+## What this is
+
+Everything built around AI tools - agents with their instructions and skills, workflows, apps,
+memory, and every conversation - kept outside any single tool, so work can move to another tool
+at any time. A person or an agent who has never seen this repository should be able to find
+anything from this page.
+
 ## Start here
 
-This repository keeps everything built around AI tools - agents, their instructions and skills,
-workflows, apps, memory, and every conversation - outside any single tool, so work can move to
-another tool at any time. A person or an agent reading this file should be able to find anything.
+- **Continue a conversation** in any tool: find it in the index (by date, topic, tool, agent or
+  project). Read its `summary.md`, then the replies in its `log.md` after the reply the summary
+  covers (`summary_reply` in `meta.yaml`). No `summary.md` (runs and conversations pulled from a
+  tool)? Read `log.md` from the start, or its last replies for a long one.
+- **Rebuild an agent** in another tool: take its definition from `core/agents/`, then everything
+  the index lists under its name - rules, skills, workflows, plugins, connections, app (tables
+  and backend functions), memory - and set up again what stays in the tool (see Accounts).
+- **Find anything else**: the index (below).
 
-**Three common tasks:**
+## The logic of the structure
 
-1. **Continue a conversation** in any tool: find it in [sessions/README.md](sessions/README.md)
-   (by date, topic, agent or project). Read its `summary.md`, then the replies in `log.md` after
-   that summary. That is the whole state; the full raw transcript is only needed for detail
-   (where it is: the account table below, path in `meta.yaml` under `transcript:`).
-2. **Rebuild an agent** in another tool: go to its section under "Agents" below. Take its
-   definition (instructions and identity), its rules, skills, workflows, connections, app
-   (tables and backend code) and memory - every path is listed there - and set up again the
-   secrets named in "Secrets and settings".
-3. **Find anything else**: the sections below list every item with its path. Through the harness
-   connector, `harness_find` searches everything by meaning; on a computer, search the files.
+Each kind of thing has one place, whichever tool it came from. An agent's parts are kept by kind
+in the shared folders - so one skill or connection can serve several agents - and each part says
+which agent it belongs to.
 
-## How the repository is organised
+- `core/` holds **what makes agents behave as they do**, portable between tools; it changes only
+  with the owner's approval.
+- Outside `core/` is **what accumulates** (memory, conversations), **what was built** (apps,
+  assets) and **what only one tool understands** (`native/`).
+- **Not on this branch:** full raw transcripts and files made in conversations (the transcripts
+  branch or a synced folder, per account - see Accounts), and secrets (never in Git).
 
-| Folder | What is in it | Format |
-|---|---|---|
-| `core/agents/` | Agent definitions: instructions, identity, model, skills and connections it uses, the tool's own settings under `native:` | one YAML per agent |
-| `core/instructions/<profile>/` | Rules and standing instructions, per account. `scope: global` = the whole account; `agent:<name>` = that agent only; `project:<name>` = one project | Markdown with front matter |
-| `core/skills/<name>/` | Skills: `SKILL.md` (when to use it, how) plus scripts and references | folder per skill |
-| `core/workflows/` | Scheduled and triggered tasks: when it runs (`trigger`), which agent does it (`steps[].agent`), the tool's full definition under `native:` | one YAML per workflow |
-| `core/plugins/<name>/` | Plugins and MCP servers that were built (their code), with `plugin.yaml` | folder per plugin |
-| `core/connections.yaml` | Every connector / MCP server, which tools and accounts have it. Sign-ins stay in the tool | one file |
-| `core/profiles.yaml` | The accounts that feed this harness (tool + account) | one file |
-| `core/profile/`, `core/projects/` | Who the user is; projects with their instructions and knowledge | |
-| `apps/<name>/` | Apps built in tools: `app.yaml`, table structures (`entities/`), backend code (`functions/`), pages. Table rows stay in the tool | folder per app |
-| `memory/` | Facts, decisions and preferences learned; `subject` says what it is about | one Markdown per fact |
-| `sessions/<profile>/<id>/` | One folder per conversation or agent run: `summary.md`, `log.md` (word for word), `meta.yaml`, files made in it | see [sessions/README.md](sessions/README.md) |
-| `native/<profile>/` | A tool's own settings that no other tool understands, kept as they are | as in the tool |
-| `assets/` | Reference files (examples, decks, designs) | folder per asset |
-| `connector/` | Generated for the harness connector (search index, instructions it serves) | generated |
-| `inbox/` | What tools sent, waiting to be filed; `inbox/conflicts/` = versions that clash | temporary |
-| `harness.config.yaml` | Settings of this harness | YAML |
+| Folder | What is in it |
+|---|---|
+| `core/agents/<agent>.yaml` | An agent: instructions, identity, model, the skills and connections it uses; the tool's own record under `native:` |
+| `core/instructions/<account>/` | Rules and standing instructions. `scope: global` = everything in that account; `agent:<name>` = one agent; `project:<name>` = one project |
+| `core/skills/<skill>/` | A skill: `SKILL.md` (when and how to use it) with its scripts and references |
+| `core/workflows/<workflow>.yaml` | A scheduled or triggered task: when it runs (`trigger`), which agent does it (`steps[].agent`), the tool's full definition and status under `native:` |
+| `core/plugins/<plugin>/` | A plugin or MCP server that was built: its code, `plugin.yaml`, its config (`mcp-config.json`, values left out) |
+| `core/connections.yaml` | Every connector, MCP server and channel (WhatsApp, phone...), and which accounts have it. Sign-ins stay in the tool |
+| `core/profiles.yaml` | The accounts (tool + account) that feed this harness |
+| `core/profile/`, `core/projects/` | Who the owner is; projects with their instructions and knowledge |
+| `apps/<app>/` | An app built in a tool: `app.yaml`; table structures (`entities/`, all together in `entities.json`); backend code (`functions/<name>/`, with `functions.json`: what runs each one); pages. Table rows stay in the tool |
+| `memory/` | One fact, decision or preference per file; `subject` says what it is about, `provenance` where it came from |
+| `sessions/<account>/<id>/` | One conversation or agent run: `summary.md`, `log.md` (word for word), `meta.yaml` (dates, topic, agent, where the raw transcript is); `replies/` when a tool sent its replies one by one |
+| `native/<account>/` | A tool's own settings that no other tool understands, kept as they are |
+| `assets/` | Reference files (examples, decks, designs) |
+| `connector/` | Written by the engine: the index and the instructions the harness connector serves |
+| `inbox/` | What tools sent, waiting to be filed; `inbox/conflicts/` = versions that clash |
 
-**Why `core/` and the rest:** `core/` is what makes agents behave as they do (definitions, rules,
-skills, workflows, plugins, connections) - portable between tools, and changed only with the
-user's approval. Outside it is what accumulates (memory, conversations), what was built (apps,
-assets), and what is tool-specific (`native/`).
-
-**Outside this branch:** full raw transcripts (a branch named `transcripts`, or a cloud-synced
-folder - per account, below); secrets (never in Git - see the end of this file).
-"""
-
-STATIC_LINKS = """\
-## How files refer to each other
+## How files point to each other
 
 | Field | In | Means |
 |---|---|---|
-| `provenance.source.profile` | every item | the account it came from (`core/profiles.yaml`); `updates` lists later changes |
-| `origin` | items | where in the tool it came from (for example `base44 superagent <id>`, `monday agent <id>`) |
-| `skills`, `requires.connections` | agent | the skills and connections the agent uses |
+| `provenance.source.profile` | every item | the account it came from; `updates` lists later changes |
+| `origin` | items | where in the tool it came from (e.g. `base44 superagent <id>`) |
+| `skills`, `requires.connections` | agent | the skills and connections it uses |
 | `steps[].agent` | workflow | the agent that runs it |
 | `scope: agent:<name>` | instruction | a rule of that agent only |
-| `agent`, `project` | conversation `meta.yaml` | the agent or project of the conversation |
-| `transcript` | conversation `meta.yaml` | the full transcript's path in transcript storage |
-| `native.<profile>` | agent, workflow | the tool's own full record, kept as it was |
-| `apps/<agent>/`, `core/plugins/<agent>-...` | names | an app or plugin named after an agent belongs to it |
+| `agent`, `project` | conversation `meta.yaml` | the agent or project it belongs to |
+| `summary_reply` | conversation `meta.yaml` | the last reply the summary covers |
+| `transcript`, `files` | conversation `meta.yaml` | the raw transcript and the files made in it, on the transcripts branch |
+| a name inside text | workflows, rules, code | a workflow or rule that says "call ingestCalendarInvites" uses that function |
+"""
 
-Names inside text are links too: a workflow whose instructions say "call ingestCalendarInvites"
-uses that backend function. The agent sections below list these.
+STATIC_FIND = """\
+## Finding everything: the index
+
+`connector/index.json` lists every item and every file, one entry each, rebuilt on every save.
+Each entry has `kind`, `name`, `path` and the account (`profile`), and, where known:
+
+- `agent` - the agent it belongs to;
+- `uses` / `used_by` - functions, tables and skills it names, and what names it;
+- `called_from_outside` - for code the tool calls itself (a webhook), `explained_in` - the
+  memory files that explain it;
+- `needs_settings` - secrets and settings it reads (names only), `runs` and `status` for
+  workflows;
+- for conversations: `date`, `tool`, `account`, `project`, `agent`, the goal from the summary,
+  the first message, and where the `summary`, `log`, `raw` transcript and `files` are.
+
+Kinds: `guide`, `agent`, `instruction`, `skill`, `workflow`, `plugin`, `connection`, `app`,
+`function`, `table`, `memory`, `project`, `conversation`, `profile`, `file`.
+
+**With the harness connector** (any tool with MCP): `harness_find` with words and optionally a
+`kind`, then `harness_read` with the `path`. **On a computer**: search `connector/index.json`
+(e.g. for `"agent": "<name>"` or a word such as a table's name), then open the paths.
+
+A link is found when a file names the other item. Something set up only inside a tool (a
+schedule, a sign-in) has no file that names it: look at `explained_in` and at the agent's memory.
 """
 
 STATIC_END = """\
+## Outside this branch
+
+- **Raw transcripts and files made in conversations**: where each account keeps them is in the
+  table above. On the transcripts branch: `git fetch origin transcripts`, then
+  `git show origin/transcripts:<path>` - the path is `transcript:` in the conversation's
+  `meta.yaml`, and its files are under `<account>/<id>/files/`. Through the connector:
+  `harness_read` with `transcripts:<path>`.
+- **Secrets** (passwords, tokens, keys) are never stored here, not even in this private
+  repository; only their names (`needs_settings` in the index). They are set in the tool
+  itself; the harness engine keeps its own in the computer's password store, a cloud
+  environment's secrets, or the connector's Cloudflare secrets.
+
 ## Changing this repository
 
 Content is written by the engine and the tools' adapters, never by hand: a hand edit can be
-overwritten or lose its provenance. To bring in a tool: `python -m harness harvest <tool>`; tools
-that cannot reach Git save through the harness connector. Check the repository with
-`python -m harness validate`.
+overwritten or lose its source. Bring in a tool with `python -m harness harvest <tool>`; tools
+that cannot reach Git save through the harness connector. Check with `python -m harness validate`.
 """

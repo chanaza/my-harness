@@ -25,6 +25,9 @@ class Superagent:
     memory: list[dict[str, Any]] = field(default_factory=list)
     conversation_ids: list[str] = field(default_factory=list)
     functions: list[dict[str, Any]] = field(default_factory=list)  # its backend functions (server code)
+    webhooks: list[dict[str, Any]] = field(default_factory=list)  # events it sends to a URL
+    channels: list[dict[str, Any]] = field(default_factory=list)  # WhatsApp, phone, Telegram...
+    workflow_status: dict[str, str] = field(default_factory=dict)  # automation -> active / ...
 
 
 class Base44Reader:
@@ -43,6 +46,12 @@ class Base44Reader:
             agent.functions = (self._get(f"/api/apps/{agent.id}/backend-functions") or {}).get(
                 "functions"
             ) or []
+            agent.webhooks = list(self._get(f"/api/agents/{agent.id}/webhooks") or [])
+            agent.channels = list((self._get(f"/api/agents/{agent.id}/channels") or {}).get("channels") or [])
+            agent.workflow_status = {
+                str(w.get("name") or w.get("file_key")): str(w.get("status") or "")
+                for w in self._get(f"/api/apps/{agent.id}/workflows") or []
+            }
             agent.memory = list(self._get(f"/api/agents/{agent.id}/memory") or [])
             listed = [c["id"] for c in self._get(f"/api/agents/{agent.id}/conversations") or []]
             in_files = sorted({p.split("/")[1] for p in agent.files if p.startswith("conversations/")})

@@ -7,8 +7,9 @@ by the agent itself. Every item carries the Base44 profile as its source.
 |---|---|
 | Identity and soul (`.agents/.memory/IDENTITY.md`, `SOUL.md`), model, skills, connections, all its settings (`base44/agents/your_agent`) | `core/agents/<superagent>.yaml` |
 | Rules (`.agents/rules/*.md`, always on for that agent) | `core/instructions/` (scope `agent:<superagent>`) |
-| Automations (`base44/workflows/`) | `core/workflows/<superagent>-<name>.yaml` |
-| Connectors it is signed in to (`base44/connectors/`) | `core/connections.yaml` |
+| Automations (`base44/workflows/`), with whether each is still active | `core/workflows/<superagent>-<name>.yaml` |
+| Connectors it is signed in to (`base44/connectors/`) and connected channels (WhatsApp, phone...) | `core/connections.yaml` (the sign-in stays in Base44) |
+| Webhooks (events it sends to its own functions) | the agent's `native.webhooks`, and `functions.json` next to each function |
 | Skills (`.agents/skills/`, with scripts) | `core/skills/` |
 | MCP servers it runs (`.agents/mcps/<name>/`, with its config, names only) | `core/plugins/<superagent>-mcp-<name>/` and `core/connections.yaml` |
 | Structured memory, `USER.md`, `memory.md`, `notes/` | `memory/` |
