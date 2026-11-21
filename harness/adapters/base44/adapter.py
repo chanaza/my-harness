@@ -30,12 +30,13 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
-from ...conversation_log import ConversationLog, Reply
+from ...conversation_import import ConversationImporter, ToolConversation
+from ...conversation_log import Reply
 from ...credentials import CredentialStore
 from ...harvest import Captured, HarvestReport, HarvestSync, Kind
 from ...local import LocalHome
 from ...profiles import ProfileRegistry
-from ...provenance import Origin, now_iso, to_iso
+from ...provenance import Origin, to_iso
 from ...sessions import SessionRecord
 from ...text import slugify
 from ..base import Account, AccountBoundAdapter, HarnessNotConfigured, adapters
@@ -107,14 +108,21 @@ class Base44Adapter(AccountBoundAdapter):
             )
             report.merge(part)
             storage = repo.storage("transcripts", profile)
+            state = self.local.state("conversations", profile)
+            importer = ConversationImporter(repo, profile, storage, state)
             with storage.batch():
                 for agent in agents:
                     ids = [(c, False) for c in agent.conversation_ids]
                     ids += [(c, True) for c in getattr(agent, "mentioned_conversation_ids", [])]
                     for conversation_id, mentioned in ids:
                         conversation = reader.conversation(agent, conversation_id, mentioned=mentioned)
-                        if conversation and save_conversation(repo, profile, storage, agent, conversation):
-                            report.counts["conversations saved"] += 1
+                        saved = (
+                            base44_conversation(repo, profile, agent, conversation) if conversation else None
+                        )
+                        action = importer.save(saved) if saved else None
+                        if action:
+                            report.counts[f"conversations {action}"] += 1
+            state.save()
             report.errors += reader.problems
         return report
 
@@ -475,49 +483,34 @@ def message_replies(messages: list[dict[str, Any]]) -> list[Reply]:
     return replies
 
 
-def save_conversation(repo, profile: str, storage, agent: Superagent, conversation: dict[str, Any]) -> bool:
-    """One conversation: its messages, merged by message id with what earlier pulls saw,
-    its log, and the files made in it. Returns whether anything changed."""
-    record = SessionRecord(repo, profile, f"conversation-{conversation['id']}")
-    key = record.storage_key("messages.json")
-    kept = json.loads(storage.read_text(key)) if storage.exists(key) else []
-    seen = {m.get("id") for m in kept}
-    new = [m for m in conversation.get("messages") or [] if m.get("id") not in seen]
-    messages = sorted(
-        kept + new,
-        key=lambda m: str(m.get("created_date") or (m.get("metadata") or {}).get("created_date") or ""),
+def base44_conversation(
+    repo, profile: str, agent: Superagent, conversation: dict[str, Any]
+) -> ToolConversation | None:
+    """One Superagent conversation, in the engine's terms (the engine saves it like any tool's)."""
+    cid = conversation["id"]
+    prefix = f"conversations/{cid}/"
+    files = {
+        p[len(prefix) :]: text
+        for p, text in agent.files.items()
+        if p.startswith(prefix) and isinstance(text, str) and _safe(p)
+    }
+    gone = bool(conversation.get("gone"))
+    if gone and not files and not SessionRecord(repo, profile, f"conversation-{cid}").meta_path.is_file():
+        return None  # deleted in Base44 before it was ever saved, and nothing of it is left
+    messages = conversation.get("messages") or []
+    return ToolConversation(
+        id=f"conversation-{cid}",
+        version=f"{conversation.get('updated_date')}|{len(messages)}|{sorted(files)}|{gone}",
+        title=conversation.get("title") or cid,
+        started_at=to_iso(conversation.get("created_date")),
+        ended_at=to_iso(conversation.get("updated_date")),
+        messages=messages,
+        message_date=lambda m: str(
+            m.get("created_date") or (m.get("metadata") or {}).get("created_date") or ""
+        ),
+        raw_name="messages.json",
+        files=files,
+        replies=message_replies,
+        fields={"agent": slugify(agent.name)},
+        note="Deleted in Base44; what was saved before (and the files made in it) is kept" if gone else None,
     )
-    total = (conversation.get("summary") or {}).get("message_count")
-    note = None
-    if conversation.get("gone"):
-        note = "Deleted in Base44; what was saved before (and the files made in it) is kept"
-    elif total and total > len(messages):
-        returned = len(conversation.get("messages") or [])
-        note = f"Base44 returned the last {returned} of {total} messages; earlier ones were not available"
-    if not new and record.meta_path.is_file() and record.meta().get("note") == note:
-        return False  # nothing new, and what it says about itself is still true
-    prefix = f"conversations/{conversation['id']}/"
-    if conversation.get("gone") and not kept and not any(p.startswith(prefix) for p in agent.files):
-        return False
-    storage.write_text(key, json.dumps(messages, ensure_ascii=False))
-    files = []
-    for path, text in agent.files.items():
-        if path.startswith(prefix) and isinstance(text, str) and _safe(path):
-            relative = path[len(prefix) :]
-            storage.write_text(record.storage_key(f"files/{relative}"), text)
-            files.append({"path": relative, "size": len(text.encode("utf-8"))})
-    title = conversation.get("title") or conversation["id"]
-    ConversationLog(record).write(title, message_replies(messages))
-    started = to_iso(conversation.get("created_date"))
-    if not record.meta_path.is_file():
-        record.touch(started_at=started or now_iso(), imported_at=now_iso())
-    record.touch(
-        activity_at=to_iso(conversation.get("updated_date")),
-        topic=title,
-        transcript=key,
-        agent=slugify(agent.name),
-        files=files or None,
-        note=note,
-        clear=() if note else ("note",),
-    )
-    return True

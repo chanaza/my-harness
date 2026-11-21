@@ -23,15 +23,14 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
+from ...conversation_import import ConversationImporter, ToolConversation
 from ...harvest import Captured, HarvestReport, HarvestSync, Kind
-from ...local import LocalHome, StateFile
+from ...local import LocalHome
 from ...profiles import ProfileRegistry
-from ...provenance import Origin, now_iso
-from ...repo import ContentRepo
-from ...sessions import SessionRecord
-from ...storage import Storage
+from ...provenance import Origin
 from ..base import Account, AccountBoundAdapter, HarnessNotConfigured, adapters
 from ..claude_code.transcript import TranscriptReader
+from ..claude_code.transcript_replies import transcript_replies
 from .locations import CoworkAccount, CoworkLocations
 
 TOOL = "cowork"
@@ -58,8 +57,13 @@ class CoworkAdapter(AccountBoundAdapter):
         for account in self.locations.accounts():
             sessions = len(account.session_folders()) + len(account.agent_folders())
             skills = sorted(p.parent.name for p in (account.skills_folder / "skills").glob("*/SKILL.md"))
-            found.append(Account(account.key, f"account {account.short}…: {sessions} conversations, "
-                                              f"skills: {', '.join(skills) or 'none'}"))
+            found.append(
+                Account(
+                    account.key,
+                    f"account {account.short}…: {sessions} conversations, "
+                    f"skills: {', '.join(skills) or 'none'}",
+                )
+            )
         return found
 
     def _bound(self) -> list[tuple[CoworkAccount, str]]:
@@ -81,10 +85,17 @@ class CoworkAdapter(AccountBoundAdapter):
             manifest = _read_json(folder / ".claude-plugin" / "plugin.json")
             name = manifest.get("name") or folder.name
             description = manifest.get("description") or name
-            items.append(Captured(Kind.CONNECTION, name, str(folder), meta={
-                "tool": TOOL, "kind": "plugin", "description": description}))
-            items.append(Captured(Kind.PLUGIN, name, str(folder), _files(folder),
-                                  meta={"description": description}))
+            items.append(
+                Captured(
+                    Kind.CONNECTION,
+                    name,
+                    str(folder),
+                    meta={"tool": TOOL, "kind": "plugin", "description": description},
+                )
+            )
+            items.append(
+                Captured(Kind.PLUGIN, name, str(folder), _files(folder), meta={"description": description})
+            )
         for path in account.scheduled_task_files():
             surface = "cowork" if path.parent == account.folder else "claude-code"
             for task in _read_json(path).get("scheduledTasks") or []:
@@ -107,14 +118,16 @@ class CoworkAdapter(AccountBoundAdapter):
             if config.harvest_enabled:
                 items = self._items(account, config.harvest_exclude)
                 part = HarvestSync(repo, self.local.state("harvest", profile)).run(
-                    items, Origin.now(profile, session))
+                    items, Origin.now(profile, session)
+                )
                 report.merge(part)
             storage = repo.storage("transcripts", profile)
             state = self.local.state("conversations", profile)
+            importer = ConversationImporter(repo, profile, storage, state)
             with storage.batch():
                 for folder in account.session_folders() + account.agent_folders():
                     try:
-                        action = ConversationImporter(repo, profile, storage, state).run(folder)
+                        action = importer.save(cowork_conversation(folder))
                     except Exception as exc:  # one broken conversation must not stop the rest
                         report.errors.append(f"{folder.name}: {exc}")
                         continue
@@ -125,21 +138,30 @@ class CoworkAdapter(AccountBoundAdapter):
 
     def preview(self, exclude: list[str]) -> list[str]:
         lines = [f"{i.kind.value:11} {i.name}" for i in self.harvest(exclude)]
-        conversations = sum(len(a.session_folders()) + len(a.agent_folders())
-                            for a in self.locations.accounts())
+        conversations = sum(
+            len(a.session_folders()) + len(a.agent_folders()) for a in self.locations.accounts()
+        )
         return lines + [f"conversations: {conversations} (with their files)"]
 
     # --- installation ------------------------------------------------------------------------
 
-    def install(self, profile_id: str, label: str, repo_root: Path | None = None, hooks: bool = True,
-                environment: str | None = None, account_key: str | None = None) -> list[str]:
+    def install(
+        self,
+        profile_id: str,
+        label: str,
+        repo_root: Path | None = None,
+        hooks: bool = True,
+        environment: str | None = None,
+        account_key: str | None = None,
+    ) -> list[str]:
         done: list[str] = []
         if repo_root:
             self.local.save_settings(content_repo=str(Path(repo_root).resolve()))
             done.append(f"harness repository: {Path(repo_root).resolve()}")
         account_key = account_key or self._only_account_key()
-        profile = ProfileRegistry(self.repo()).add(self.tool, label, profile_id=profile_id,
-                                                   environment=environment or "local")
+        profile = ProfileRegistry(self.repo()).add(
+            self.tool, label, profile_id=profile_id, environment=environment or "local"
+        )
         self.bind(account_key, profile.id)
         done.append(f"Cowork account {account_key[:8]}… -> {profile.id}")
         if hooks:
@@ -153,50 +175,27 @@ class CoworkAdapter(AccountBoundAdapter):
         return accounts[0].key
 
 
-class ConversationImporter:
-    """Copies one Cowork conversation (or agent) folder into the harness, when it changed."""
-
-    def __init__(self, repo: ContentRepo, profile: str, storage: Storage, state: StateFile) -> None:
-        self.repo = repo
-        self.profile = profile
-        self.storage = storage
-        self.state = state
-
-    def run(self, folder: Path) -> str | None:
-        """Returns 'imported', 'updated', or None when nothing changed since last time."""
-        name = folder.name if folder.parent.name != "agent" else f"agent-{folder.name}"
-        signature = _signature(folder)
-        if self.state.get(name) == signature:
-            return None
-        session = SessionRecord(self.repo, self.profile, name)
-        new = not session.meta_path.is_file()
-        transcript = _main_transcript(folder)
-        span = TranscriptReader(transcript).span() if transcript else None
-        ended = span.ended_at if span else None
-        if new:
-            session.touch(activity_at=ended, started_at=(span.started_at if span else None) or now_iso(),
-                          imported_at=now_iso())
-        if transcript:
-            session.save_transcript(self.storage, transcript, activity_at=ended)
-        audit = folder / "audit.jsonl"
-        if audit.is_file():
-            self.storage.write_text(session.storage_key("audit.jsonl"), audit.read_text("utf-8"))
-        files = self._copy_files(folder, session)
-        session.touch(activity_at=ended, files=files or None)
-        self.state.set(name, signature)
-        return "imported" if new else "updated"
-
-    def _copy_files(self, folder: Path, session: SessionRecord) -> list[dict[str, Any]]:
-        listed = []
-        for kind in FILE_FOLDERS:
-            base = folder / kind
-            for path in sorted(base.rglob("*")) if base.is_dir() else []:
-                if not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
-                    continue
-                relative = f"{kind}/{path.relative_to(base).as_posix()}"
-                self.storage.write_bytes(session.storage_key(f"files/{relative}"), path.read_bytes())
-                listed.append({"path": relative, "size": path.stat().st_size})
-        return listed
+def cowork_conversation(folder: Path) -> ToolConversation:
+    """One Cowork conversation (or agent) folder, in the engine's terms."""
+    transcript = _main_transcript(folder)
+    span = TranscriptReader(transcript).span() if transcript else None
+    audit = folder / "audit.jsonl"
+    files: dict[str, bytes | str] = {}
+    for kind in FILE_FOLDERS:
+        base = folder / kind
+        for path in sorted(base.rglob("*")) if base.is_dir() else []:
+            if path.is_file() and path.stat().st_size <= MAX_FILE_BYTES:
+                files[f"{kind}/{path.relative_to(base).as_posix()}"] = path.read_bytes()
+    return ToolConversation(
+        id=folder.name if folder.parent.name != "agent" else f"agent-{folder.name}",
+        version=_signature(folder),
+        started_at=span.started_at if span else None,
+        ended_at=span.ended_at if span else None,
+        raw_file=transcript,
+        extra={"audit.jsonl": audit.read_text("utf-8")} if audit.is_file() else {},
+        files=files,
+        replies=(lambda path: transcript_replies(Path(path))) if transcript else None,
+    )
 
 
 class _Exclusions:
@@ -210,23 +209,34 @@ class _Exclusions:
 def _workflow_item(task: dict[str, Any], source: Path, surface: str) -> Captured:
     """A scheduled task as a workflow. Field names vary, so common ones are tried and the
     whole original record is kept under ``native``."""
+
     def first(*keys: str) -> str:
         return next((str(task[k]) for k in keys if task.get(k)), "")
 
     prompt = first("prompt", "instructions", "message", "task", "text")
     name = first("name", "title", "label", "id") or "scheduled-task"
-    return Captured(Kind.WORKFLOW, name, str(source), meta={
-        "description": first("description", "summary") or prompt[:200] or name,
-        "prompt": prompt or name,
-        "trigger": first("schedule", "cron", "cronExpression", "rrule", "frequency", "interval"),
-        "native": {"surface": surface, **task},
-    })
+    return Captured(
+        Kind.WORKFLOW,
+        name,
+        str(source),
+        meta={
+            "description": first("description", "summary") or prompt[:200] or name,
+            "prompt": prompt or name,
+            "trigger": first("schedule", "cron", "cronExpression", "rrule", "frequency", "interval"),
+            "native": {"surface": surface, **task},
+        },
+    )
 
 
 def _main_transcript(folder: Path) -> Path | None:
     """The conversation's main transcript (sub-agent transcripts are part of it, not separate)."""
-    candidates = [p for p in folder.rglob("*.jsonl") if p.name != "audit.jsonl"
-                  and "subagents" not in p.parts and not set(p.relative_to(folder).parts) & SKIPPED]
+    candidates = [
+        p
+        for p in folder.rglob("*.jsonl")
+        if p.name != "audit.jsonl"
+        and "subagents" not in p.parts
+        and not set(p.relative_to(folder).parts) & SKIPPED
+    ]
     return max(candidates, key=lambda p: p.stat().st_size) if candidates else None
 
 
@@ -241,10 +251,15 @@ def _signature(folder: Path) -> str:
 
 
 def _files(folder: Path) -> dict[str, bytes]:
-    return {p.relative_to(folder).as_posix(): p.read_bytes() for p in sorted(folder.rglob("*"))
-            if p.is_file() and p.stat().st_size <= MAX_FILE_BYTES
-            and not any(part.startswith(".") and part != ".claude-plugin"
-                        for part in p.relative_to(folder).parts[:-1])}
+    return {
+        p.relative_to(folder).as_posix(): p.read_bytes()
+        for p in sorted(folder.rglob("*"))
+        if p.is_file()
+        and p.stat().st_size <= MAX_FILE_BYTES
+        and not any(
+            part.startswith(".") and part != ".claude-plugin" for part in p.relative_to(folder).parts[:-1]
+        )
+    }
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -253,5 +268,3 @@ def _read_json(path: Path) -> dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
-
-

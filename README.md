@@ -166,6 +166,8 @@ are marked with ★.
 | `SessionRecord` | `harness/sessions.py` | One conversation: meta, rolling summary, compactions |
 | `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it |
 | `SummaryDigest`, `summary_request` | `harness/digest.py` | The one summary language for every tool; its sections -> instructions, memory, connections |
+| `ConversationImporter`, `ToolConversation` | `harness/conversation_import.py` | Saving a conversation or run a tool holds - for every tool: change detection, messages merged by id, raw record and files in transcript storage, the log, meta |
+| `SecretGuard` | `harness/secrets.py` | Keeps secret values out of everything that enters the repository (names kept, files whole) |
 | `ConversationLog`, `Reply` | `harness/conversation_log.py` | The one readable `log.md` per conversation, for every tool |
 | `RepoGuide` | `harness/guide.py` | The content repo's `README.md` (the logic of the structure, real examples of each kind) and the links in the index (agent, uses, used by, called from outside), built from the content on every save |
 | `InboxProcessor`, `HarnessIndex` | `harness/inbox.py` | Saves what the connector dropped into `inbox/connector/`; the index of everything, for reading |
@@ -196,7 +198,7 @@ are marked with ★.
 Adding things. The rule: **the engine holds every piece of logic once; an adapter only
 translates its tool's own format** (e.g. Claude Code's transcript into `Reply` objects).
 
-- **A tool**: subclass `Adapter`, decorate with `@adapters.register`, import it in `harness/adapters/__init__.py`.
+- **A tool**: subclass `Adapter`, decorate with `@adapters.register`, import it in `harness/adapters/__init__.py`. It only translates: its items become `Captured` (with `agent=` when the tool says whose they are), its conversations `ToolConversation`; the engine does all saving, merging, secret-keeping and linking.
 - **A storage backend**: subclass `Storage`, decorate with `@backends.register`, add its name to `config.schema.json`.
 - **A content type**: add a schema to `harness/schemas/`, an `ItemWriter` if tools produce it, a `SchemaCheck`, and teach `RepoGuide` (and through it the connector's index) how it links to agents.
 - **A command**: subclass `Command` and add it to `DEFAULT_COMMANDS`.
