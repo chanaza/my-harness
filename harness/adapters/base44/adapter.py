@@ -483,15 +483,22 @@ def save_conversation(repo, profile: str, storage, agent: Superagent, conversati
     kept = json.loads(storage.read_text(key)) if storage.exists(key) else []
     seen = {m.get("id") for m in kept}
     new = [m for m in conversation.get("messages") or [] if m.get("id") not in seen]
-    if not new and record.meta_path.is_file():
-        return False
-    prefix = f"conversations/{conversation['id']}/"
-    if conversation.get("gone") and not kept and not any(p.startswith(prefix) for p in agent.files):
-        return False
     messages = sorted(
         kept + new,
         key=lambda m: str(m.get("created_date") or (m.get("metadata") or {}).get("created_date") or ""),
     )
+    total = (conversation.get("summary") or {}).get("message_count")
+    note = None
+    if conversation.get("gone"):
+        note = "Deleted in Base44; what was saved before (and the files made in it) is kept"
+    elif total and total > len(messages):
+        returned = len(conversation.get("messages") or [])
+        note = f"Base44 returned the last {returned} of {total} messages; earlier ones were not available"
+    if not new and record.meta_path.is_file() and record.meta().get("note") == note:
+        return False  # nothing new, and what it says about itself is still true
+    prefix = f"conversations/{conversation['id']}/"
+    if conversation.get("gone") and not kept and not any(p.startswith(prefix) for p in agent.files):
+        return False
     storage.write_text(key, json.dumps(messages, ensure_ascii=False))
     files = []
     for path, text in agent.files.items():
@@ -504,13 +511,6 @@ def save_conversation(repo, profile: str, storage, agent: Superagent, conversati
     started = to_iso(conversation.get("created_date"))
     if not record.meta_path.is_file():
         record.touch(started_at=started or now_iso(), imported_at=now_iso())
-    total = (conversation.get("summary") or {}).get("message_count")
-    note = None
-    if conversation.get("gone"):
-        note = "Deleted in Base44; what was saved before (and the files made in it) is kept"
-    elif total and total > len(messages):
-        returned = len(conversation.get("messages") or [])
-        note = f"Base44 returned the last {returned} of {total} messages; earlier ones were not available"
     record.touch(
         activity_at=to_iso(conversation.get("updated_date")),
         topic=title,

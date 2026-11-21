@@ -130,6 +130,8 @@ class AgentWriter(ItemWriter):
         agent["origin"] = item.origin
         if native:
             agent["native"] = {origin.profile: native}
+        if not conflict and _same(existing, agent):
+            return WriteResult("unchanged", target)
         previous = None if conflict or not existing else existing.get("provenance")
         agent["provenance"] = Provenance.updated(previous, origin)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -202,9 +204,12 @@ class ConnectionWriter(ItemWriter):
             })
             action = "created"
         else:
+            before = yaml_io.dump({k: v for k, v in current.items() if k != "provenance"})
             current.setdefault("available_in", {})[tool] = available
             if item.meta.get("description") and not str(item.meta["description"]).startswith("Plugin '"):
                 current["description"] = item.meta["description"]  # a real description wins
+            if yaml_io.dump({k: v for k, v in current.items() if k != "provenance"}) == before:
+                return WriteResult("unchanged", path)
             current["provenance"] = Provenance.updated(current.get("provenance"), origin)
             action = "updated"
         self._save(path, connections)
@@ -265,6 +270,10 @@ class FolderWriter(ItemWriter):
             all(existing.get(k) == v for k, v in fields.items())
         conflict = bool(existing) and not same_content and \
             self._conflicting(existing.get("provenance"), origin)
+        if _folder_matches(folder, item.files, self.DESCRIPTOR) and _same(
+            existing, self._descriptor(item, origin, fields, None)
+        ):
+            return WriteResult("unchanged", descriptor)
         if conflict:
             folder = self._conflict_path(folder, origin)
             descriptor = folder / self.DESCRIPTOR
@@ -346,6 +355,8 @@ class WorkflowWriter(ItemWriter):
             workflow["trigger"] = str(item.meta["trigger"])
         if item.meta.get("native"):
             workflow["native"] = {origin.profile: item.meta["native"]}
+        if _same(existing, workflow):
+            return WriteResult("unchanged", target)
         same = bool(existing) and existing.get("steps") == workflow["steps"]
         conflict = bool(existing) and not same and self._conflicting(existing.get("provenance"), origin)
         if conflict:
@@ -368,14 +379,17 @@ class NativeWriter(ItemWriter):
 
     def write(self, item: Captured, origin: Origin) -> WriteResult:
         folder = self._folder(item.scope, origin.profile)
-        existed = False
+        existed = changed = False
         for relative, content in item.files.items():
             path = folder.joinpath(*relative.split("/"))
             existed = existed or path.exists()
+            if path.is_file() and path.read_bytes() == content:
+                continue
+            changed = True
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
         entry = folder / next(iter(item.files)).split("/", 1)[0]
-        return WriteResult("updated" if existed else "created", entry)
+        return WriteResult("unchanged" if not changed else ("updated" if existed else "created"), entry)
 
     def location(self, name: str, scope: str, profile: str) -> Path | None:
         folder = self._folder(scope, profile)
@@ -393,6 +407,15 @@ DEFAULT_WRITERS: tuple[type[ItemWriter], ...] = (
 )
 
 
+def _same(existing: Any, new: dict[str, Any]) -> bool:
+    """Whether writing ``new`` would change nothing but its provenance (then nothing is written:
+    a provenance entry records a change, not a re-read)."""
+    if not isinstance(existing, dict):
+        return False
+    strip = lambda d: {k: v for k, v in d.items() if k != "provenance"}  # noqa: E731
+    return strip(existing) == strip(yaml_io.load(yaml_io.dump(new)) or {})
+
+
 def owner(item: Captured) -> dict[str, str]:
     """The ``agent:`` field every writer adds when the tool says whose item this is."""
     return {"agent": slugify(item.agent)} if item.agent else {}
@@ -405,6 +428,8 @@ def _write_markdown(writer: ItemWriter, target: Path, item: Captured, origin: Or
     existing = current.meta if current else None
     same_content = current is not None and current.body.strip() == body.strip()
     conflict = bool(existing) and not same_content and writer._conflicting(existing.get("provenance"), origin)
+    if same_content and _same(existing, {**meta, **owner(item)}):
+        return WriteResult("unchanged", target)
     if conflict:
         target = writer._conflict_path(target, origin)
     previous = None if conflict or not existing else existing.get("provenance")

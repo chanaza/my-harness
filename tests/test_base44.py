@@ -249,3 +249,19 @@ def test_the_guide_and_the_connector_index_show_every_part_of_an_agent(repo: Con
     assert "core/workflows/business-dev-weekly.yaml" in function["used_by"]
     assert "core/workflows/business-dev-goal-emergency-group-bridge.yaml" in function["used_by"]
     assert index["core/workflows/business-dev-weekly.yaml"]["uses"] == ["function:yemotBridgeWebhook"]
+
+
+def test_a_new_engine_rereads_everything_but_changes_only_what_differs(repo: ContentRepo, monkeypatch):
+    import harness.harvest.item as item_module
+
+    LocalHome().save_settings(content_repo=str(repo.root))
+    reader = Reader([message(1, "user", "q1"), message(2, "assistant", "a1")])
+    adapter = Base44Adapter(LocalHome(), reader_factory=lambda account: reader)
+    adapter.install("base44-personal-cloud", "personal", repo.root, hooks=False)
+    adapter.run_harvest()
+    before = {p: p.read_text() for p in repo.path("core").rglob("*") if p.is_file()}
+    monkeypatch.setattr(item_module, "__version__", "99.0.0")  # an engine upgrade
+    report = adapter.run_harvest()
+    after = {p: p.read_text() for p in repo.path("core").rglob("*") if p.is_file()}
+    assert before == after  # re-read, nothing rewritten: no provenance entry for a non-change
+    assert report.counts["unchanged"] and not report.counts["updated"]
