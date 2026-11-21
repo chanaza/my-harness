@@ -23,10 +23,12 @@ def test_code_that_names_or_reads_a_secret_is_not_a_secret():
 
 def test_settings_records_hide_the_value_of_a_secret_named_key():
     rows = [{"key": "outlook_bridge_token", "value": "zzzzzzzzzzzz"},
+            {"key": "group_password", "value": "1234"},
             {"key": "owner_phone", "value": "0501234567"},
             {"name": "x", "api_key": "kkkkkkkkkkkk", "env": {"TOKEN": "${TOKEN}"}}]
     cleaned = SecretGuard().clean_text(json.dumps(rows), "data/ClientSetting.json")
     saved = json.loads(cleaned.text)
-    assert saved[0]["value"] == MARKER and saved[1]["value"] == "0501234567"
-    assert saved[2]["api_key"] == MARKER and saved[2]["env"]["TOKEN"] == "${TOKEN}"
-    assert set(cleaned.hidden) == {"outlook_bridge_token", "api_key"}
+    assert saved[0]["value"] == MARKER and saved[1]["value"] == MARKER  # a short PIN too
+    assert saved[2]["value"] == "0501234567"
+    assert saved[3]["api_key"] == MARKER and saved[3]["env"]["TOKEN"] == "${TOKEN}"
+    assert set(cleaned.hidden) == {"outlook_bridge_token", "group_password", "api_key"}

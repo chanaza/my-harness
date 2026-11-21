@@ -111,5 +111,7 @@ def _is_reference(value: str) -> bool:
     """A placeholder or reference to a secret, not the secret itself (``${TOKEN}``, ``<set in X>``,
     a boolean or a short word such as ``true``)."""
     stripped = value.strip()
-    return (len(stripped) < 6 or stripped.startswith(("${", "$", "<", "{{"))
-            or stripped.lower() in ("true", "false", "null"))
+    # a value under a secret's name is a secret however short (a 4-digit PIN is one); only
+    # nothing, a placeholder or a yes/no is not
+    return (not stripped or stripped.startswith(("${", "$", "<", "{{"))
+            or stripped.lower() in ("true", "false", "null", "none", "yes", "no"))
