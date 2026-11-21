@@ -47,7 +47,13 @@ class Base44Reader:
         return found
 
     def conversation(self, agent: Superagent, conversation_id: str) -> dict[str, Any] | None:
-        return self._get(f"/api/agents/{agent.id}/conversations/{conversation_id}")
+        try:
+            return self.client.get(f"/api/agents/{agent.id}/conversations/{conversation_id}")
+        except Base44Error as exc:
+            if " 404 " in str(exc):  # deleted in Base44; files made in it may still be in the agent's folder
+                return {"id": conversation_id, "messages": [], "gone": True}
+            self.problems.append(str(exc))
+            return None
 
     def _get(self, path: str) -> Any:
         try:

@@ -10,7 +10,7 @@
   "properties": {
     "scope": {
       "type": "string",
-      "description": "global, or project:<name>."
+      "description": "global, project:<name>, or agent:<name> (only that agent's rule)."
     },
     "origin": {
       "type": "string"

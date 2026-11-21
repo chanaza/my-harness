@@ -21,7 +21,11 @@ class Base44Client:
     def get(self, path: str) -> Any:
         request = urllib.request.Request(
             f"{self.base}{path}",
-            headers={"Authorization": f"Bearer {self.token}", "Accept": "application/json"},
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Accept": "application/json",
+                "User-Agent": "my-harness",
+            },  # Python's default is refused by Base44's Cloudflare
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
