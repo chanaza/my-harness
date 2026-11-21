@@ -12,7 +12,7 @@ by the agent itself. Every item carries the Base44 profile as its source.
 | Skills (`.agents/skills/`, with scripts) | `core/skills/` |
 | MCP servers it runs (`.agents/mcps/<name>/`, with its config, names only) | `core/plugins/<superagent>-mcp-<name>/` and `core/connections.yaml` |
 | Structured memory, `USER.md`, `memory.md`, `notes/` | `memory/` |
-| Data model only (`base44/entities/`) | `apps/<superagent>/` (the table data stays in Base44) |
+| Data model (`base44/entities/`) and backend functions (server code, e.g. webhooks; from `/backend-functions`) | `apps/<superagent>/` (the table data stays in Base44) |
 | Conversations | `sessions/<profile>/conversation-<id>/` with `log.md`; files made in a conversation next to it |
 
 Never saved: `.agents/.env`, anything that looks like a secret (reported by name), MCP

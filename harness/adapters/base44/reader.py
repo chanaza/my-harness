@@ -24,6 +24,7 @@ class Superagent:
     files: dict[str, str] = field(default_factory=dict)
     memory: list[dict[str, Any]] = field(default_factory=list)
     conversation_ids: list[str] = field(default_factory=list)
+    functions: list[dict[str, Any]] = field(default_factory=list)  # its backend functions (server code)
 
 
 class Base44Reader:
@@ -39,6 +40,9 @@ class Base44Reader:
             agent = Superagent(app["id"], app.get("name") or app["id"], app)
             agent.profile = self._get(f"/api/agents/{agent.id}") or {}
             agent.files = (self._get(f"/api/apps/{agent.id}/sandbox/files") or {}).get("files") or {}
+            agent.functions = (self._get(f"/api/apps/{agent.id}/backend-functions") or {}).get(
+                "functions"
+            ) or []
             agent.memory = list(self._get(f"/api/agents/{agent.id}/memory") or [])
             listed = [c["id"] for c in self._get(f"/api/agents/{agent.id}/conversations") or []]
             in_files = sorted({p.split("/")[1] for p in agent.files if p.startswith("conversations/")})

@@ -67,6 +67,23 @@ def agent() -> Superagent:
         dict(FILES),
         [{"id": "m1", "content": "Hours are reported weekly.", "scope": "user"}],
         ["c1"],
+        [
+            {
+                "name": "yemotBridgeWebhook",
+                "entry": "main.ts",
+                "automations": [],
+                "files": [
+                    {
+                        "path": "main.ts",
+                        "content": "const token = Deno.env.get('T');\nasync function f(token: string) {}",
+                    }
+                ],
+            },
+            {
+                "name": "leaky",
+                "files": [{"path": "main.ts", "content": "const API_KEY = 'abcd1234efgh5678';"}],
+            },
+        ],
     )
 
 
@@ -113,7 +130,16 @@ def test_a_superagent_is_saved_in_its_places_with_its_source(repo: ContentRepo):
     app = repo.path("apps", "business-dev")
     assert (app / "entities.json").is_file() and (app / "entities" / "TaskItem.jsonc").is_file()
     # the app is the data model only; everything else is where it belongs, sourced from the profile
-    assert sorted(p.name for p in app.iterdir()) == ["app.yaml", "entities", "entities.json"]
+    assert sorted(p.name for p in app.iterdir()) == [
+        "app.yaml",
+        "entities",
+        "entities.json",
+        "functions",
+        "functions.json",
+    ]
+    assert (app / "functions" / "yemotBridgeWebhook" / "main.ts").is_file()  # code that names a token is fine
+    assert not (app / "functions" / "leaky").exists()  # a literal key is not saved
+    assert any("functions/leaky/main.ts" in e for e in report.errors)
     plugin = repo.path("core", "plugins", "business-dev-mcp-hms-report")
     assert "<set in Base44>" in (plugin / "mcp-config.json").read_text()
     flow = repo.path("core", "workflows", "business-dev-weekly.yaml").read_text()

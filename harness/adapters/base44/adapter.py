@@ -12,7 +12,7 @@ ConversationLog), so every item carries this profile as its source.
   skills (.agents/skills/) ............................................. core/skills/
   MCP servers it runs (.agents/mcps/<name>/, config names only) ...... core/plugins/ (+ connections)
   memory (structured memory, legacy USER.md / memory.md, notes/) ...... memory/
-  data model (entities, base44/entities/) ............................. apps/<superagent>/
+  data model (base44/entities/) and backend functions (server code) ... apps/<superagent>/
   conversations (last 200 messages each, kept growing by message id) .. sessions/ (+ log.md)
   files made in a conversation (conversations/<id>/) .................. with that conversation
 
@@ -45,9 +45,11 @@ TOOL = "base44"
 NEVER = (".agents/.env", ".agents/platform-docs/", ".gitignore")
 SECRET = re.compile(
     r"(ghp_|github_pat_|sk-ant-|sk-[A-Za-z0-9]{20}|xox[bp]-|AKIA|b44k_)[A-Za-z0-9_-]{8,}"
-    r"|(password|passwd|secret|api_?key|token)\"?\s*[:=]\s*\"?"
-    r"(?!process\.env|os\.environ|os\.getenv|env\.|Deno\.env)[^\s\"${}]{6,}",  # reading a variable is fine
-    re.IGNORECASE,
+    # a secret-named key given a literal value: "password": "...", TOKEN='...', API_KEY=... (an .env line).
+    # Code that names a variable, reads one, or types a parameter (token: string) is not a secret.
+    r"|(password|passwd|secret|api_?key|token)[\"']?\s*[:=]\s*(?P<q>[\"'`])[^\s\"'`${}]{8,}(?P=q)"
+    r"|^\s*[A-Z0-9_]*(PASSWORD|SECRET|API_?KEY|TOKEN)[A-Z0-9_]*\s*=\s*[^\s\"'`${}]{8,}\s*$",
+    re.IGNORECASE | re.MULTILINE,
 )
 
 
@@ -292,6 +294,14 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
         for p, c in _under(files, "base44/", skipped).items()
         if not p.startswith(("agents/", "workflows/", "connectors/"))
     }
+    for function in agent.functions:
+        for source in function.get("files") or []:
+            path = f"functions/{function.get('name')}/{source.get('path')}"
+            if isinstance(source.get("content"), str) and _safe(path, source["content"], skipped):
+                app_files[path] = source["content"].encode("utf-8")
+    if agent.functions:  # what runs each function (automations) and what it signs in to
+        manifest = [{k: v for k, v in f.items() if k != "files"} for f in agent.functions]
+        app_files["functions.json"] = json.dumps(manifest, ensure_ascii=False, indent=1).encode("utf-8")
     app_files["entities.json"] = json.dumps(
         agent.app.get("entities") or {}, ensure_ascii=False, indent=1
     ).encode("utf-8")
@@ -302,7 +312,8 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             origin,
             app_files,
             meta={
-                "description": f"Data model of the Base44 Superagent {agent.name} (tables stay in Base44)",
+                "description": f"Data model and backend functions of the Base44 Superagent {agent.name} "
+                "(the table rows stay in Base44)",
                 "fields": {"link": f"https://app.base44.com/superagents/{agent.id}"},
             },
         )
