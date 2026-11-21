@@ -198,7 +198,7 @@ are marked with ★.
 Adding things. The rule: **the engine holds every piece of logic once; an adapter only
 translates its tool's own format** (e.g. Claude Code's transcript into `Reply` objects).
 
-- **A tool**: subclass `Adapter`, decorate with `@adapters.register`, import it in `harness/adapters/__init__.py`. It only translates: its items become `Captured` (with `agent=` when the tool says whose they are), its conversations `ToolConversation`; the engine does all saving, merging, secret-keeping and linking.
+- **A tool**: subclass `Adapter`, decorate with `@adapters.register`, import it in `harness/adapters/__init__.py`. It only translates: its items become `Captured` (with `agent=` when the tool says whose they are; an app's tables as `meta['tables']`, from the tool's live definition), its conversations `ToolConversation`; the engine does all saving, merging, secret-keeping, table files and linking, and `harness validate` checks that what belongs together agrees.
 - **A storage backend**: subclass `Storage`, decorate with `@backends.register`, add its name to `config.schema.json`.
 - **A content type**: add a schema to `harness/schemas/`, an `ItemWriter` if tools produce it, a `SchemaCheck`, and teach `RepoGuide` (and through it the connector's index) how it links to agents.
 - **A command**: subclass `Command` and add it to `DEFAULT_COMMANDS`.

@@ -7,10 +7,11 @@ the target last: if a *different* profile did, the incoming version goes to
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -306,11 +307,30 @@ class PluginWriter(FolderWriter):
 
 
 class AppWriter(FolderWriter):
-    """An app or page built inside a tool -> apps/<name>/ (its code as-is) + app.yaml."""
+    """An app or page built inside a tool -> apps/<name>/ (its code as-is) + app.yaml.
+
+    Its tables (``item.meta['tables']``: name -> structure, from the tool's live definition) are
+    written here, by the engine, for every tool: one file per table in ``entities/`` and all of
+    them in ``entities.json`` - from one source, so no table can be in one and missing from the
+    other (``TablesCheck`` verifies it).
+    """
 
     kind = Kind.APP
     AREA = ("apps",)
     DESCRIPTOR = "app.yaml"
+    TABLES_FOLDER = "entities"
+    TABLES_FILE = "entities.json"
+
+    def write(self, item: Captured, origin: Origin) -> WriteResult:
+        tables = item.meta.get("tables")
+        if isinstance(tables, dict):
+            files = {k: v for k, v in item.files.items()
+                     if not (k == self.TABLES_FILE or k.startswith(f"{self.TABLES_FOLDER}/"))}
+            for name, structure in tables.items():
+                files[f"{self.TABLES_FOLDER}/{name}.json"] = _json_bytes(structure)
+            files[self.TABLES_FILE] = _json_bytes(tables)
+            item = replace(item, files=files)
+        return super().write(item, origin)
 
     def _descriptor(self, item: Captured, origin: Origin, fields: dict[str, Any],
                     previous: Any) -> dict[str, Any]:
@@ -405,6 +425,10 @@ DEFAULT_WRITERS: tuple[type[ItemWriter], ...] = (
     InstructionWriter, SkillWriter, AgentWriter, MemoryWriter, ConnectionWriter, PluginWriter,
     ProjectWriter, WorkflowWriter, NativeWriter, AppWriter,
 )
+
+
+def _json_bytes(value: Any) -> bytes:
+    return json.dumps(value, ensure_ascii=False, indent=1).encode("utf-8")
 
 
 def _same(existing: Any, new: dict[str, Any]) -> bool:

@@ -89,3 +89,26 @@ class ProfileReferenceCheck(Check):
                 for profile in set(self.REFERENCE.findall(path.read_text("utf-8", errors="replace"))):
                     if profile not in known:
                         report.add(path.relative_to(repo.root).as_posix(), f"unknown profile {profile!r}")
+
+
+class TablesCheck(Check):
+    """An app's tables are listed in entities.json and kept one per file in entities/: the two
+    must agree, whichever tool the app came from."""
+
+    def run(self, repo: ContentRepo, report: Report) -> None:
+        import json
+
+        for listing in sorted(repo.path("apps").glob("*/entities.json")):
+            try:
+                names = set(json.loads(listing.read_text("utf-8")) or {})
+            except ValueError:
+                report.add(listing.relative_to(repo.root).as_posix(), "not valid JSON")
+                continue
+            folder = listing.parent / "entities"
+            files = {p.stem for p in folder.iterdir() if p.is_file()} if folder.is_dir() else set()
+            for name in sorted(names - files):
+                report.add(listing.relative_to(repo.root).as_posix(),
+                           f"table {name!r} has no file in entities/")
+            for name in sorted(files - names):
+                report.add(f"{folder.relative_to(repo.root).as_posix()}/{name}",
+                           "table not listed in entities.json")

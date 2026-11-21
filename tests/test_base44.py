@@ -161,7 +161,7 @@ def test_a_superagent_is_saved_in_its_places_with_its_source(repo: ContentRepo):
     rule = next(repo.path("core", "instructions").rglob("*delete-requires-approval.md")).read_text()
     assert "scope: agent:" in rule and "global" not in rule  # the agent's rule, not one for every tool
     app = repo.path("apps", "business-dev")
-    assert (app / "entities.json").is_file() and (app / "entities" / "TaskItem.jsonc").is_file()
+    assert (app / "entities.json").is_file() and (app / "entities" / "TaskItem.json").is_file()
     # the app is the data model only; everything else is where it belongs, sourced from the profile
     assert sorted(p.name for p in app.iterdir()) == [
         "app.yaml",
@@ -175,7 +175,7 @@ def test_a_superagent_is_saved_in_its_places_with_its_source(repo: ContentRepo):
     leaky = (app / "functions" / "leaky" / "main.ts").read_text()  # the file is kept, its key is not
     assert "abcd1234efgh5678" not in leaky and "set it again" in leaky
     assert any("leaky" in h and "API_KEY" in h for h in report.hidden)  # and the owner is told which
-    assert (app / "entities" / "Tenants.jsonc").is_file()  # a table only the app record has yet
+    assert (app / "entities" / "Tenants.json").is_file()  # a table only the app record has yet
     plugin = repo.path("core", "plugins", "business-dev-mcp-hms-report")
     assert "<set in Base44>" in (plugin / "mcp-config.json").read_text()
     flow = repo.path("core", "workflows", "business-dev-weekly.yaml").read_text()

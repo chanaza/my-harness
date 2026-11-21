@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from ..config import ConfigError
 from ..layout import RepoLayout
 from ..repo import ContentRepo
-from .checks import AssetSizeCheck, Check, ProfileReferenceCheck, SchemaCheck
+from .checks import AssetSizeCheck, Check, ProfileReferenceCheck, SchemaCheck, TablesCheck
 from .readers import FrontmatterReader
 from .report import Report
 
@@ -39,6 +39,7 @@ class RepoValidator:
             SchemaCheck("sessions/*/*/summary.md", "summary", frontmatter),
             AssetSizeCheck(),
             ProfileReferenceCheck(),
+            TablesCheck(),
         ])
 
     def validate(self, repo: ContentRepo) -> Report:
