@@ -138,6 +138,10 @@
       "type": "integer",
       "minimum": 1,
       "description": "The last reply covered by summary.md (conversations saved through the harness connector)."
+    },
+    "note": {
+      "type": "string",
+      "description": "Something to know about this record, e.g. that the tool returned only part of a long conversation."
     }
   },
   "additionalProperties": false

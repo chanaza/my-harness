@@ -56,6 +56,7 @@ From then on, everything is saved by itself. Nothing is shown while it runs.
 | — history from before | Every chat with its attachments | Once, from claude.ai's data export (Settings > Privacy > Export data) |
 | Cowork sessions kept on a computer | Every conversation and its files | When you ask: `python -m harness harvest cowork` |
 | monday.com | Your AI agents (with skills, knowledge, jobs), workflows, recent agent runs (each with a readable log) | When you ask: `python -m harness harvest monday` |
+| Base44 Superagents | Identity, rules, skills (with scripts), MCP servers, memory, data model, conversations (each with a readable log) | When you ask: `python -m harness harvest base44` ([docs](docs/adapters/base44.md)) |
 | Genspark | Every exchange word for word, summaries, and what the account built (Hubs, pages, instructions) | Genspark itself, through your connector ([docs](docs/adapters/genspark.md)) |
 
 How each tool is captured is one setting per tool (`capture_modes` in your
@@ -157,6 +158,7 @@ are marked with ★.
 | `CoworkAdapter` | `harness/adapters/cowork/` | Cowork in the Claude desktop app ([docs](docs/adapters/cowork.md)) |
 | `ClaudeAiAdapter` | `harness/adapters/claude_ai/` | The Claude account (claude.ai, Desktop, Cowork): the self-updating skill, and one-off exports ([docs](docs/adapters/claude-ai.md)) |
 | `MondayAdapter` | `harness/adapters/monday/` | monday.com agents, workflows and runs through its API |
+| `Base44Adapter` | `harness/adapters/base44/` | Base44 Superagents through its API ([docs](docs/adapters/base44.md)) |
 | `ConnectorAdapter` | `harness/adapters/connector.py` | Shared base for tools that save themselves through the connector (Claude account, Genspark) |
 | `GensparkAdapter` | `harness/adapters/genspark/` | Genspark: only its own notes on top of `ConnectorAdapter` ([docs](docs/adapters/genspark.md)) |
 | harness connector | `connector/worker.js` | Your own tiny MCP server: tools without direct access save into the inbox ([docs](docs/connector.md)) |

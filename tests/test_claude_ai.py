@@ -492,7 +492,8 @@ def test_everything_in_the_harness_can_be_found(connected: ClaudeAiAdapter, repo
     assert {"skill", "memory", "instruction", "project", "app", "workflow", "connection", "profile",
             "conversation", "file"} <= kinds
     talk = next(e for e in index if e["kind"] == "conversation" and e["name"] == "Plan")
-    assert talk["date"] == "2026-11-19" and talk["tool"] == "claude-ai" and talk["account"] == "personal"
+    meta = (repo.root / talk["path"] / "meta.yaml").read_text()
+    assert talk["date"] in meta and talk["tool"] == "claude-ai" and talk["account"] == "personal"
     assert "Plan it." in talk["description"] and talk["first_message"] == "q1"
     assert talk["log"].endswith("log.md") and talk["summary"].endswith("summary.md")
     assert any(e["kind"] == "connection" and e["name"] == "gmail" for e in index)
