@@ -362,6 +362,12 @@ def superagent_items(agent: Superagent) -> list[Captured]:
         app_files[f"data/{table}.json"] = json.dumps(
             [_setting_row(row) for row in rows], ensure_ascii=False, indent=1
         ).encode("utf-8")
+    for table, schema in (agent.app.get("entities") or {}).items():
+        # the app record is the live definition; the sandbox's entities/ files can lag behind it
+        if f"entities/{table}.jsonc" not in app_files:
+            app_files[f"entities/{table}.jsonc"] = json.dumps(schema, ensure_ascii=False, indent=1).encode(
+                "utf-8"
+            )
     app_files["entities.json"] = json.dumps(
         agent.app.get("entities") or {}, ensure_ascii=False, indent=1
     ).encode("utf-8")

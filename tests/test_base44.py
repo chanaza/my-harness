@@ -62,7 +62,7 @@ def agent() -> Superagent:
         "business_dev",
         {
             "agents": {"your_agent": {"instructions": "Be helpful", "model": "automatic"}},
-            "entities": {"TaskItem": {"type": "object"}},
+            "entities": {"TaskItem": {"type": "object"}, "Tenants": {"type": "object"}},
         },
         {"slug": "koda"},
         dict(FILES),
@@ -175,6 +175,7 @@ def test_a_superagent_is_saved_in_its_places_with_its_source(repo: ContentRepo):
     leaky = (app / "functions" / "leaky" / "main.ts").read_text()  # the file is kept, its key is not
     assert "abcd1234efgh5678" not in leaky and "set it again" in leaky
     assert any("leaky" in h and "API_KEY" in h for h in report.hidden)  # and the owner is told which
+    assert (app / "entities" / "Tenants.jsonc").is_file()  # a table only the app record has yet
     plugin = repo.path("core", "plugins", "business-dev-mcp-hms-report")
     assert "<set in Base44>" in (plugin / "mcp-config.json").read_text()
     flow = repo.path("core", "workflows", "business-dev-weekly.yaml").read_text()
