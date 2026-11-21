@@ -47,6 +47,12 @@ class MemoryStore:
 
         existing = MarkdownDocument.read(path)
         if existing.body.strip() == body.strip():
+            if not subject or existing.meta.get("subject") == subject:
+                return MemoryResult(path, "unchanged")
+            if Provenance.last_profile(existing.meta.get("provenance")) in (None, origin.profile):
+                existing.meta["subject"] = subject  # a better description of the same entry
+                existing.write(path)
+                return MemoryResult(path, "updated")
             return MemoryResult(path, "unchanged")
         if Provenance.last_profile(existing.meta.get("provenance")) not in (None, origin.profile):
             return self._conflict(existing, path, entry_id, kind, subject, body, origin)
