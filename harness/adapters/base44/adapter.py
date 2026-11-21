@@ -4,12 +4,15 @@ Only what is particular to Base44 lives here: where a Superagent keeps each thin
 its messages read. Everything goes into the harness through the engine (HarvestSync,
 ConversationLog), so every item carries this profile as its source.
 
-  Superagent definition (identity, soul, model, skills, connections) .. core/agents/
-  rules (.agents/rules/*.md, always-on) ................................ core/instructions/
+  Superagent definition (identity, soul, model, skills, connections,
+    the whole base44/agents/your_agent settings) ....................... core/agents/
+  rules (.agents/rules/*.md, always-on for that agent) ...... core/instructions/ (agent:<name>)
+  automations (base44/workflows/) ...................................... core/workflows/
+  connectors it is signed in to (base44/connectors/) .................. core/connections.yaml
   skills (.agents/skills/) ............................................. core/skills/
-  MCP servers it runs (.agents/mcps/<name>/) ........................... core/plugins/ (+ connections)
+  MCP servers it runs (.agents/mcps/<name>/, config names only) ...... core/plugins/ (+ connections)
   memory (structured memory, legacy USER.md / memory.md, notes/) ...... memory/
-  data model (entities, base44/) ...................................... apps/<superagent>/
+  data model (entities, base44/entities/) ............................. apps/<superagent>/
   conversations (last 200 messages each, kept growing by message id) .. sessions/ (+ log.md)
   files made in a conversation (conversations/<id>/) .................. with that conversation
 
@@ -159,7 +162,10 @@ def _under(files: dict[str, str], folder: str, skipped: list[str]) -> dict[str, 
 def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
     files, name, origin = agent.files, slugify(agent.name), f"base44 superagent {agent.id}"
     items: list[Captured] = []
-    config = (agent.app.get("agents") or {}).get("your_agent") or {}
+    config = {  # the agent's settings file, with what the API returns on top
+        **(_jsonc(files.get("base44/agents/your_agent.jsonc")) or {}),
+        **((agent.app.get("agents") or {}).get("your_agent") or {}),
+    }
     text = lambda p: files.get(p) if isinstance(files.get(p), str) and _safe(p, files[p], skipped) else ""  # noqa: E731
     identity = "\n\n".join(
         t
@@ -188,8 +194,7 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
                     "requires": {"connections": servers} if servers else None,
                 },
                 "native": {
-                    "memory_config": config.get("memory_config"),
-                    "tool_configs": config.get("tool_configs"),
+                    "definition": {k: v for k, v in config.items() if k not in ("instructions", "model")},
                     "tools_permission_config": agent.app.get("tools_permission_config"),
                     "slug": agent.profile.get("slug"),
                     "lifecycle": agent.app.get("superagent_lifecycle"),
@@ -217,6 +222,10 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
     for server in servers:
         code = _under(files, f".agents/mcps/{server}/", skipped)
         if code:
+            entry = (_mcp_config(files).get("mcpServers") or {}).get(server) or {}
+            code["mcp-config.json"] = json.dumps(
+                {"mcpServers": {server: entry}}, ensure_ascii=False, indent=1
+            ).encode()
             items.append(
                 Captured(
                     Kind.PLUGIN,
@@ -257,13 +266,35 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             continue
         entry = f"{name}-{slugify(path.replace('.agents/.memory/', 'memory-'))}"
         items.append(Captured(Kind.MEMORY, entry, origin, {f"{entry}.md": text(path).encode("utf-8")}))
-    app_files = _under(files, "base44/", skipped)
+    for path in sorted(p for p in files if p.startswith("base44/workflows/")):
+        flow = _jsonc(files[path]) if _safe(path, files[path], skipped) else None
+        if flow:
+            items.append(_workflow(name, origin, flow))
+    for path in sorted(p for p in files if p.startswith("base44/connectors/")):
+        connector = _jsonc(files[path]) if _safe(path, files[path], skipped) else None
+        if connector:
+            kind = str(connector.get("type") or Path(path).stem)
+            items.append(
+                Captured(
+                    Kind.CONNECTION,
+                    kind,
+                    origin,
+                    meta={
+                        "tool": TOOL,
+                        "kind": "connector",
+                        "description": f"Base44 connector '{kind}' (signed in inside Base44)",
+                        "notes": "scopes: " + ", ".join(connector.get("scopes") or []),
+                    },
+                )
+            )
+    app_files = {
+        p: c
+        for p, c in _under(files, "base44/", skipped).items()
+        if not p.startswith(("agents/", "workflows/", "connectors/"))
+    }
     app_files["entities.json"] = json.dumps(
         agent.app.get("entities") or {}, ensure_ascii=False, indent=1
     ).encode("utf-8")
-    app_files[".agents/mcps/config.json"] = json.dumps(
-        _mcp_config(files), ensure_ascii=False, indent=1
-    ).encode()
     items.append(
         Captured(
             Kind.APP,
@@ -295,6 +326,46 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             )
         )
     return items
+
+
+def _jsonc(text: Any) -> dict[str, Any] | None:
+    """Base44's .jsonc files (JSON that may hold // comment lines)."""
+    if not isinstance(text, str):
+        return None
+    for candidate in (
+        text,
+        "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//")),
+    ):
+        try:
+            value = json.loads(candidate)
+            return value if isinstance(value, dict) else None
+        except ValueError:
+            continue
+    return None
+
+
+def _workflow(agent_name: str, origin: str, flow: dict[str, Any]) -> Captured:
+    """A Base44 automation of the Superagent -> a harness workflow run by that agent."""
+    title = str(flow.get("name") or "automation")
+    trigger = (flow.get("trigger") or {}).get("config") or {}
+    when = (
+        trigger.get("cron_expression")
+        or trigger.get("one_time_date")
+        or ", ".join(trigger.get("events") or [])
+    )
+    zone = f" ({trigger['timezone']})" if trigger.get("timezone") and when else ""
+    return Captured(
+        Kind.WORKFLOW,
+        f"{agent_name}-{slugify(title)}",
+        origin,
+        meta={
+            "description": flow.get("description") or title,
+            "prompt": flow.get("description") or title,
+            "trigger": f"{trigger.get('trigger_type') or 'manual'}: {when}{zone}".rstrip(": "),
+            "agent": agent_name,
+            "native": flow,
+        },
+    )
 
 
 def _mcp_config(files: dict[str, str]) -> dict[str, Any]:

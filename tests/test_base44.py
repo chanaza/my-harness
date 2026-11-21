@@ -35,6 +35,21 @@ FILES = {
     ".agents/platform-docs/skills.md": "Base44's own docs",
     ".agents/leak.json": '{"api_key": "abcdef123456789"}',
     "base44/entities/TaskItem.jsonc": "{}",
+    "base44/agents/your_agent.jsonc": '{"instructions": "Be helpful", "whatsapp_greeting": "hi"}',
+    "base44/workflows/Weekly.jsonc": json.dumps(
+        {
+            "name": "Weekly",
+            "description": "Weekly scout",
+            "trigger": {
+                "config": {
+                    "trigger_type": "scheduled",
+                    "cron_expression": "0 9 * * 0",
+                    "timezone": "Asia/Jerusalem",
+                }
+            },
+        }
+    ),
+    "base44/connectors/one_note.jsonc": '{"type": "one_note", "scopes": ["Notes.Read"]}',
     "notes/system-map/main.md": "# System map",
     "conversations/c1/plan.md": "The plan.",
 }
@@ -97,7 +112,16 @@ def test_a_superagent_is_saved_in_its_places_with_its_source(repo: ContentRepo):
     assert "scope: agent:" in rule and "global" not in rule  # the agent's rule, not one for every tool
     app = repo.path("apps", "business-dev")
     assert (app / "entities.json").is_file() and (app / "entities" / "TaskItem.jsonc").is_file()
-    assert "<set in Base44>" in (app / ".agents" / "mcps" / "config.json").read_text()
+    # the app is the data model only; everything else is where it belongs, sourced from the profile
+    assert sorted(p.name for p in app.iterdir()) == ["app.yaml", "entities", "entities.json"]
+    plugin = repo.path("core", "plugins", "business-dev-mcp-hms-report")
+    assert "<set in Base44>" in (plugin / "mcp-config.json").read_text()
+    flow = repo.path("core", "workflows", "business-dev-weekly.yaml").read_text()
+    assert (
+        "0 9 * * 0 (Asia/Jerusalem)" in flow and "agent: business-dev" in flow and "profile: base44" in flow
+    )
+    assert "one-note" in repo.path("core", "connections.yaml").read_text()
+    assert "whatsapp_greeting" in repo.path("core", "agents", "business-dev.yaml").read_text()
     everything = "".join(
         p.read_text(errors="ignore") for p in repo.root.rglob("*") if p.is_file() and ".git" not in p.parts
     )
