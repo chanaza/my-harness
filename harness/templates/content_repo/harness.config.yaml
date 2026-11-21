@@ -65,6 +65,10 @@ harvest:
   # Skip what you did not build (e.g. Anthropic's skills and plugins): it is reinstalled, not copied.
   # A skipped plugin is still listed under connections, so you know to install it elsewhere.
   exclude: []
+  # Apps' tables: their structure is always saved; their rows only for tables named here
+  # (patterns, any case). Default: settings tables, which the app's code needs to run anywhere.
+  # Secret values in them are hidden. Add one with: harness config add harvest.table_rows "*Customer*"
+  table_rows: ["*setting*", "*config*", "*infra*"]
 
 storage:
   # Full transcripts (saved every turn) never go into the main branch. They go to:

@@ -14,6 +14,7 @@ from . import yaml_io
 from .documents import MarkdownDocument
 from .provenance import now_iso
 from .repo import ContentRepo
+from .secrets import SecretGuard
 from .storage import Storage
 
 SESSIONS_AREA = "sessions"
@@ -109,6 +110,6 @@ class SessionRecord:
             meta["context_percent"] = round(context_percent, 1)
         if user_messages is not None:
             meta["user_messages"] = user_messages
-        MarkdownDocument(meta, text.strip() + "\n").write(self.summary_path)
+        MarkdownDocument(meta, SecretGuard().clean_text(text.strip()).text + "\n").write(self.summary_path)
         self.touch()
         return number

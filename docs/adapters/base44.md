@@ -19,9 +19,14 @@ by the agent itself. Every item carries the Base44 profile as its source.
 Never saved: `.agents/.env`, anything that looks like a secret (reported by name), MCP
 environment and header values (names only), Base44's own docs (`.agents/platform-docs/`).
 
-**Limit:** Base44 returns the last 200 messages of a conversation. Every pull keeps what it
-saw (by message id), so from the first pull on nothing is lost; earlier messages of long
-conversations are noted as not available.
+**Conversations:** every conversation (also ones only a goal or a note names), with all its
+messages: the public API returns only the last 200, so the adapter reads them the way Base44's
+own editor does, page by page. **Standing goals** (with their tasks) are saved as workflows
+`core/workflows/<superagent>-goal-<name>.yaml`.
+
+**Secrets:** like for every tool, the engine's `SecretGuard` keeps secret values out (their
+names stay, marked). Rows are saved for the tables named in `harvest.table_rows` (default:
+settings tables).
 
 **Access:** a Base44 personal access token with full access (created in a Superagent's
 settings > Developer; it is account-wide). Reading the Superagent's definition and skills is

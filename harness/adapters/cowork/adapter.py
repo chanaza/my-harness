@@ -108,9 +108,7 @@ class CoworkAdapter(AccountBoundAdapter):
                 items = self._items(account, config.harvest_exclude)
                 part = HarvestSync(repo, self.local.state("harvest", profile)).run(
                     items, Origin.now(profile, session))
-                report.counts.update(part.counts)
-                report.conflicts += part.conflicts
-                report.errors += part.errors
+                report.merge(part)
             storage = repo.storage("transcripts", profile)
             state = self.local.state("conversations", profile)
             with storage.batch():

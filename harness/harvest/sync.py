@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from .. import yaml_io
@@ -13,6 +13,7 @@ from ..documents import MarkdownDocument
 from ..local import StateFile
 from ..provenance import Origin, Provenance
 from ..repo import ContentRepo
+from ..secrets import SecretGuard
 from .item import Captured, Kind
 from .writers import DEFAULT_WRITERS, ItemWriter
 
@@ -22,6 +23,15 @@ class HarvestReport:
     counts: Counter = field(default_factory=Counter)
     conflicts: list[Path] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    #: Secret values the guard kept out (item: names), shown so they can be set up again.
+    hidden: list[str] = field(default_factory=list)
+
+    def merge(self, other: HarvestReport) -> None:
+        """Add another run's results (adapters harvest one account or agent at a time)."""
+        self.counts.update(other.counts)
+        self.conflicts += other.conflicts
+        self.errors += other.errors
+        self.hidden += other.hidden
 
     @property
     def changed(self) -> bool:
@@ -59,7 +69,7 @@ class HarvestSync:
         seen: dict[str, str] = dict(self.state.get(self.STATE_KEY, {}))
         written: dict[str, str] = dict(self.state.get(self.WRITTEN_KEY, {}))
         items_list = list(items)
-        items_list = [item for item in items_list if not item.engine_owned]
+        items_list = [self._guarded(item, report) for item in items_list if not item.engine_owned]
         for item in items_list:
             fingerprint = item.fingerprint
             if seen.get(item.key) == fingerprint:
@@ -95,6 +105,27 @@ class HarvestSync:
         self.state.set(self.WRITTEN_KEY, written)
         self.state.save()
         return report
+
+    @staticmethod
+    def _guarded(item: Captured, report: HarvestReport) -> Captured:
+        """No secret value reaches the repository, whatever the tool (see harness/secrets.py)."""
+        guard = SecretGuard()
+        files, names = {}, []
+        for path, content in item.files.items():
+            try:
+                text = content.decode("utf-8")
+            except UnicodeDecodeError:
+                files[path] = content
+                continue
+            cleaned = guard.clean_text(text, path)
+            files[path] = cleaned.text.encode("utf-8") if cleaned.hidden else content
+            names += [f"{path}: {n}" for n in cleaned.hidden]
+        meta, hidden = guard.clean_value(item.meta)
+        names += hidden
+        if not names:
+            return item
+        report.hidden.append(f"{item.kind.value} {item.name} ({'; '.join(names)})")
+        return replace(item, files=files, meta=meta)
 
     def prune(self, excluded: Callable[[str, str], bool], profile: str) -> list[str]:
         """Delete what this profile harvested earlier for items that are now ``excluded``.

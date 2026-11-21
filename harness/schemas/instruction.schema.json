@@ -23,6 +23,10 @@
     },
     "original": {
       "type": "string"
+    },
+    "agent": {
+      "type": "string",
+      "description": "The agent this belongs to (core/agents/<agent>.yaml)."
     }
   },
   "additionalProperties": false

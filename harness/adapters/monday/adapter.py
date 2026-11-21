@@ -51,8 +51,8 @@ class MondayAdapter(AccountBoundAdapter):
     environment = "cloud"  # an online service, not a machine
     kept_in_tool = (
         "board items (the boards' rows) and agent memory / board learnings",
-        "the contents of knowledge files (only references are saved)",
-        "files an agent keeps in its own storage (e.g. agent-config/jobs/index.json)",
+        "the contents of the boards and knowledge files an agent reads (references are saved)",
+        "files an agent made (decks, reports - its artifacts)",
         "connector sign-ins",
     )
 
@@ -118,9 +118,7 @@ class MondayAdapter(AccountBoundAdapter):
                 part = HarvestSync(repo, self.local.state("harvest", profile)).run(
                     self._items(agents, reader.workflows(), config.harvest_exclude),
                     Origin.now(profile, session))
-                report.counts.update(part.counts)
-                report.conflicts += part.conflicts
-                report.errors += part.errors
+                report.merge(part)
             storage = repo.storage("transcripts", profile)
             state = self.local.state("conversations", profile)
             with storage.batch():

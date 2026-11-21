@@ -16,6 +16,8 @@ Status of the engine. Saving comes first; loading comes after saving is complete
   (agent, uses, used by, called from outside, settings needed), rebuilt on every save
   (`harness/guide.py`).
 - Conversation summaries record the last reply they cover (`summary_reply`).
+- One secret guard for everything that enters the repository (`harness/secrets.py`); every item
+  records the agent it belongs to (`agent:`); a new engine rewrites what it writes differently.
 
 ## Not finished / not verified
 
@@ -42,8 +44,8 @@ Next: OAuth sign-in for the connector; writing back into tools (loading proper).
 ### Known limits
 - Cloud sessions cannot reach a local synced folder; they use the git storage backend.
 - Transcript retention (deleting old transcripts after N days) is not implemented.
-- Base44: the API returns the last 200 messages of a conversation (each pull keeps what it
-  saw); table rows stay in Base44 (structure only); a pull runs when asked.
+- Base44: rows of tables other than those in `harvest.table_rows` stay in Base44; archived
+  automations are not saved; a pull runs when asked.
 - Links between items are found by name: a workflow that names a function uses it. A link
   that is not written anywhere (a webhook set up in another service) shows as "called from
   outside", with the files that describe it.

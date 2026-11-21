@@ -86,6 +86,10 @@
     "version": {
       "type": "string",
       "description": "The tool's version of the app when it was saved (only changed versions are copied again)."
+    },
+    "agent": {
+      "type": "string",
+      "description": "The agent this belongs to (core/agents/<agent>.yaml)."
     }
   },
   "additionalProperties": false

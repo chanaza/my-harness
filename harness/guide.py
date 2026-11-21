@@ -29,7 +29,6 @@ from typing import Any
 from . import yaml_io
 from .documents import MarkdownDocument
 from .repo import ContentRepo
-from .text import slugify
 
 TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".jsonc", ".ts", ".js", ".py", ".sh", ".txt", ".html"}
 SHELL_VARS = re.compile(r"\$\{?([A-Z][A-Z0-9_]{3,})\}?")  # a workflow's $ACCESS_TOKEN
@@ -121,7 +120,9 @@ class RepoGuide:
         for path in sorted((self.root / "core" / "instructions").glob("*/*.md")):
             doc = MarkdownDocument.read(path)
             scope = str(doc.meta.get("scope") or "global")
-            agent = scope.split(":", 1)[1] if scope.startswith("agent:") else ""
+            agent = str(
+                doc.meta.get("agent") or (scope.split(":", 1)[1] if scope.startswith("agent:") else "")
+            )
             self.items.append(
                 Item(
                     "rule",
@@ -146,7 +147,7 @@ class RepoGuide:
                     self._rel(folder),
                     _one_line(doc.meta.get("description")),
                     _source(doc.meta),
-                    "",
+                    str(doc.meta.get("agent") or ""),
                     self._folder_text(folder),
                     {"files": sorted(self._rel(p, folder) for p in folder.rglob("*") if p.is_file())},
                 )
@@ -181,7 +182,7 @@ class RepoGuide:
                     self._rel(folder),
                     _one_line(data.get("description")),
                     _source(data),
-                    "",
+                    str(data.get("agent") or ""),
                     self._folder_text(folder),
                     {"settings": self._mcp_settings(folder)},
                 )
@@ -215,7 +216,7 @@ class RepoGuide:
                 self._rel(folder),
                 _one_line(data.get("purpose") or data.get("description")),
                 _source(data),
-                "",
+                str(data.get("agent") or ""),
                 "",
                 {"url": data.get("url") or ""},
             )
@@ -228,7 +229,7 @@ class RepoGuide:
                         self._rel(table),
                         "",
                         app.profile,
-                        "",
+                        app.agent,
                         table.read_text("utf-8", errors="replace"),
                         {"app": folder.name},
                     )
@@ -245,7 +246,7 @@ class RepoGuide:
                         self._rel(function),
                         _code_comment(text),
                         app.profile,
-                        "",
+                        app.agent,
                         text,
                         {
                             "app": folder.name,
@@ -267,7 +268,7 @@ class RepoGuide:
                     self._rel(path),
                     subject or _first_line(doc.body),
                     _source(doc.meta),
-                    "",
+                    str(doc.meta.get("agent") or ""),
                     doc.body,
                     {"subject": subject},
                 )
@@ -384,24 +385,19 @@ class RepoGuide:
         return [i for i in self.items if i.kind == kind]
 
     def belongs(self, agent: Item) -> dict[str, list[Item]]:
-        """Everything that declares it is part of ``agent``."""
-        name = agent.name
-        names = {name, name.replace("-", "_")}
+        """Everything that declares it is part of ``agent``: its own ``agent`` field (written by the
+        engine for every item a tool says belongs to an agent), the skills and connections the agent
+        lists, a workflow step's agent, a conversation's agent."""
+        names = {agent.name, agent.name.replace("-", "_")}
         parts: dict[str, list[Item]] = defaultdict(list)
         for item in self.items:
             if item is agent:
                 continue
-            declared = item.agent in names
-            if item.kind == "skill" and item.name in agent.extra["skills"]:
-                declared = True
-            if item.kind == "connection" and item.name in agent.extra["connections"]:
-                declared = True
-            if item.kind in ("app", "plugin") and (item.name == name or item.name.startswith(f"{name}-")):
-                declared = True
-            if item.kind in ("table", "function") and item.extra.get("app") == name:
-                declared = True
-            if item.kind == "memory" and slugify(item.extra["subject"].split(":", 1)[0]) == name:
-                declared = True
+            declared = (
+                item.agent in names
+                or (item.kind == "skill" and item.name in agent.extra["skills"])
+                or (item.kind == "connection" and item.name in agent.extra["connections"])
+            )
             if declared:
                 parts[item.kind].append(item)
         return parts

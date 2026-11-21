@@ -35,6 +35,10 @@ OBSOLETE_SETTINGS: tuple[str, ...] = (
 )
 
 
+#: Without a setting: the rows of settings tables, which an app's code needs to run anywhere.
+DEFAULT_TABLE_ROWS = ("*setting*", "*config*", "*infra*")
+
+
 class ConfigError(Exception):
     """The configuration file is missing or invalid."""
 
@@ -156,6 +160,15 @@ class HarnessConfig:
     @property
     def harvest_exclude(self) -> list[str]:
         return list(self.data["harvest"].get("exclude") or [])
+
+    def wants_table_rows(self, table: str) -> bool:
+        """Whether an app table's rows are saved (``harvest.table_rows``), not only its structure."""
+        from fnmatch import fnmatch
+
+        patterns = self.data["harvest"].get("table_rows")
+        if patterns is None:
+            patterns = DEFAULT_TABLE_ROWS
+        return any(fnmatch(table.lower(), p.lower()) for p in patterns)
 
     @property
     def max_inline_asset_bytes(self) -> int:

@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from . import yaml_io
+from .secrets import SecretGuard
 from .sessions import SessionRecord
 
 LOG_FILE = "log.md"
@@ -60,14 +61,15 @@ class ConversationLog:
     def write(self, title: str, replies: Iterable[Reply]) -> None:
         """The whole log from a complete source (e.g. a transcript file)."""
         self.record.folder.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(self.render(title, replies), encoding="utf-8")
+        # the readable log is on the main branch: no secret value in it, whatever was typed
+        self.path.write_text(SecretGuard().clean_text(self.render(title, replies)).text, encoding="utf-8")
 
     def add(self, title: str, reply: Reply) -> int:
         """One reply that arrived on its own (in any order; sent twice: the newest is kept).
         Returns the highest reply number so far."""
         self.replies_folder.mkdir(parents=True, exist_ok=True)
         (self.replies_folder / f"{reply.number:05d}.yaml").write_text(
-            yaml_io.dump(asdict(reply)), encoding="utf-8")
+            SecretGuard().clean_text(yaml_io.dump(asdict(reply))).text, encoding="utf-8")
         replies = [Reply(**self._load(p)) for p in sorted(self.replies_folder.glob("*.yaml"))]
         self.write(title, replies)
         return max(r.number for r in replies)

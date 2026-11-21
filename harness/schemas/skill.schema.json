@@ -63,6 +63,10 @@
     "origin": {
       "type": "string",
       "description": "Where the item lived in the source tool."
+    },
+    "agent": {
+      "type": "string",
+      "description": "The agent this belongs to (core/agents/<agent>.yaml)."
     }
   },
   "additionalProperties": true

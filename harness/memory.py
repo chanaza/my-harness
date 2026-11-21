@@ -36,31 +36,33 @@ class MemoryStore:
         return self.root / f"{entry_id}.md"
 
     def put(self, entry_id: str, body: str, origin: Origin, kind: str = "fact",
-            subject: str | None = None) -> MemoryResult:
+            subject: str | None = None, agent: str = "") -> MemoryResult:
+        """``subject`` says what the entry is about; without one, its own first words do.
+        ``agent``: the agent whose memory it is."""
+        subject = subject or _first_words(body)
         if kind not in KINDS:
             raise ValueError(f"kind must be one of {', '.join(KINDS)}")
         entry_id = slugify(entry_id)
         path = self.path_for(entry_id)
         if not path.is_file():
-            self._write(path, entry_id, kind, subject, body, Provenance.new(origin))
+            self._write(path, entry_id, kind, subject, body, Provenance.new(origin), agent=agent)
             return MemoryResult(path, "created")
 
         existing = MarkdownDocument.read(path)
+        described = {"subject": subject, **({"agent": slugify(agent)} if agent else {})}
         if existing.body.strip() == body.strip():
-            if not subject or existing.meta.get("subject") == subject:
+            mine = Provenance.last_profile(existing.meta.get("provenance")) in (None, origin.profile)
+            if not mine or all(existing.meta.get(k) == v for k, v in described.items()):
                 return MemoryResult(path, "unchanged")
-            if Provenance.last_profile(existing.meta.get("provenance")) in (None, origin.profile):
-                existing.meta["subject"] = subject  # a better description of the same entry
-                existing.write(path)
-                return MemoryResult(path, "updated")
-            return MemoryResult(path, "unchanged")
+            existing.meta.update(described)  # a better description of the same entry
+            existing.write(path)
+            return MemoryResult(path, "updated")
         if Provenance.last_profile(existing.meta.get("provenance")) not in (None, origin.profile):
             return self._conflict(existing, path, entry_id, kind, subject, body, origin)
 
         existing.meta["provenance"] = Provenance.updated(existing.meta.get("provenance"), origin)
         existing.meta["kind"] = kind
-        if subject:
-            existing.meta["subject"] = subject
+        existing.meta.update(described)
         existing.body = body.strip() + "\n"
         existing.write(path)
         return MemoryResult(path, "updated")
@@ -80,11 +82,24 @@ class MemoryStore:
 
     @staticmethod
     def _write(path: Path, entry_id: str, kind: str, subject: str | None, body: str,
-               provenance: dict, status: str = "active", conflicts_with: list[str] | None = None) -> None:
+               provenance: dict, status: str = "active", conflicts_with: list[str] | None = None,
+               agent: str = "") -> None:
         meta = {"id": entry_id, "kind": kind, "status": status}
         if subject:
             meta["subject"] = subject
+        if agent:
+            meta["agent"] = slugify(agent)
         if conflicts_with:
             meta["conflicts_with"] = conflicts_with
         meta["provenance"] = provenance
         MarkdownDocument(meta, body.strip() + "\n").write(path)
+
+
+def _first_words(body: str, limit: int = 120) -> str:
+    """What an entry is about when nobody said: its first words (headings and blank lines skipped)."""
+    for line in body.splitlines():
+        line = line.strip().lstrip("#>-* ").strip()
+        if line and line != "---":
+            text = " ".join(line.split())
+            return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
+    return ""

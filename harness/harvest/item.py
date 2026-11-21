@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from .. import __version__
 from ..text import slugify
 
 
@@ -50,6 +51,8 @@ class Captured:
     files: dict[str, bytes] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)
     scope: str = "global"
+    #: The agent this item belongs to, when the tool says so (written as ``agent:`` on it).
+    agent: str = ""
 
     @property
     def engine_owned(self) -> bool:
@@ -67,6 +70,8 @@ class Captured:
             digest.update(path.encode())
             digest.update(self.files[path])
         digest.update(repr(sorted(self.meta.items())).encode())
+        # how the engine writes an item is part of what was written: a new engine rewrites it
+        digest.update(f"{self.agent}|{__version__}".encode())
         return digest.hexdigest()
 
     def text(self, path: str) -> str:

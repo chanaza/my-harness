@@ -239,6 +239,13 @@
             "type": "string"
           },
           "description": "Glob patterns (matched against '<kind>:<name>', e.g. 'skill:pdf' or 'skill:*') to skip."
+        },
+        "table_rows": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tables of apps whose rows are saved too (glob patterns on the table name, case-insensitive), e.g. settings tables the app's code reads at run time. Secret values are hidden. Other tables keep their structure only."
         }
       },
       "additionalProperties": false

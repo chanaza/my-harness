@@ -13,7 +13,8 @@ ConversationLog), so every item carries this profile as its source.
   MCP servers it runs (.agents/mcps/<name>/, config names only) ...... core/plugins/ (+ connections)
   memory (structured memory, legacy USER.md / memory.md, notes/) ...... memory/
   data model (base44/entities/) and backend functions (server code) ... apps/<superagent>/
-  conversations (last 200 messages each, kept growing by message id) .. sessions/ (+ log.md)
+  conversations (every one, with all its messages) ...................... sessions/ (+ log.md)
+  standing goals (with their tasks) ......... core/workflows/<agent>-goal-<name>.yaml
   files made in a conversation (conversations/<id>/) .................. with that conversation
 
 Never saved: .agents/.env and anything that looks like a secret, Base44's own docs
@@ -23,8 +24,8 @@ Never saved: .agents/.env and anything that looks like a secret, Base44's own do
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Callable
+from dataclasses import replace
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
@@ -43,14 +44,6 @@ from .reader import Base44Reader, Superagent
 
 TOOL = "base44"
 NEVER = (".agents/.env", ".agents/platform-docs/", ".gitignore")
-SECRET = re.compile(
-    r"(ghp_|github_pat_|sk-ant-|sk-[A-Za-z0-9]{20}|xox[bp]-|AKIA|b44k_)[A-Za-z0-9_-]{8,}"
-    # a secret-named key given a literal value: "password": "...", TOKEN='...', API_KEY=... (an .env line).
-    # Code that names a variable, reads one, or types a parameter (token: string) is not a secret.
-    r"|(password|passwd|secret|api_?key|token)[\"']?\s*[:=]\s*(?P<q>[\"'`])[^\s\"'`${}]{8,}(?P=q)"
-    r"|^\s*[A-Z0-9_]*(PASSWORD|SECRET|API_?KEY|TOKEN)[A-Z0-9_]*\s*=\s*[^\s\"'`${}]{8,}\s*$",
-    re.IGNORECASE | re.MULTILINE,
-)
 
 
 @adapters.register
@@ -60,13 +53,11 @@ class Base44Adapter(AccountBoundAdapter):
     capture_modes = ("on_demand", "scheduled")
     capture_reason = "always reachable through its API with a personal access token"
     kept_in_tool = (
-        "table rows, except settings tables (saved in apps/<agent>/data/, secret values hidden)",
-        "secret values in settings tables (their names are saved, marked as secrets)",
+        "table rows, except the tables named in harvest.table_rows (saved in apps/<agent>/data/)",
+        "secret values (their names are saved, marked as secrets)",
         "secrets and channel sign-ins (WhatsApp, phone numbers, Slack...): which channels are "
         "connected is saved, the connection itself is not",
-        "Base44 goals and the conversations they run in, when the API does not list them",
         "archived automations (only current ones are saved, each with whether it is active)",
-        "conversation messages older than the last 200 at the first pull",
     )
 
     def __init__(
@@ -88,7 +79,7 @@ class Base44Adapter(AccountBoundAdapter):
                 "No Base44 token: set HARNESS_BASE44_TOKEN (in a cloud session "
                 "with the token saved as a network secret: proxy-injected)."
             )
-        return Base44Reader(Base44Client(token))
+        return Base44Reader(Base44Client(token), self.repo().config.wants_table_rows)
 
     # --- what a Superagent is, as harness items -----------------------------------------------------
 
@@ -105,24 +96,23 @@ class Base44Adapter(AccountBoundAdapter):
         for account, profile in self.bindings().items():
             reader = self._reader_factory(account)
             agents = reader.superagents()
-            skipped: list[str] = []
             items = [
                 i
                 for agent in agents
-                for i in superagent_items(agent, skipped)
+                for i in superagent_items(agent)
                 if not any(fnmatch(f"{i.kind.value}:{i.name}", p) for p in repo.config.harvest_exclude)
             ]
             part = HarvestSync(repo, self.local.state("harvest", profile)).run(
                 items, Origin.now(profile, session)
             )
-            report.counts.update(part.counts)
-            report.conflicts += part.conflicts
-            report.errors += part.errors + [f"not saved (looks like a secret): {s}" for s in skipped]
+            report.merge(part)
             storage = repo.storage("transcripts", profile)
             with storage.batch():
                 for agent in agents:
-                    for conversation_id in agent.conversation_ids:
-                        conversation = reader.conversation(agent, conversation_id)
+                    ids = [(c, False) for c in agent.conversation_ids]
+                    ids += [(c, True) for c in getattr(agent, "mentioned_conversation_ids", [])]
+                    for conversation_id, mentioned in ids:
+                        conversation = reader.conversation(agent, conversation_id, mentioned=mentioned)
                         if conversation and save_conversation(repo, profile, storage, agent, conversation):
                             report.counts["conversations saved"] += 1
             report.errors += reader.problems
@@ -153,31 +143,28 @@ class Base44Adapter(AccountBoundAdapter):
 # --- translation (what is particular to Base44) ------------------------------------------------------
 
 
-def _safe(path: str, text: str, skipped: list[str]) -> bool:
-    if any(path == n or path.startswith(n) for n in NEVER) or path.endswith(".env"):
-        return False
-    if SECRET.search(text or ""):
-        skipped.append(path)
-        return False
-    return True
+def _safe(path: str) -> bool:
+    """Files that are never saved: secrets files and Base44's own docs. Secret values inside any
+    other file are kept out by the engine's SecretGuard, like for every tool."""
+    return not (any(path == n or path.startswith(n) for n in NEVER) or path.endswith(".env"))
 
 
-def _under(files: dict[str, str], folder: str, skipped: list[str]) -> dict[str, bytes]:
+def _under(files: dict[str, str], folder: str) -> dict[str, bytes]:
     return {
         p[len(folder) :]: t.encode("utf-8")
         for p, t in files.items()
-        if p.startswith(folder) and isinstance(t, str) and _safe(p, t, skipped)
+        if p.startswith(folder) and isinstance(t, str) and _safe(p)
     }
 
 
-def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
+def superagent_items(agent: Superagent) -> list[Captured]:
     files, name, origin = agent.files, slugify(agent.name), f"base44 superagent {agent.id}"
     items: list[Captured] = []
     config = {  # the agent's settings file, with what the API returns on top
         **(_jsonc(files.get("base44/agents/your_agent.jsonc")) or {}),
         **((agent.app.get("agents") or {}).get("your_agent") or {}),
     }
-    text = lambda p: files.get(p) if isinstance(files.get(p), str) and _safe(p, files[p], skipped) else ""  # noqa: E731
+    text = lambda p: files.get(p) if isinstance(files.get(p), str) and _safe(p) else ""  # noqa: E731
     identity = "\n\n".join(
         t
         for t in (
@@ -233,7 +220,7 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
                 )
             )
     for skill in skills:
-        skill_files = _under(files, f".agents/skills/{skill}/", skipped)
+        skill_files = _under(files, f".agents/skills/{skill}/")
         if skill_files:
             items.append(Captured(Kind.SKILL, skill, origin, skill_files))
     for channel in channels:
@@ -250,7 +237,7 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             )
         )
     for server in servers:
-        code = _under(files, f".agents/mcps/{server}/", skipped)
+        code = _under(files, f".agents/mcps/{server}/")
         if code:
             entry = (_mcp_config(files).get("mcpServers") or {}).get(server) or {}
             code["mcp-config.json"] = json.dumps(
@@ -278,7 +265,7 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             )
         )
     for memory in agent.memory:
-        if memory.get("content") and _safe("memory", memory["content"], skipped):
+        if memory.get("content"):
             entry = f"{name}-{memory.get('id')}"
             items.append(
                 Captured(
@@ -286,8 +273,6 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
                     entry,
                     origin,
                     {f"{entry}.md": memory["content"].encode("utf-8")},
-                    # what it is about, in its own first words (the scope alone says nothing)
-                    meta={"subject": f"{agent.name}: " + " ".join(memory["content"].split())[:120]},
                 )
             )
     for path in sorted(
@@ -297,12 +282,31 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             continue
         entry = f"{name}-{slugify(path.replace('.agents/.memory/', 'memory-'))}"
         items.append(Captured(Kind.MEMORY, entry, origin, {f"{entry}.md": text(path).encode("utf-8")}))
+    for goal in agent.goals:  # a standing goal: the agent keeps working on its tasks
+        items.append(
+            Captured(
+                Kind.WORKFLOW,
+                f"{name}-goal-{slugify(str(goal.get('name')))}",
+                origin,
+                meta={
+                    "description": goal.get("title") or goal.get("name"),
+                    "prompt": "\n\n".join(
+                        f"{t.get('id')}: {t.get('instruction')}"
+                        for t in goal.get("tasks") or []
+                        if t.get("instruction")
+                    )
+                    or str(goal.get("title") or goal.get("name")),
+                    "trigger": "standing goal (the agent works on it until it is done)",
+                    "native": {**goal, "status": goal.get("status") or ""},
+                },
+            )
+        )
     for path in sorted(p for p in files if p.startswith("base44/workflows/")):
-        flow = _jsonc(files[path]) if _safe(path, files[path], skipped) else None
+        flow = _jsonc(files[path]) if _safe(path) else None
         if flow:
             items.append(_workflow(name, origin, flow, agent.workflow_status))
     for path in sorted(p for p in files if p.startswith("base44/connectors/")):
-        connector = _jsonc(files[path]) if _safe(path, files[path], skipped) else None
+        connector = _jsonc(files[path]) if _safe(path) else None
         if connector:
             kind = str(connector.get("type") or Path(path).stem)
             items.append(
@@ -320,13 +324,13 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             )
     app_files = {
         p: c
-        for p, c in _under(files, "base44/", skipped).items()
+        for p, c in _under(files, "base44/").items()
         if not p.startswith(("agents/", "workflows/", "connectors/"))
     }
     for function in agent.functions:
         for source in function.get("files") or []:
             path = f"functions/{function.get('name')}/{source.get('path')}"
-            if isinstance(source.get("content"), str) and _safe(path, source["content"], skipped):
+            if isinstance(source.get("content"), str) and _safe(path):
                 app_files[path] = source["content"].encode("utf-8")
     if agent.functions:  # what runs each function (automations) and what it signs in to
         manifest = [
@@ -369,7 +373,7 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
     rest = {
         p: t
         for p, t in files.items()
-        if p.startswith(".agents/") and p.count("/") == 1 and isinstance(t, str) and _safe(p, t, skipped)
+        if p.startswith(".agents/") and p.count("/") == 1 and isinstance(t, str) and _safe(p)
     }
     if rest:
         items.append(
@@ -380,32 +384,17 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
                 {f"{name}-settings/{Path(p).name}": t.encode("utf-8") for p, t in rest.items()},
             )
         )
-    return items
-
-
-SECRET_NAME = re.compile(r"password|passwd|token|secret|api_?key|guid|credential|pin\b", re.IGNORECASE)
-HIDDEN = "<secret: kept in Base44, set it again there>"
+    # everything here is this Superagent's (connections are shared between agents: they say who uses them)
+    return [item if item.kind is Kind.CONNECTION else replace(item, agent=name) for item in items]
 
 
 def _setting_row(row: dict[str, Any]) -> dict[str, Any]:
-    """A settings row as saved: no ids or dates (they change without meaning), and the value
-    hidden when its name or its content looks like a secret."""
-    kept = {
+    """A table row as saved: without ids and dates, which change with no meaning."""
+    return {
         k: v
         for k, v in row.items()
         if k not in ("id", "created_by_id", "is_sample") and not k.startswith(("created_", "updated_"))
     }
-    name = " ".join(str(row.get(k) or "") for k in ("key", "name"))
-    for field_name, value in list(kept.items()):
-        if field_name in ("key", "name", "description"):
-            continue
-        if (
-            SECRET_NAME.search(name)
-            or SECRET_NAME.search(field_name)
-            or SECRET.search(f'{field_name}: "{value}"')
-        ):
-            kept[field_name] = HIDDEN
-    return kept
 
 
 def _jsonc(text: Any) -> dict[str, Any] | None:
@@ -487,7 +476,7 @@ def message_replies(messages: list[dict[str, Any]]) -> list[Reply]:
 
 
 def save_conversation(repo, profile: str, storage, agent: Superagent, conversation: dict[str, Any]) -> bool:
-    """One conversation: its messages kept growing by message id (the API returns the last 200),
+    """One conversation: its messages, merged by message id with what earlier pulls saw,
     its log, and the files made in it. Returns whether anything changed."""
     record = SessionRecord(repo, profile, f"conversation-{conversation['id']}")
     key = record.storage_key("messages.json")
@@ -499,11 +488,14 @@ def save_conversation(repo, profile: str, storage, agent: Superagent, conversati
     prefix = f"conversations/{conversation['id']}/"
     if conversation.get("gone") and not kept and not any(p.startswith(prefix) for p in agent.files):
         return False
-    messages = kept + new
+    messages = sorted(
+        kept + new,
+        key=lambda m: str(m.get("created_date") or (m.get("metadata") or {}).get("created_date") or ""),
+    )
     storage.write_text(key, json.dumps(messages, ensure_ascii=False))
     files = []
     for path, text in agent.files.items():
-        if path.startswith(prefix) and isinstance(text, str) and _safe(path, text, []):
+        if path.startswith(prefix) and isinstance(text, str) and _safe(path):
             relative = path[len(prefix) :]
             storage.write_text(record.storage_key(f"files/{relative}"), text)
             files.append({"path": relative, "size": len(text.encode("utf-8"))})

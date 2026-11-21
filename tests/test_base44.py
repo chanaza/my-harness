@@ -102,6 +102,14 @@ def with_channels(a: Superagent) -> Superagent:
             {"id": "2", "key": "yemot_webhook_token", "value": "s3cr3t-value"},
         ]
     }
+    a.goals = [
+        {
+            "name": "emergency-group-bridge",
+            "title": "Emergency Group Bridge",
+            "status": "active",
+            "tasks": [{"id": "service-watch", "instruction": "Call yemotBridgeWebhook when needed"}],
+        }
+    ]
     a.webhooks = [
         {
             "target_url": "https://x.base44.app/functions/yemotBridgeWebhook",
@@ -120,7 +128,7 @@ class Reader:
     def superagents(self):
         return [with_channels(agent())]
 
-    def conversation(self, agent, conversation_id):
+    def conversation(self, agent, conversation_id, mentioned=False):
         return {
             "id": "c1",
             "title": "Hours",
@@ -164,8 +172,9 @@ def test_a_superagent_is_saved_in_its_places_with_its_source(repo: ContentRepo):
         "functions.json",
     ]
     assert (app / "functions" / "yemotBridgeWebhook" / "main.ts").is_file()  # code that names a token is fine
-    assert not (app / "functions" / "leaky").exists()  # a literal key is not saved
-    assert any("functions/leaky/main.ts" in e for e in report.errors)
+    leaky = (app / "functions" / "leaky" / "main.ts").read_text()  # the file is kept, its key is not
+    assert "abcd1234efgh5678" not in leaky and "set it again" in leaky
+    assert any("leaky" in h and "API_KEY" in h for h in report.hidden)  # and the owner is told which
     plugin = repo.path("core", "plugins", "business-dev-mcp-hms-report")
     assert "<set in Base44>" in (plugin / "mcp-config.json").read_text()
     flow = repo.path("core", "workflows", "business-dev-weekly.yaml").read_text()
@@ -179,7 +188,7 @@ def test_a_superagent_is_saved_in_its_places_with_its_source(repo: ContentRepo):
     )
     assert "hunter2" not in everything and "abcdef123456789" not in everything  # never a secret
     assert "Base44's own docs" not in everything
-    assert any("looks like a secret" in e and "leak.json" in e for e in report.errors)
+    assert any("leak.json: api_key" in h for h in report.hidden)
     log = repo.path("sessions", profile, "conversation-c1", "log.md").read_text()
     assert "q1" in log and "a1" in log
     reader.messages = [message(2, "assistant", "a1"), message(3, "user", "q2"), message(4, "assistant", "a2")]
@@ -209,6 +218,8 @@ def test_the_guide_and_the_connector_index_show_every_part_of_an_agent(repo: Con
     settings = repo.path("apps", "business-dev", "data", "ClientSetting.json").read_text()
     assert "yemot_bridge_phone" in settings and "072" in settings  # the settings code needs to run
     assert "s3cr3t-value" not in settings and "set it again" in settings  # a secret value is hidden
+    goal = repo.path("core", "workflows", "business-dev-goal-emergency-group-bridge.yaml").read_text()
+    assert "standing goal" in goal and "service-watch" in goal and "agent: business-dev" in goal
     connections = repo.path("core", "connections.yaml").read_text()
     assert "id: whatsapp" in connections and "telegram" not in connections  # connected channels only
     agent_file = repo.path("core", "agents", "business-dev.yaml").read_text()
@@ -235,5 +246,6 @@ def test_the_guide_and_the_connector_index_show_every_part_of_an_agent(repo: Con
     assert index["README.md"]["kind"] == "guide"
     function = index["apps/business-dev/functions/yemotBridgeWebhook/main.ts"]
     assert function["kind"] == "function" and function["agent"] == "business-dev"
-    assert function["used_by"] == ["core/workflows/business-dev-weekly.yaml"]
+    assert "core/workflows/business-dev-weekly.yaml" in function["used_by"]
+    assert "core/workflows/business-dev-goal-emergency-group-bridge.yaml" in function["used_by"]
     assert index["core/workflows/business-dev-weekly.yaml"]["uses"] == ["function:yemotBridgeWebhook"]

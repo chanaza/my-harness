@@ -167,7 +167,7 @@ class MemoryWriter(ItemWriter):
         entry_id = slugify(f"{origin.profile}-{scope}{item.name}")
         body = MarkdownDocument.parse(item.text(next(iter(item.files)))).body
         result = MemoryStore(self.repo).put(entry_id, body, origin, kind="project-state",
-                                            subject=item.meta.get("subject"))
+                                            subject=item.meta.get("subject"), agent=item.agent)
         return WriteResult(result.action, result.path)
 
 
@@ -284,7 +284,8 @@ class FolderWriter(ItemWriter):
     def _descriptor(self, item: Captured, origin: Origin, fields: dict[str, Any],
                     previous: Any) -> dict[str, Any]:
         return {"name": slugify(item.name), "description": item.meta.get("description", item.name),
-                **fields, "origin": item.origin, "provenance": Provenance.updated(previous, origin)}
+                **fields, **owner(item),
+                "origin": item.origin, "provenance": Provenance.updated(previous, origin)}
 
 
 class PluginWriter(FolderWriter):
@@ -311,7 +312,7 @@ class AppWriter(FolderWriter):
             descriptor["url"] = fields["link"]
         if fields.get("version"):
             descriptor["version"] = str(fields["version"])
-        return {**descriptor, "provenance": Provenance.updated(previous, origin)}
+        return {**descriptor, **owner(item), "provenance": Provenance.updated(previous, origin)}
 
 
 class ProjectWriter(FolderWriter):
@@ -337,7 +338,8 @@ class WorkflowWriter(ItemWriter):
             "name": slugify(item.name),
             "description": str(item.meta.get("description") or item.name),
             "steps": [{"name": "run", "description": str(item.meta.get("prompt") or item.name),
-                       **({"agent": slugify(str(item.meta["agent"]))} if item.meta.get("agent") else {})}],
+                       **({"agent": slugify(str(item.meta.get("agent") or item.agent))}
+                          if item.meta.get("agent") or item.agent else {})}],
             "origin": item.origin,
         }
         if item.meta.get("trigger"):
@@ -391,6 +393,11 @@ DEFAULT_WRITERS: tuple[type[ItemWriter], ...] = (
 )
 
 
+def owner(item: Captured) -> dict[str, str]:
+    """The ``agent:`` field every writer adds when the tool says whose item this is."""
+    return {"agent": slugify(item.agent)} if item.agent else {}
+
+
 def _write_markdown(writer: ItemWriter, target: Path, item: Captured, origin: Origin, body: str,
                     meta: dict[str, Any]) -> WriteResult:
     """Shared path for Markdown items: provenance, conflict diversion, write."""
@@ -401,7 +408,8 @@ def _write_markdown(writer: ItemWriter, target: Path, item: Captured, origin: Or
     if conflict:
         target = writer._conflict_path(target, origin)
     previous = None if conflict or not existing else existing.get("provenance")
-    meta = {**meta, "provenance": Provenance.updated(previous, origin)}
+    meta = {**meta, **owner(item),
+            "provenance": Provenance.updated(previous, origin)}
     MarkdownDocument(meta, body).write(target)
     return WriteResult("conflict" if conflict else ("updated" if existing else "created"), target)
 

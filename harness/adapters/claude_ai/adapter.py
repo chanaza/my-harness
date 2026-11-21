@@ -189,9 +189,7 @@ class ClaudeAiAdapter(ConnectorAdapter):
                 continue
             part = HarvestSync(repo, self.local.state("harvest", profile)).run(
                 self._items(export, config.harvest_exclude), Origin.now(profile, session))
-            report.counts.update(part.counts)
-            report.errors += part.errors
-            report.conflicts += part.conflicts
+            report.merge(part)
             storage = repo.storage("transcripts", profile)
             state = self.local.state("conversations", profile)
             with storage.batch():

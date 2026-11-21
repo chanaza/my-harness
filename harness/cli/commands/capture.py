@@ -473,6 +473,8 @@ class HarvestCommand(Command):
             raise ErrorExit(str(exc)) from None
         for problem in report.errors:
             print(f"  x {problem}")
+        for hidden in report.hidden:
+            print(f"  ~ secret value kept out: {hidden}")
         for path in report.conflicts:
             print(f"  ! conflict: {path.relative_to(repo.root)}")
         GitSync(repo.root, repo.config.git).sync(f"{args.tool}: harvest ({report.summary()})", push=True)
