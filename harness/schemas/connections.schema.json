@@ -39,7 +39,8 @@
                     "native",
                     "api",
                     "manual",
-                    "connector"
+                    "connector",
+                    "channel"
                   ]
                 },
                 "notes": {
@@ -64,7 +65,8 @@
               "plugin",
               "api",
               "native",
-              "connector"
+              "connector",
+              "channel"
             ]
           }
         },

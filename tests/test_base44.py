@@ -91,13 +91,28 @@ def agent() -> Superagent:
     )
 
 
+def with_channels(a: Superagent) -> Superagent:
+    a.channels = [
+        {"channel": "whatsapp", "connected": True, "status": "connected"},
+        {"channel": "telegram", "connected": False},
+    ]
+    a.webhooks = [
+        {
+            "target_url": "https://x.base44.app/functions/yemotBridgeWebhook",
+            "events": ["message.created"],
+            "description": "wake up",
+        }
+    ]
+    return a
+
+
 class Reader:
     def __init__(self, messages):
         self.messages = messages
         self.problems = []
 
     def superagents(self):
-        return [agent()]
+        return [with_channels(agent())]
 
     def conversation(self, agent, conversation_id):
         return {
@@ -184,6 +199,10 @@ def test_the_guide_and_the_connector_index_show_every_part_of_an_agent(repo: Con
     adapter.run_harvest()
     RepoGuide(repo).write()
     assert validate(repo).ok
+    connections = repo.path("core", "connections.yaml").read_text()
+    assert "id: whatsapp" in connections and "telegram" not in connections  # connected channels only
+    agent_file = repo.path("core", "agents", "business-dev.yaml").read_text()
+    assert "whatsapp" in agent_file and "message.created" in agent_file  # channels and webhooks
     readme = repo.path("README.md").read_text()
     # the logic, with one real example of each kind - not a list of everything
     assert "## The logic of the structure" in readme and "connector/index.json" in readme
