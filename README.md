@@ -42,6 +42,7 @@ itself: improvements arrive without uploading it again.
 
 From then on, everything is saved by itself. Nothing is shown while it runs.
 
+**Remove something that should not be there** (e.g. a leftover): `python -m harness remove <path> --reason "..."`.
 **Check that it works:** `python -m harness status` (and `python -m harness sources`: how each tool is captured).
 **Update later:** run the same installation command again.
 **More details, cloud sessions and troubleshooting:** [docs/getting-started.md](docs/getting-started.md).

@@ -43,6 +43,7 @@ def _read_stdin_text() -> str:
 
 # --- profiles ---------------------------------------------------------------------
 
+
 class ProfileAddCommand(Command):
     name = "add"
     help = "Register a tool account, e.g. `harness profile add claude-code personal`."
@@ -57,8 +58,9 @@ class ProfileAddCommand(Command):
 
     def run(self, args: argparse.Namespace) -> int:
         try:
-            profile = ProfileRegistry(open_repo(args)).add(args.tool, args.label, args.description,
-                                                           args.id, args.environment)
+            profile = ProfileRegistry(open_repo(args)).add(
+                args.tool, args.label, args.description, args.id, args.environment
+            )
         except ProfileError as exc:
             raise ErrorExit(str(exc)) from None
         print(f"Profile: {profile.id}")
@@ -93,7 +95,8 @@ class ProfileSetCommand(Command):
         repo = open_repo(args)
         try:
             profile = ProfileRegistry(repo).update(
-                args.profile, label=args.label, environment=args.environment, description=args.description)
+                args.profile, label=args.label, environment=args.environment, description=args.description
+            )
         except ProfileError as exc:
             raise ErrorExit(str(exc)) from None
         GitSync(repo.root, repo.config.git).sync(f"profile {profile.id} updated", push=True)
@@ -135,14 +138,21 @@ class ProfileCommand(Command):
 
 # --- tools --------------------------------------------------------------------------
 
+
 class SetupCommand(Command):
     name = "setup"
-    help = ("Guided setup: connect the AI tools on this machine to your harness (capture only, "
-            "nothing is loaded). Without a tool name, every tool found here is set up.")
+    help = (
+        "Guided setup: connect the AI tools on this machine to your harness (capture only, "
+        "nothing is loaded). Without a tool name, every tool found here is set up."
+    )
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("tool", nargs="?", choices=adapters.names(),
-                            help="One tool only (default: every tool found on this machine).")
+        parser.add_argument(
+            "tool",
+            nargs="?",
+            choices=adapters.names(),
+            help="One tool only (default: every tool found on this machine).",
+        )
         parser.add_argument("--repo", help="Your harness repository: a folder or a GitHub address.")
         parser.add_argument("--account", help="Account name, e.g. personal (several: abcd1234=personal,...).")
         parser.add_argument("--environment", choices=ENVIRONMENTS, help="local or cloud (detected).")
@@ -168,9 +178,15 @@ class SetupCommand(Command):
         next_steps: list[str] = []
         for tool in missing:
             print(f"--- {tool} ---")
-            options = SetupOptions(tool=tool, repo=args.repo, account=args.account,
-                                   environment=environment, transcripts=args.transcripts,
-                                   owner=args.owner, capture_now=False if args.no_capture else None)
+            options = SetupOptions(
+                tool=tool,
+                repo=args.repo,
+                account=args.account,
+                environment=environment,
+                transcripts=args.transcripts,
+                owner=args.owner,
+                capture_now=False if args.no_capture else None,
+            )
             try:
                 result = SetupWizard(prompter).run(options)
             except SetupSkipped:
@@ -200,8 +216,11 @@ class SetupCommand(Command):
     def _offered_tools() -> list[str]:
         """Account services (e.g. claude.ai) offered once in setup; an empty answer skips them."""
         declined = LocalHome().settings().get("declined") or []
-        return [name for name in adapters.names()
-                if adapters.create(name).offered_everywhere and name not in declined]
+        return [
+            name
+            for name in adapters.names()
+            if adapters.create(name).offered_everywhere and name not in declined
+        ]
 
     @staticmethod
     def _connected(tool: str) -> bool:
@@ -228,12 +247,13 @@ class StatusCommand(Command):
             repo = ContentRepo(repo_path)
             report = RepoValidator.default(repo.layout).validate(repo)
             print(f"Repository check: {'OK' if report.ok else f'{len(report.problems)} problem(s)'}")
-            for problem in report.problems[:args.problems]:
+            for problem in report.problems[: args.problems]:
                 print(f"  x {problem}")
             from ...inbox import conversation_gaps
+
             gaps = conversation_gaps(repo)
             print(f"Conversations with missing replies: {len(gaps) or 'none'}")
-            for path, numbers in list(gaps.items())[:args.problems]:
+            for path, numbers in list(gaps.items())[: args.problems]:
                 shown = ", ".join(map(str, numbers[:10])) + ("..." if len(numbers) > 10 else "")
                 print(f"  ! {path}: replies {shown} did not arrive")
         problems = local.recent_problems(args.problems)
@@ -245,18 +265,29 @@ class StatusCommand(Command):
 
 class InboxCommand(Command):
     name = "inbox"
-    help = ("Save what the harness connector dropped into inbox/connector/ (run by GitHub Actions; "
-            "works on any computer too).")
+    help = (
+        "Save what the harness connector dropped into inbox/connector/ (run by GitHub Actions; "
+        "works on any computer too)."
+    )
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
         repo_argument(parser)
-        parser.add_argument("--retry-rejected", action="store_true",
-                            help="Try the files in inbox/rejected/ again (e.g. after an engine fix).")
-        parser.add_argument("--add", nargs="+", metavar="FILE", default=[],
-                            help="First put these files into the inbox (checked against their form).")
+        parser.add_argument(
+            "--retry-rejected",
+            action="store_true",
+            help="Try the files in inbox/rejected/ again (e.g. after an engine fix).",
+        )
+        parser.add_argument(
+            "--add",
+            nargs="+",
+            metavar="FILE",
+            default=[],
+            help="First put these files into the inbox (checked against their form).",
+        )
 
     def run(self, args: argparse.Namespace) -> int:
         from ...inbox import InboxProcessor, write_connector_instructions
+
         repo = open_repo(args)
         git = GitSync(repo.root, repo.config.git)
         git.pull()
@@ -279,8 +310,10 @@ class InboxCommand(Command):
 
 class SourcesCommand(Command):
     name = "sources"
-    help = ("How each kind of tool is captured (capture_modes in the settings), why, and when it "
-            "was last captured on this machine.")
+    help = (
+        "How each kind of tool is captured (capture_modes in the settings), why, and when it "
+        "was last captured on this machine."
+    )
 
     def run(self, args: argparse.Namespace) -> int:
         local = LocalHome()
@@ -295,8 +328,10 @@ class SourcesCommand(Command):
             mode = config.capture_mode(tool, adapter.capture_modes[0])
             when = f" every {mode.every_minutes} min" if mode.mode == "scheduled" else ""
             profiles = ", ".join(sorted(set((bound.get(tool) or {}).values()))) or "not connected here"
-            print(f"  {tool:12} {mode.mode}{when}  |  {profiles}  |  last: "
-                  f"{local.last_capture(tool) or 'never'}")
+            print(
+                f"  {tool:12} {mode.mode}{when}  |  {profiles}  |  last: "
+                f"{local.last_capture(tool) or 'never'}"
+            )
             if adapter.capture_reason:
                 print(f"  {'':12} why: {adapter.capture_reason}")
         print("Change a mode in harness.config.yaml (capture_modes), then run `harness update`.")
@@ -313,13 +348,15 @@ class MachineNameCommand(Command):
 
     def run(self, args: argparse.Namespace) -> int:
         from ...text import slugify
+
         local = LocalHome()
         name = slugify(args.name)
         old_name = local.machine() or "local"
         repo = open_repo(args)
         registry = ProfileRegistry(repo)
-        mine = {p for bindings in (local.settings().get("profiles") or {}).values()
-                for p in bindings.values()}
+        mine = {
+            p for bindings in (local.settings().get("profiles") or {}).values() for p in bindings.values()
+        }
         for profile in registry.all():
             if profile.id not in mine or profile.environment != "local":
                 continue
@@ -376,18 +413,29 @@ class InstallCommand(Command):
         parser.add_argument("--label", help="Account label if the profile is new (default: from the id).")
         parser.add_argument("--repo", help="Content repository on this machine (remembered).")
         parser.add_argument("--account-key", help="Which of the tool's accounts (tools with several).")
-        parser.add_argument("--environment", choices=ENVIRONMENTS,
-                            help="Where this account's tool runs (recorded on a new profile).")
-        parser.add_argument("--no-hooks", action="store_true",
-                            help="Only bind the profile (for manual `harness harvest`), no hooks or skill.")
+        parser.add_argument(
+            "--environment",
+            choices=ENVIRONMENTS,
+            help="Where this account's tool runs (recorded on a new profile).",
+        )
+        parser.add_argument(
+            "--no-hooks",
+            action="store_true",
+            help="Only bind the profile (for manual `harness harvest`), no hooks or skill.",
+        )
 
     def run(self, args: argparse.Namespace) -> int:
         adapter = adapters.create(args.tool)
         label = args.label or args.profile.removeprefix(f"{args.tool}-")
         try:
-            done = adapter.install(args.profile, label, Path(args.repo) if args.repo else None,
-                                   hooks=not args.no_hooks, environment=args.environment,
-                                   account_key=args.account_key)
+            done = adapter.install(
+                args.profile,
+                label,
+                Path(args.repo) if args.repo else None,
+                hooks=not args.no_hooks,
+                environment=args.environment,
+                account_key=args.account_key,
+            )
         except (HarnessNotConfigured, ProfileError) as exc:
             raise ErrorExit(str(exc)) from None
         for line in done:
@@ -403,8 +451,9 @@ class HarvestCommand(Command):
         _tool_argument(parser)
         parser.add_argument("--project", help="Also harvest this project folder's settings.")
         parser.add_argument("--dry-run", action="store_true", help="List what would be captured.")
-        parser.add_argument("--prune", action="store_true",
-                            help="Also remove items harvested earlier that are now excluded.")
+        parser.add_argument(
+            "--prune", action="store_true", help="Also remove items harvested earlier that are now excluded."
+        )
 
     def run(self, args: argparse.Namespace) -> int:
         adapter = adapters.create(args.tool)
@@ -450,21 +499,26 @@ class BackfillCommand(Command):
         except (HarnessNotConfigured, StorageError) as exc:
             raise ErrorExit(str(exc)) from None
         for e in entries:
-            print(f"  {e.action:9} {e.started_at or '?':20} {e.user_messages:4} msgs  "
-                  f"{e.project or '-':20} {e.session}")
+            print(
+                f"  {e.action:9} {e.started_at or '?':20} {e.user_messages:4} msgs  "
+                f"{e.project or '-':20} {e.session}"
+            )
         if not args.dry_run:
             counts = Counter(e.action for e in entries)
             summary = ", ".join(f"{n} {a}" for a, n in sorted(counts.items())) or "nothing found"
-            GitSync(repo.root, repo.config.git).sync(f"{adapter.profile_id()}: backfill ({summary})",
-                                                     push=True)
+            GitSync(repo.root, repo.config.git).sync(
+                f"{adapter.profile_id()}: backfill ({summary})", push=True
+            )
             print(f"Backfill: {summary}")
         return 0
 
 
 class SkillCommand(Command):
     name = "skill"
-    help = ("Create again the skill a tool's account needs, put it on the desktop and show it, "
-            "e.g. `harness skill claude-ai`.")
+    help = (
+        "Create again the skill a tool's account needs, put it on the desktop and show it, "
+        "e.g. `harness skill claude-ai`."
+    )
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
         _tool_argument(parser)
@@ -491,9 +545,11 @@ class MondayProbeCommand(Command):
     name = "probe"
     help = "Show what your monday.com account lets the harness read (names and counts only)."
 
-    TOKEN_HELP = ("monday.com API token needed. In monday.com: click your profile picture > "
-                  "Developers > My access tokens > Show > copy it. Paste it here (it is kept in this "
-                  "computer's password store, never in your harness)")
+    TOKEN_HELP = (
+        "monday.com API token needed. In monday.com: click your profile picture > "
+        "Developers > My access tokens > Show > copy it. Paste it here (it is kept in this "
+        "computer's password store, never in your harness)"
+    )
 
     def configure(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument("--account", default="default", help="A name for this monday account.")
@@ -555,6 +611,7 @@ class HookCommand(Command):
 
 # --- content written by models ------------------------------------------------------------
 
+
 def _profile_and_repo_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--profile", required=True, help="Profile id the content comes from.")
     parser.add_argument("--session", help="Session id (default: the profile's current session).")
@@ -580,7 +637,8 @@ class SessionCheckpointCommand(Command):
                 raise ErrorExit(f"No current session for {args.profile}; pass --session.")
         result = recorder.write(_read_stdin_text(), args.reason)
         GitSync(repo.root, repo.config.git).sync(
-            f"{args.profile}: checkpoint {result.number} of {recorder.session.id}", push=True)
+            f"{args.profile}: checkpoint {result.number} of {recorder.session.id}", push=True
+        )
         if not args.quiet:
             print(f"Checkpoint {result.number} saved for {recorder.session.id}.")
             for path in result.digested:
@@ -613,8 +671,9 @@ class MemoryAddCommand(Command):
         if not session:
             recorder = CheckpointRecorder.current(local, repo, args.profile)
             session = recorder.session.native_id if recorder else None
-        result = MemoryStore(repo).put(args.id, _read_stdin_text(), Origin.now(args.profile, session),
-                                       args.kind, args.subject)
+        result = MemoryStore(repo).put(
+            args.id, _read_stdin_text(), Origin.now(args.profile, session), args.kind, args.subject
+        )
         GitSync(repo.root, repo.config.git).sync(f"{args.profile}: memory {result.action} {args.id}")
         print(f"Memory {result.action}: {result.path.relative_to(repo.root)}")
         if result.action == "conflict":

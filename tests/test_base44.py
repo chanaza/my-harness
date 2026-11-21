@@ -96,6 +96,12 @@ def with_channels(a: Superagent) -> Superagent:
         {"channel": "whatsapp", "connected": True, "status": "connected"},
         {"channel": "telegram", "connected": False},
     ]
+    a.settings_rows = {
+        "ClientSetting": [
+            {"id": "1", "key": "yemot_bridge_phone", "value": "0721234567", "created_date": "x"},
+            {"id": "2", "key": "yemot_webhook_token", "value": "s3cr3t-value"},
+        ]
+    }
     a.webhooks = [
         {
             "target_url": "https://x.base44.app/functions/yemotBridgeWebhook",
@@ -151,6 +157,7 @@ def test_a_superagent_is_saved_in_its_places_with_its_source(repo: ContentRepo):
     # the app is the data model only; everything else is where it belongs, sourced from the profile
     assert sorted(p.name for p in app.iterdir()) == [
         "app.yaml",
+        "data",
         "entities",
         "entities.json",
         "functions",
@@ -199,6 +206,9 @@ def test_the_guide_and_the_connector_index_show_every_part_of_an_agent(repo: Con
     adapter.run_harvest()
     RepoGuide(repo).write()
     assert validate(repo).ok
+    settings = repo.path("apps", "business-dev", "data", "ClientSetting.json").read_text()
+    assert "yemot_bridge_phone" in settings and "072" in settings  # the settings code needs to run
+    assert "s3cr3t-value" not in settings and "set it again" in settings  # a secret value is hidden
     connections = repo.path("core", "connections.yaml").read_text()
     assert "id: whatsapp" in connections and "telegram" not in connections  # connected channels only
     agent_file = repo.path("core", "agents", "business-dev.yaml").read_text()

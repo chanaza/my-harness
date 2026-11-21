@@ -32,6 +32,7 @@ from .repo import ContentRepo
 from .text import slugify
 
 TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".jsonc", ".ts", ".js", ".py", ".sh", ".txt", ".html"}
+SHELL_VARS = re.compile(r"\$\{?([A-Z][A-Z0-9_]{3,})\}?")  # a workflow's $ACCESS_TOKEN
 ENV_READS = re.compile(
     r"(?:Deno\.env\.get\(\s*['\"]|process\.env\.|process\.env\[['\"]|os\.environ(?:\.get)?\(?\[?['\"]|os\.getenv\(['\"])"
     r"([A-Z][A-Z0-9_]{2,})"
@@ -321,6 +322,7 @@ class RepoGuide:
             if item.extra.get("webhooks"):
                 entry["called_from_outside"] = [
                     f"webhook on {', '.join(w.get('events') or [])}: {w.get('description') or ''}".strip(": ")
+                    + (f" (OFF since {str(w['off_since'])[:10]})" if w.get("off_since") else "")
                     for w in item.extra["webhooks"]
                 ]
             entries.append(entry)
@@ -343,19 +345,34 @@ class RepoGuide:
                 continue
             if id(item) in agent_of and not entry.get("agent"):
                 entry["agent"] = agent_of[id(item)]
+            elif not entry.get("agent"):  # built for an agent elsewhere, e.g. a skill named after it
+                named = [
+                    a.name for a in self._of("agent") if len(a.name) >= 4 and a.name in item.name.lower()
+                ]
+                if named:
+                    entry["for_agent"] = named[0]
             if item.kind in ("workflow", "skill", "function"):
                 used = self.uses(item)
                 if used:
                     entry["uses"] = [f"{u.kind}:{u.name}" for u in used]
             if item.kind in ("function", "table"):
-                users = self.mentions(item, callers)
+                owner = agent_of.get(id(item))  # a name like "User" also appears in other agents' files
+                users = [u for u in self.mentions(item, callers) if agent_of.get(id(u)) in (None, owner)]
                 if users:
                     entry["used_by"] = [u.path for u in users]
+                elif item.kind == "function" and not entry.get("called_from_outside"):
+                    entry["called_from_outside"] = [
+                        "nothing in this repository calls it: another service or the agent itself does "
+                        "(see the comment at the top of the code, and explained_in)"
+                    ]
             if item.kind == "function":
                 explained = self.mentions(item, explainers)
                 if explained:
                     entry["explained_in"] = [m.path for m in explained[:8]]
             if item.kind == "workflow":
+                settings = sorted(set(SHELL_VARS.findall(item.text)))
+                if settings:
+                    entry["needs_settings"] = settings
                 if item.extra["trigger"]:
                     entry["runs"] = item.extra["trigger"]
                 if item.extra["status"]:
@@ -579,8 +596,8 @@ class RepoGuide:
         return [
             f"**A conversation, and how to continue it.** `{c.path}/` ({c.extra['last']}): "
             f"`summary.md` is {upto}; `log.md` has every reply word for word - read the replies "
-            "after that. Files made in it and the full raw transcript are on the transcripts "
-            "branch (see below)."
+            "after that. Files made in it and the full raw transcript are where its account "
+            "keeps them (see Accounts)."
         ]
 
     def _example_setting(self) -> list[str]:
@@ -729,13 +746,19 @@ anything from this page.
 
 ## Start here
 
-- **Continue a conversation** in any tool: find it in the index (by date, topic, tool, agent or
-  project). Read its `summary.md`, then the replies in its `log.md` after the reply the summary
-  covers (`summary_reply` in `meta.yaml`). No `summary.md` (runs and conversations pulled from a
-  tool)? Read `log.md` from the start, or its last replies for a long one.
+- **Continue a conversation** in any tool: find it in the index (by `last_active` date, topic,
+  tool, agent or project). Read its `summary.md`, then the replies in its `log.md` after the
+  reply the summary covers (`summary_reply` in `meta.yaml`; an older summary without it: the
+  replies dated after the summary's `updated_at`). No `summary.md` (runs and conversations pulled
+  from a tool)? Read `log.md` from the start, or its last replies for a long one. The log is
+  written at the end of each turn: for the very latest minutes, read the raw transcript.
 - **Rebuild an agent** in another tool: take its definition from `core/agents/`, then everything
-  the index lists under its name - rules, skills, workflows, plugins, connections, app (tables
-  and backend functions), memory - and set up again what stays in the tool (see Accounts).
+  the index lists with `"agent": "<name>"` (its parts) or `"for_agent": "<name>"` (built for it
+  in another tool) - rules, skills, workflows, plugins, connections, app (tables and backend
+  functions), memory - and set up again what stays in the tool (see Accounts).
+- **Rebuild something that spans agents** (a service such as "WhatsApp"): search the index for
+  the word - names, descriptions and memory subjects - then follow `uses` / `used_by`; the
+  memory files in `explained_in` usually describe the whole service.
 - **Find anything else**: the index (below).
 
 ## The logic of the structure
@@ -753,7 +776,7 @@ which agent it belongs to.
 
 | Folder | What is in it |
 |---|---|
-| `core/agents/<agent>.yaml` | An agent: instructions, identity, model, the skills and connections it uses; the tool's own record under `native:` |
+| `core/agents/<agent>.yaml` | An agent: instructions, identity (when the tool has one), model, the skills and connections it uses; the tool's own record under `native:` (e.g. channels, webhooks). Where `instructions` is short, the behaviour is in its rules and memory |
 | `core/instructions/<account>/` | Rules and standing instructions. `scope: global` = everything in that account; `agent:<name>` = one agent; `project:<name>` = one project |
 | `core/skills/<skill>/` | A skill: `SKILL.md` (when and how to use it) with its scripts and references |
 | `core/workflows/<workflow>.yaml` | A scheduled or triggered task: when it runs (`trigger`), which agent does it (`steps[].agent`), the tool's full definition and status under `native:` |
@@ -761,13 +784,13 @@ which agent it belongs to.
 | `core/connections.yaml` | Every connector, MCP server and channel (WhatsApp, phone...), and which accounts have it. Sign-ins stay in the tool |
 | `core/profiles.yaml` | The accounts (tool + account) that feed this harness |
 | `core/profile/`, `core/projects/` | Who the owner is; projects with their instructions and knowledge |
-| `apps/<app>/` | An app built in a tool: `app.yaml`; table structures (`entities/`, all together in `entities.json`); backend code (`functions/<name>/`, with `functions.json`: what runs each one); pages. Table rows stay in the tool |
-| `memory/` | One fact, decision or preference per file; `subject` says what it is about, `provenance` where it came from |
+| `apps/<app>/` | An app built in a tool: `app.yaml`; table structures (`entities/`, all together in `entities.json`); backend code (`functions/<name>/`, with `functions.json`: what runs each one); the rows of settings tables (`data/`, secret values hidden); pages. Other table rows stay in the tool |
+| `memory/` | One fact, decision or preference per file; `subject` says what it is about (for an agent's memory: the agent, then its first words), `provenance` where it came from |
 | `sessions/<account>/<id>/` | One conversation or agent run: `summary.md`, `log.md` (word for word), `meta.yaml` (dates, topic, agent, where the raw transcript is); `replies/` when a tool sent its replies one by one |
 | `native/<account>/` | A tool's own settings that no other tool understands, kept as they are |
 | `assets/` | Reference files (examples, decks, designs) |
 | `connector/` | Written by the engine: the index and the instructions the harness connector serves |
-| `inbox/` | What tools sent, waiting to be filed; `inbox/conflicts/` = versions that clash |
+| `inbox/` | What tools sent, waiting to be filed by the engine. `inbox/conflicts/` = an incoming version that clashes with another account's (kept for the owner to choose); `inbox/rejected/` = files that could not be saved, with the reason - nothing to rebuild from either |
 
 ## How files point to each other
 
@@ -790,13 +813,14 @@ STATIC_FIND = """\
 `connector/index.json` lists every item and every file, one entry each, rebuilt on every save.
 Each entry has `kind`, `name`, `path` and the account (`profile`), and, where known:
 
-- `agent` - the agent it belongs to;
+- `agent` - the agent it belongs to; `for_agent` - built for that agent in another tool;
 - `uses` / `used_by` - functions, tables and skills it names, and what names it;
-- `called_from_outside` - for code the tool calls itself (a webhook), `explained_in` - the
-  memory files that explain it;
+- `called_from_outside` - for code called from outside this repository (a webhook - marked OFF
+  when switched off - or another service), `explained_in` - the memory files that explain it;
 - `needs_settings` - secrets and settings it reads (names only), `runs` and `status` for
-  workflows;
-- for conversations: `date`, `tool`, `account`, `project`, `agent`, the goal from the summary,
+  workflows (`active`, or not scheduled any more);
+- for conversations: `date` (started), `last_active`, `tool`, `account`, `project`, `agent`,
+  the goal from the summary,
   the first message, and where the `summary`, `log`, `raw` transcript and `files` are.
 
 Kinds: `guide`, `agent`, `instruction`, `skill`, `workflow`, `plugin`, `connection`, `app`,

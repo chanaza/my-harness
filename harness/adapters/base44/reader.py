@@ -9,10 +9,15 @@ model in the app record (entities). Reading it needs a full-access token.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from .client import Base44Client, Base44Error
+
+#: Tables that hold the settings the code reads at run time: without their rows, nothing runs
+#: elsewhere. Their rows are saved (secret values hidden); other tables keep only their structure.
+SETTINGS_TABLE = re.compile(r"setting|config|infra", re.IGNORECASE)
 
 
 @dataclass
@@ -28,6 +33,7 @@ class Superagent:
     webhooks: list[dict[str, Any]] = field(default_factory=list)  # events it sends to a URL
     channels: list[dict[str, Any]] = field(default_factory=list)  # WhatsApp, phone, Telegram...
     workflow_status: dict[str, str] = field(default_factory=dict)  # automation -> active / ...
+    settings_rows: dict[str, list[dict[str, Any]]] = field(default_factory=dict)  # settings tables' rows
 
 
 class Base44Reader:
@@ -51,6 +57,11 @@ class Base44Reader:
             agent.workflow_status = {
                 str(w.get("name") or w.get("file_key")): str(w.get("status") or "")
                 for w in self._get(f"/api/apps/{agent.id}/workflows") or []
+            }
+            agent.settings_rows = {
+                table: list(self._get(f"/api/apps/{agent.id}/entities/{table}") or [])
+                for table in (app.get("entities") or {})
+                if SETTINGS_TABLE.search(table)
             }
             agent.memory = list(self._get(f"/api/agents/{agent.id}/memory") or [])
             listed = [c["id"] for c in self._get(f"/api/agents/{agent.id}/conversations") or []]

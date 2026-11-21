@@ -349,7 +349,9 @@ class HarnessIndex:
             entry = self._entry("conversation", title, self._goal(folder), folder, data)
             started = str(data.get("started_at") or "")
             missing = ConversationLog(SessionRecord(self.repo, folder.parent.name, folder.name)).missing()
-            extra = {"date": started[:10], "tool": profile.tool if profile else None,
+            last = str(data.get("last_activity_at") or data.get("activity_at") or "")
+            extra = {"date": started[:10], "last_active": last[:10] or None,
+                     "tool": profile.tool if profile else None,
                      "replies_saved": data.get("log_last"), "replies_missing": missing or None,
                      "account": profile.label if profile else None, "project": data.get("project"),
                      "agent": data.get("agent"), "first_message": self._first_message(folder),
@@ -374,7 +376,10 @@ class HarnessIndex:
         path = self.repo.path("core", "connections.yaml")
         data = self._yaml(path) if path.is_file() else {}
         return [{"kind": "connection", "name": c.get("id"), "description": c.get("description"),
-                 "tools": sorted(c.get("available_in") or {}), "path": "core/connections.yaml"}
+                 "tools": sorted(c.get("available_in") or {}),
+                 "accounts": sorted({p for t in (c.get("available_in") or {}).values()
+                                     for p in t.get("profiles") or []}),
+                 "path": "core/connections.yaml"}
                 for c in data.get("connections") or []]
 
     def _profile_entries(self) -> list[dict[str, Any]]:

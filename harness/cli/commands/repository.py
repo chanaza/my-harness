@@ -18,8 +18,10 @@ from ..base import Command, ErrorExit
 
 
 def repo_argument(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--repo", help="Content repository (default: the one configured on this "
-                                       "machine, else the current folder).")
+    parser.add_argument(
+        "--repo",
+        help="Content repository (default: the one configured on this machine, else the current folder).",
+    )
 
 
 def open_repo(args: argparse.Namespace) -> ContentRepo:
@@ -37,13 +39,19 @@ class InitCommand(Command):
         parser.add_argument("path", help="Empty folder (an empty git clone is fine).")
         parser.add_argument("--owner", required=True, help="Display name of the harness owner.")
         parser.add_argument("--language", default="en", help="Working language code (default: en).")
-        parser.add_argument("--tools", nargs="+", default=list(SUPPORTED_TOOLS),
-                            help="Tool ids in use (default: all supported).")
+        parser.add_argument(
+            "--tools",
+            nargs="+",
+            default=list(SUPPORTED_TOOLS),
+            help="Tool ids in use (default: all supported).",
+        )
         parser.add_argument("--transcripts-path", help="Folder for transcripts (e.g. a OneDrive folder).")
 
     def run(self, args: argparse.Namespace) -> int:
         options = InitOptions(
-            owner=args.owner, language=args.language, tools=args.tools,
+            owner=args.owner,
+            language=args.language,
+            tools=args.tools,
             storage_paths={"transcripts": args.transcripts_path} if args.transcripts_path else {},
         )
         try:
@@ -73,6 +81,58 @@ class ValidateCommand(Command):
         return 1
 
 
+class RemoveCommand(Command):
+    name = "remove"
+    help = "Remove things from the harness on request (e.g. leftovers), with a commit saying why."
+
+    #: What the engine itself maintains: never removed this way.
+    PROTECTED = (".git", "connector", "inbox", "harness.config.yaml", "core/profiles.yaml", "README.md")
+
+    def configure(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("paths", nargs="+", help="Paths inside the content repository.")
+        parser.add_argument("--reason", required=True, help="Why (goes into the commit message).")
+        repo_argument(parser)
+
+    def run(self, args: argparse.Namespace) -> int:
+        import shutil
+
+        repo = open_repo(args)
+        root = repo.root.resolve()
+        targets = []
+        for raw in args.paths:
+            target = (root / raw).resolve()
+            relative = target.relative_to(root).as_posix() if target.is_relative_to(root) else None
+            if (
+                not relative
+                or relative == "."
+                or any(relative == p or relative.startswith(f"{p}/") for p in self.PROTECTED)
+            ):
+                raise ErrorExit(f"{raw}: not something that can be removed this way")
+            if not target.exists():
+                raise ErrorExit(f"{raw}: not found")
+            targets.append((relative, target))
+        for relative, target in targets:
+            parts = relative.split("/")
+            if parts[0] == "sessions" and len(parts) == 3:  # a conversation: also its raw transcript
+                meta = (
+                    yaml_io.load((target / "meta.yaml").read_text("utf-8"))
+                    if (target / "meta.yaml").is_file()
+                    else {}
+                )
+                storage = repo.storage("transcripts", parts[1])
+                keys = [str(meta.get("transcript") or "")] + [
+                    f"{parts[1]}/{parts[2]}/files/{f.get('path')}" for f in meta.get("files") or []
+                ]
+                with storage.batch():
+                    for key in (k for k in keys if k and storage.exists(k)):
+                        storage.delete(key)
+            shutil.rmtree(target) if target.is_dir() else target.unlink()
+            print(f"  - removed {relative}")
+        names = ", ".join(r for r, _ in targets)
+        GitSync(repo.root, repo.config.git).sync(f"removed on request: {names} ({args.reason})", push=True)
+        return 0
+
+
 class ConfigGetCommand(Command):
     name = "get"
     help = "Print a setting, e.g. `harness config get storage.transcripts.path`."
@@ -97,8 +157,11 @@ class ConfigSetCommand(Command):
     def configure(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument("key", help="Dotted setting name, e.g. checkpoints.every_user_messages.")
         parser.add_argument("value", nargs="+", help="New value. Several values make a list.")
-        parser.add_argument("--string", action="store_true",
-                            help="Keep the value as text (no conversion to number/true/false).")
+        parser.add_argument(
+            "--string",
+            action="store_true",
+            help="Keep the value as text (no conversion to number/true/false).",
+        )
         repo_argument(parser)
 
     def run(self, args: argparse.Namespace) -> int:
@@ -211,6 +274,7 @@ class UpgradeCommand(Command):
             raise ErrorExit(str(exc)) from None
         created = Scaffolder(repo.layout).ensure_structure(repo)
         from ...inbox import write_connector_instructions
+
         created += [repo.path(p) for p in write_connector_instructions(repo)]
         print(f"Added settings: {', '.join(added) or 'none'}")
         print(f"Removed settings: {', '.join(removed) or 'none'}")

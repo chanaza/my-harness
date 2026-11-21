@@ -60,10 +60,12 @@ class Base44Adapter(AccountBoundAdapter):
     capture_modes = ("on_demand", "scheduled")
     capture_reason = "always reachable through its API with a personal access token"
     kept_in_tool = (
-        "table rows - including settings tables the code reads at run time (e.g. ClientSetting)",
+        "table rows, except settings tables (saved in apps/<agent>/data/, secret values hidden)",
+        "secret values in settings tables (their names are saved, marked as secrets)",
         "secrets and channel sign-ins (WhatsApp, phone numbers, Slack...): which channels are "
         "connected is saved, the connection itself is not",
         "Base44 goals and the conversations they run in, when the API does not list them",
+        "archived automations (only current ones are saved, each with whether it is active)",
         "conversation messages older than the last 200 at the first pull",
     )
 
@@ -284,7 +286,8 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
                     entry,
                     origin,
                     {f"{entry}.md": memory["content"].encode("utf-8")},
-                    meta={"subject": f"{agent.name}: {memory.get('scope') or 'memory'} memory"},
+                    # what it is about, in its own first words (the scope alone says nothing)
+                    meta={"subject": f"{agent.name}: " + " ".join(memory["content"].split())[:120]},
                 )
             )
     for path in sorted(
@@ -330,7 +333,11 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             {
                 **{k: v for k, v in f.items() if k != "files"},
                 "webhooks": [  # who calls it from outside: the agent's own webhooks to this function
-                    {"events": w.get("events"), "description": w.get("description")}
+                    {
+                        "events": w.get("events"),
+                        "description": w.get("description"),
+                        "off_since": w.get("disabled_at"),
+                    }
                     for w in agent.webhooks
                     if str(w.get("target_url") or "").rstrip("/").endswith(f"/functions/{f.get('name')}")
                 ]
@@ -339,6 +346,10 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             for f in agent.functions
         ]
         app_files["functions.json"] = json.dumps(manifest, ensure_ascii=False, indent=1).encode("utf-8")
+    for table, rows in agent.settings_rows.items():
+        app_files[f"data/{table}.json"] = json.dumps(
+            [_setting_row(row) for row in rows], ensure_ascii=False, indent=1
+        ).encode("utf-8")
     app_files["entities.json"] = json.dumps(
         agent.app.get("entities") or {}, ensure_ascii=False, indent=1
     ).encode("utf-8")
@@ -370,6 +381,31 @@ def superagent_items(agent: Superagent, skipped: list[str]) -> list[Captured]:
             )
         )
     return items
+
+
+SECRET_NAME = re.compile(r"password|passwd|token|secret|api_?key|guid|credential|pin\b", re.IGNORECASE)
+HIDDEN = "<secret: kept in Base44, set it again there>"
+
+
+def _setting_row(row: dict[str, Any]) -> dict[str, Any]:
+    """A settings row as saved: no ids or dates (they change without meaning), and the value
+    hidden when its name or its content looks like a secret."""
+    kept = {
+        k: v
+        for k, v in row.items()
+        if k not in ("id", "created_by_id", "is_sample") and not k.startswith(("created_", "updated_"))
+    }
+    name = " ".join(str(row.get(k) or "") for k in ("key", "name"))
+    for field_name, value in list(kept.items()):
+        if field_name in ("key", "name", "description"):
+            continue
+        if (
+            SECRET_NAME.search(name)
+            or SECRET_NAME.search(field_name)
+            or SECRET.search(f'{field_name}: "{value}"')
+        ):
+            kept[field_name] = HIDDEN
+    return kept
 
 
 def _jsonc(text: Any) -> dict[str, Any] | None:
