@@ -47,8 +47,9 @@ class SessionRecord:
     def transcript_key(self, extension: str) -> str:
         return self.storage_key(f"transcript{extension}")
 
-    def save_transcript(self, storage: Storage, source: Path,
-                        activity_at: str | None = None) -> tuple[str, bool] | None:
+    def save_transcript(
+        self, storage: Storage, source: Path, activity_at: str | None = None
+    ) -> tuple[str, bool] | None:
         """Copy the tool's transcript into transcript storage.
 
         Returns (key, changed); nothing is written when the stored copy is identical.
@@ -76,15 +77,20 @@ class SessionRecord:
             return {}
         return dict(yaml_io.load(self.meta_path.read_text("utf-8")) or {})
 
-    def touch(self, activity_at: str | None = None, **fields: Any) -> dict[str, Any]:
+    def touch(
+        self, activity_at: str | None = None, clear: tuple[str, ...] = (), **fields: Any
+    ) -> dict[str, Any]:
         """Create meta.yaml on first use; update ``fields`` and the activity time
-        (now, unless ``activity_at`` gives it, e.g. when importing an old session)."""
+        (now, unless ``activity_at`` gives it, e.g. when importing an old session). A field given
+        as None is left as it is; one named in ``clear`` is removed (it is no longer true)."""
         meta = self.meta()
         if not meta:
             meta = {"id": self.id, "profile": self.profile, "started_at": now_iso()}
             if self.native_id != self.id:
                 meta["native_id"] = self.native_id
         meta.update({k: v for k, v in fields.items() if v is not None})
+        for name in clear:
+            meta.pop(name, None)
         meta["last_activity_at"] = activity_at or now_iso()
         self.folder.mkdir(parents=True, exist_ok=True)
         self.meta_path.write_text(yaml_io.dump(meta), encoding="utf-8")
@@ -99,13 +105,18 @@ class SessionRecord:
     def summary(self) -> MarkdownDocument | None:
         return MarkdownDocument.read(self.summary_path) if self.summary_path.is_file() else None
 
-    def write_summary(self, text: str, reason: str, context_percent: float | None = None,
-                      user_messages: int | None = None) -> int:
+    def write_summary(
+        self, text: str, reason: str, context_percent: float | None = None, user_messages: int | None = None
+    ) -> int:
         """Replace the rolling summary. Returns the new checkpoint number."""
         previous = self.summary()
         number = (previous.meta.get("checkpoint", 0) if previous else 0) + 1
-        meta: dict[str, Any] = {"session": self.id, "updated_at": now_iso(),
-                                "checkpoint": number, "reason": reason}
+        meta: dict[str, Any] = {
+            "session": self.id,
+            "updated_at": now_iso(),
+            "checkpoint": number,
+            "reason": reason,
+        }
         if context_percent is not None:
             meta["context_percent"] = round(context_percent, 1)
         if user_messages is not None:

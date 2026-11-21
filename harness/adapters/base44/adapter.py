@@ -518,5 +518,6 @@ def save_conversation(repo, profile: str, storage, agent: Superagent, conversati
         agent=slugify(agent.name),
         files=files or None,
         note=note,
+        clear=() if note else ("note",),
     )
     return True
