@@ -36,7 +36,7 @@ class GitSync:
     MERGE_DRIVER = "harness"
     GENERATED_DRIVER = "harness-generated"
     #: Paths the engine generates from the content (merged by keeping either side).
-    GENERATED = ("connector/**",)
+    GENERATED = ("connector/**", "/README.md", "/sessions/README.md")
 
     def __init__(self, root: Path, settings: GitSettings, timeout: float = 60,
                  log: Callable[[str], None] | None = None) -> None:
@@ -52,6 +52,7 @@ class GitSync:
         """Commit everything if enabled; push too when ``push`` and enabled."""
         if not self.settings.auto_commit or not self.is_repository():
             return SyncResult(False, False, "auto-commit off or not a git repository")
+        self._write_guide()
         try:
             self._git("add", "-A")
             committed = self._git("diff", "--cached", "--quiet", check=False).returncode != 0
@@ -68,6 +69,22 @@ class GitSync:
             return SyncResult(committed, pushed)
         except (subprocess.SubprocessError, OSError) as exc:
             return self._failed(SyncResult(False, False, f"git failed: {exc}"))
+
+    def _write_guide(self) -> None:
+        """Every save carries an up-to-date guide (README.md, sessions/README.md) and connector index:
+        both are built from the content, so they are rebuilt here, not by each command that saves."""
+        if not (self.root / "harness.config.yaml").is_file():
+            return
+        try:
+            from .guide import RepoGuide
+            from .inbox import write_connector_instructions
+            from .repo import ContentRepo
+
+            repo = ContentRepo(self.root)
+            RepoGuide(repo).write()
+            write_connector_instructions(repo)  # the connector finds and reads what was just saved
+        except Exception as exc:  # noqa: BLE001 - a guide must never stop a save
+            self._log(f"guide not updated: {exc}")
 
     def pull(self) -> bool:
         """Bring in what other machines pushed (settings included) before working.

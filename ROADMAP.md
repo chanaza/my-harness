@@ -8,8 +8,12 @@ Status of the engine. Saving comes first; loading comes after saving is complete
   environment); provenance and conflict handling; several machines on one harness
   (rebase + YAML merge); silent background capture; guided setup and one-line installers.
 - Adapters: Claude Code (hooks); the Claude account - claude.ai, Desktop, Cowork - through the
-  `harness-account` skill (Drive folder); Cowork local files on demand; monday.com (API).
+  `harness-account` skill (Drive folder); Cowork local files on demand; monday.com (API);
+  Base44 Superagents (API, on demand); Genspark (through the connector).
 - One summary language for every tool (`harness/digest.py`).
+- The content repository explains itself: `README.md` (every agent with all its parts, links,
+  dependencies, settings needed) and `sessions/README.md`, rebuilt with the connector's index
+  on every save (`harness/guide.py`).
 
 ## Not finished / not verified
 
@@ -36,6 +40,11 @@ Next: OAuth sign-in for the connector; writing back into tools (loading proper).
 ### Known limits
 - Cloud sessions cannot reach a local synced folder; they use the git storage backend.
 - Transcript retention (deleting old transcripts after N days) is not implemented.
+- Base44: the API returns the last 200 messages of a conversation (each pull keeps what it
+  saw); table rows stay in Base44 (structure only); a pull runs when asked.
+- Links between items are found by name: a workflow that names a function uses it. A link
+  that is not written anywhere (a webhook set up in another service) shows as "called from
+  outside", with the files that describe it.
 
 ## Next
 
@@ -44,6 +53,6 @@ Next: OAuth sign-in for the connector; writing back into tools (loading proper).
    answers "unauthorized"), knowledge file contents (references are kept), board
    automations and boards (structure first) as the next step, a guided `harness setup
    monday`, and a scheduled cloud capture.
-2. ChatGPT, Cursor, Genspark, Base44 adapters.
+2. ChatGPT and Cursor adapters; scheduled Base44 pull.
 3. Loading: build a "resume pack" and load the harness into a tool / account.
 4. Optional: package the Claude Code adapter as a Claude Code plugin.

@@ -40,6 +40,7 @@ FILES = {
         {
             "name": "Weekly",
             "description": "Weekly scout",
+            "definition": {"do": "Call yemotBridgeWebhook"},
             "trigger": {
                 "config": {
                     "trigger_type": "scheduled",
@@ -165,3 +166,40 @@ def test_a_superagent_is_saved_in_its_places_with_its_source(repo: ContentRepo):
 
     report = validate(repo)
     assert report.ok, report.problems
+
+
+def test_the_guide_and_the_connector_index_show_every_part_of_an_agent(repo: ContentRepo):
+    from conftest import validate
+
+    from harness.guide import RepoGuide
+    from harness.inbox import HarnessIndex
+
+    LocalHome().save_settings(content_repo=str(repo.root))
+    reader = Reader([message(1, "user", "q1"), message(2, "assistant", "a1")])
+    adapter = Base44Adapter(LocalHome(), reader_factory=lambda account: reader)
+    adapter.install("base44-personal-cloud", "personal", repo.root, hooks=False)
+    adapter.run_harvest()
+    RepoGuide(repo).write()
+    readme = repo.path("README.md").read_text()
+    section = readme.split("### Agent `business-dev`", 1)[1]
+    for part in (
+        "core/agents/business-dev.yaml",
+        "delete-requires-approval.md",
+        "core/skills/hms-time-report/",
+        "core/workflows/business-dev-weekly.yaml",
+        "core/plugins/business-dev-mcp-hms-report/",
+        "apps/business-dev/",
+        "`TaskItem`",
+        "Backend function `yemotBridgeWebhook`",
+    ):
+        assert part in section, part
+    assert "called by: `core/workflows/business-dev-weekly.yaml`" in section  # the link, found by name
+    assert "HMS_PORTAL_PASSWORD" in readme  # a setting to set up again, by name only
+    assert "conversation-c1" in repo.path("sessions", "README.md").read_text()
+    index = {e["path"]: e for e in HarnessIndex(repo).entries()}
+    assert index["README.md"]["kind"] == "guide"
+    function = index["apps/business-dev/functions/yemotBridgeWebhook/main.ts"]
+    assert function["kind"] == "function" and function["agent"] == "business-dev"
+    assert function["used_by"] == ["core/workflows/business-dev-weekly.yaml"]
+    assert index["core/workflows/business-dev-weekly.yaml"]["uses"] == ["function:yemotBridgeWebhook"]
+    assert validate(repo).ok

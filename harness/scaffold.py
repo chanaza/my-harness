@@ -11,7 +11,6 @@ from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
 
-from . import __version__
 from .layout import DEFAULT_LAYOUT, RepoLayout
 from .repo import ContentRepo
 
@@ -60,7 +59,9 @@ class Scaffolder:
         repo = ContentRepo(target, self.layout)
         repo.config_file.update(options.config_changes())
         self._create_areas(repo)
-        repo.path("README.md").write_text(self._readme(options.owner), encoding="utf-8")
+        from .guide import RepoGuide
+
+        RepoGuide(repo).write()  # the map of the repository, rebuilt by the engine on every save
         return repo
 
     def ensure_structure(self, repo: ContentRepo) -> list[Path]:
@@ -98,24 +99,3 @@ class Scaffolder:
             if not any(folder.iterdir()):
                 (folder / ".gitkeep").touch()
         return created
-
-    def _readme(self, owner: str) -> str:
-        rows = "\n".join(f"| `{a.path}/` | {a.purpose} |" for a in self.layout.areas)
-        return f"""# {owner}'s harness
-
-This repository holds a personal AI harness: instructions, skills, agents,
-memory, app specs and session records, kept outside any single AI tool so
-they can move between tools.
-
-It is **managed by [my-harness](https://github.com/chanaza/my-harness)**
-(engine v{__version__}). Do not restructure it by hand: create and change
-content through the engine and its tool adapters, then run
-`harness validate` to check it.
-
-| Folder | Purpose |
-|---|---|
-{rows}
-
-Transcripts and live logs are not stored here. Their location is set in
-`{self.layout.config_file}` under `storage`.
-"""

@@ -302,10 +302,14 @@ class HarnessIndex:
         self.profiles = {p.id: p for p in ProfileRegistry(repo).all()}
 
     def entries(self) -> list[dict[str, Any]]:
+        from .guide import RepoGuide
+
+        guide = RepoGuide(self.repo)
+        guide.load()
         rich: dict[str, dict[str, Any]] = {}
-        for entry in self._items() + self._conversations():
+        for entry in self._guides() + self._items() + guide.index_entries() + self._conversations():
             rich.setdefault(entry["path"], entry)
-        found = list(rich.values())
+        guide.annotate(found := list(rich.values()))  # which agent each belongs to, what it uses
         described = set(rich)
         for path in sorted(p for p in self.repo.root.rglob("*") if p.is_file()):
             rel = path.relative_to(self.repo.root).as_posix()
@@ -356,6 +360,17 @@ class HarnessIndex:
             entry.update({k: v for k, v in extra.items() if v})
             found.append(entry)
         return found
+
+    def _guides(self) -> list[dict[str, Any]]:
+        return [
+            {"kind": "guide", "name": "README.md - start here", "path": "README.md",
+             "description": "Map of the whole harness: how it is organised, every agent with all its "
+                            "parts (rules, skills, workflows, app tables and backend functions, connections, "
+                            "memory, conversations), what uses what, and the secrets each part needs."},
+            {"kind": "guide", "name": "sessions/README.md - every conversation", "path": "sessions/README.md",
+             "description": "Every conversation and agent run, newest first, per account: date, topic, agent "
+                            "or project, and how to continue it."},
+        ]
 
     def _connections(self) -> list[dict[str, Any]]:
         path = self.repo.path("core", "connections.yaml")

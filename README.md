@@ -56,17 +56,36 @@ From then on, everything is saved by itself. Nothing is shown while it runs.
 | — history from before | Every chat with its attachments | Once, from claude.ai's data export (Settings > Privacy > Export data) |
 | Cowork sessions kept on a computer | Every conversation and its files | When you ask: `python -m harness harvest cowork` |
 | monday.com | Your AI agents (with skills, knowledge, jobs), workflows, recent agent runs (each with a readable log) | When you ask: `python -m harness harvest monday` |
-| Base44 Superagents | Identity, rules, skills (with scripts), MCP servers, memory, data model, conversations (each with a readable log) | When you ask: `python -m harness harvest base44` ([docs](docs/adapters/base44.md)) |
+| Base44 Superagents | Identity and settings, rules, skills (with scripts), automations, backend functions (server code), MCP servers, connectors, memory, table structures, conversations (each with a readable log) | When you ask: `python -m harness harvest base44` ([docs](docs/adapters/base44.md)) |
 | Genspark | Every exchange word for word, summaries, and what the account built (Hubs, pages, instructions) | Genspark itself, through your connector ([docs](docs/adapters/genspark.md)) |
 
 How each tool is captured is one setting per tool (`capture_modes` in your
 harness settings); `python -m harness sources` shows it.
 
+### Your harness explains itself
+
+Your content repository opens with a **`README.md` written by the engine from your content**,
+rebuilt on every save, so it is never out of date. It is the map a person or an agent needs to
+find anything without knowing the repository:
+
+- how it is organised, and how files refer to each other;
+- **every agent with all its parts**, wherever they are kept: definition, rules, skills,
+  workflows (and when they run), plugins, connections, app tables and backend functions, memory,
+  conversations - with what uses what (a workflow that calls a backend function, a function that
+  writes a table), what is called from outside, and where each is explained;
+- the secrets and settings each part needs (names only - secrets are never in Git), and where
+  each account's full transcripts are kept.
+
+`sessions/README.md` lists every conversation (date, topic, agent or project) and how to
+continue it.
+
 ### Use it in any tool
 
 Any tool that can add an MCP server (Genspark, ChatGPT, Cursor...) can read your whole
-harness through your connector: it finds agents, skills, projects, apps, memory and
-conversations (by title, date, tool, agent...) and reads them. See
+harness through your connector: it starts from that `README.md`, and finds agents, skills,
+projects, apps, backend functions, tables, workflows, memory and conversations (by title, date,
+tool, agent...) - each with the agent it belongs to, what it uses and what uses it. The index
+it searches is rebuilt on every save, so whatever was just saved can be found. See
 [docs/connector.md](docs/connector.md#using-your-harness-in-another-tool-eg-genspark).
 
 ### Continue anywhere
@@ -109,7 +128,7 @@ command or an adapter for it.
 | Knowledge | Instructions, skills, memory, summaries, app and table schemas | Content repo (Git) |
 | Conversations | `summary.md` + readable `log.md` per conversation | Content repo, `sessions/` |
 | Transcripts | Raw transcripts, exactly as the tool keeps them | Transcript storage (`storage:` in config) |
-| App data | Rows of tables in Base44, Monday boards | Reserved: `apps/<app>/data.yaml` points to snapshots (later phase) |
+| App data | Rows of tables in Base44, Monday boards | Stays in the tool (the structure of each table is saved); snapshots are a later phase |
 
 ## Provenance everywhere
 
@@ -149,6 +168,7 @@ are marked with ★.
 | `CheckpointPolicy`, `CheckpointRecorder` | `harness/checkpoints.py` | When a summary is due; recording it |
 | `SummaryDigest`, `summary_request` | `harness/digest.py` | The one summary language for every tool; its sections -> instructions, memory, connections |
 | `ConversationLog`, `Reply` | `harness/conversation_log.py` | The one readable `log.md` per conversation, for every tool |
+| `RepoGuide` | `harness/guide.py` | The content repo's `README.md` and `sessions/README.md`: structure, every agent's parts, links and dependencies, built from the content on every save |
 | `InboxProcessor`, `HarnessIndex` | `harness/inbox.py` | Saves what the connector dropped into `inbox/connector/`; the index of everything, for reading |
 | `WorkspaceScanner` | `harness/workspace.py` | Repositories, branches and commits a session works in |
 | `MemoryStore` | `harness/memory.py` | Memory entries with conflict tracking |
@@ -168,7 +188,7 @@ are marked with ★.
 | `Storage` ★, `BackendRegistry` | `harness/storage/` | Transcript storage (per profile) |
 | `Migration` ★ | `harness/migrations.py` | Bring existing content to the current engine (`harness upgrade`) |
 | `FilesystemStorage`, `GitStorage` | `harness/storage/` | A (synced) folder, or a branch of a Git repository |
-| `GitSync` | `harness/git_sync.py` | Commit / push after captures |
+| `GitSync` | `harness/git_sync.py` | Commit / push after captures; rebuilds the guide and the connector's index first |
 | `LocalHome` | `harness/local.py` | Per-machine settings and state (`~/.my-harness`) |
 | `RepoValidator`, `Check` ★, `FileReader` ★ | `harness/validation/` | Configurable checks over a content repo |
 | `Scaffolder` | `harness/scaffold.py` | `harness init` and `harness upgrade` |
@@ -179,7 +199,7 @@ translates its tool's own format** (e.g. Claude Code's transcript into `Reply` o
 
 - **A tool**: subclass `Adapter`, decorate with `@adapters.register`, import it in `harness/adapters/__init__.py`.
 - **A storage backend**: subclass `Storage`, decorate with `@backends.register`, add its name to `config.schema.json`.
-- **A content type**: add a schema to `harness/schemas/`, an `ItemWriter` if tools produce it, and a `SchemaCheck`.
+- **A content type**: add a schema to `harness/schemas/`, an `ItemWriter` if tools produce it, a `SchemaCheck`, and teach `RepoGuide` (and through it the connector's index) how it links to agents.
 - **A command**: subclass `Command` and add it to `DEFAULT_COMMANDS`.
 
 ```
