@@ -37,3 +37,17 @@ def test_messages_grow_by_id_logs_are_written_and_unchanged_ones_are_skipped(rep
     saved = json.loads(storage.read_text("tool-personal-cloud/conversation-1/messages.json"))
     assert [m["id"] for m in saved] == ["a", "b"]
     assert storage.read_text("tool-personal-cloud/conversation-1/files/out/report.md") == "# Report"
+
+
+def test_an_empty_conversation_is_not_kept_and_a_deleted_one_keeps_only_its_files(repo: ContentRepo):
+    storage = repo.storage("transcripts", "tool-personal-cloud")
+    importer = ConversationImporter(repo, "tool-personal-cloud", storage, LocalHome().state("c", "p"))
+    empty = ToolConversation(id="conversation-2", version="v", messages=[], raw_name="messages.json",
+                             replies=replies)
+    assert importer.save(empty) is None
+    assert not repo.path("sessions", "tool-personal-cloud", "conversation-2").exists()
+    deleted = ToolConversation(id="conversation-3", version="v", messages=[], raw_name="messages.json",
+                               files={"plan.md": "# Plan"}, replies=replies, note="Deleted in the tool")
+    assert importer.save(deleted) == "imported"
+    assert not storage.exists("tool-personal-cloud/conversation-3/messages.json")  # no empty record
+    assert storage.read_text("tool-personal-cloud/conversation-3/files/plan.md") == "# Plan"

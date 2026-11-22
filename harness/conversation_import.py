@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .conversation_log import ConversationLog, Reply
 from .local import StateFile
 from .provenance import now_iso
@@ -67,11 +68,15 @@ class ConversationImporter:
         self.state = state
 
     def save(self, conversation: ToolConversation) -> str | None:
-        """Returns 'imported', 'updated', or None when nothing needed saving."""
+        """Returns 'imported', 'updated', 'removed' (it holds nothing any more), or None when
+        nothing needed saving. An empty conversation - no message, no record, no file - is not
+        kept: there is nothing in it to continue or to read."""
         session = SessionRecord(self.repo, self.profile, conversation.id)
         log = ConversationLog(session)
         if self._current(conversation, session, log):
             return None
+        if self._empty(conversation, session):
+            return self._remove(session)
         new = not session.meta_path.is_file()
         if new:
             session.touch(
@@ -95,15 +100,15 @@ class ConversationImporter:
             transcript=key,
             files=files or None,
             note=conversation.note,
-            clear=() if conversation.note else ("note",),
+            clear=(() if conversation.note else ("note",)) + (() if key else ("transcript",)),
             **conversation.fields,
         )
         if conversation.version is not None:
-            self.state.set(conversation.id, conversation.version)
+            self.state.set(conversation.id, self._stamp(conversation))
         return "imported" if new else "updated"
 
     def _current(self, conversation: ToolConversation, session: SessionRecord, log: ConversationLog) -> bool:
-        if conversation.version is None or self.state.get(conversation.id) != conversation.version:
+        if conversation.version is None or self.state.get(conversation.id) != self._stamp(conversation):
             return False
         if not session.meta_path.is_file() or (conversation.replies is not None and not log.path.is_file()):
             return False  # saved before the engine kept a log: write it now
@@ -116,6 +121,10 @@ class ConversationImporter:
             merged = {str(m.get("id")): m for m in kept}
             merged.update({str(m.get("id")): m for m in conversation.messages})
             messages = sorted(merged.values(), key=conversation.message_date)
+            if not messages:  # nothing to keep: no empty record (files made in it are kept apart)
+                if self.storage.exists(key):
+                    self.storage.delete(key)
+                return None, messages
             self.storage.write_text(key, json.dumps(messages, ensure_ascii=False))
             return key, messages
         if conversation.raw_file is not None:
@@ -128,3 +137,32 @@ class ConversationImporter:
             self.storage.write_text(key, json.dumps(conversation.raw, ensure_ascii=False, indent=1))
             return key, conversation.raw
         return None, None
+
+    @staticmethod
+    def _stamp(conversation: ToolConversation) -> str:
+        """What was saved, and by which engine: a new engine looks at every conversation again."""
+        return f"{conversation.version}|{__version__}"
+
+    def _empty(self, conversation: ToolConversation, session: SessionRecord) -> bool:
+        if conversation.files or conversation.extra or conversation.raw is not None or conversation.raw_file:
+            return False
+        if conversation.messages is None or conversation.messages:
+            return False
+        key = session.storage_key(conversation.raw_name)
+        kept = json.loads(self.storage.read_text(key)) if self.storage.exists(key) else []
+        return not kept and not session.meta().get("files")
+
+    def _remove(self, session: SessionRecord) -> str | None:
+        """An empty conversation saved earlier: its folder and its empty record go."""
+        import shutil
+
+        removed = False
+        for name in (session.meta().get("transcript"),):
+            if name and self.storage.exists(name):
+                self.storage.delete(name)
+                removed = True
+        if session.folder.is_dir():
+            shutil.rmtree(session.folder)
+            removed = True
+        self.state.set(session.id, None)
+        return "removed" if removed else None
