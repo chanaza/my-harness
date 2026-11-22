@@ -155,13 +155,13 @@ class InboxProcessor:
             self._check(data, "harness-describe.schema.json")
             return InboxFile(path, data)
         if path.match(CONVERSATION_PATTERN):
-            document = MarkdownDocument.parse(path.read_text("utf-8"))
+            document = _document(path.read_text("utf-8"))
             meta = _plain(dict(document.meta))
             self._check(meta, "harness-conversation.schema.json")
             return InboxFile(path, meta, document.body)
         if path.match(EXCHANGE_PATTERN):
-            document = MarkdownDocument.parse(path.read_text("utf-8"))
-            meta = _plain(dict(document.meta))
+            document = _document(path.read_text("utf-8"))
+            meta = {**_from_name(path.name), **_plain(dict(document.meta))}
             self._check(meta, "harness-exchange.schema.json")
             return InboxFile(path, meta, document.body)
         raise ValueError("unknown kind of file (expected describe-*.yaml, conversation-*.md "
@@ -425,6 +425,30 @@ class HarnessIndex:
     @staticmethod
     def _yaml(path: Path) -> dict[str, Any]:
         return dict(yaml_io.load(path.read_text("utf-8")) or {})
+
+
+def _from_name(name: str) -> dict[str, Any]:
+    """What an exchange's file name already says (exchange-<started>-<title>-<n>.md): its
+    conversation and its number, used when the tool left them out of the file."""
+    match = re.fullmatch(r"exchange-(?P<conversation>.+)-(?P<number>\d+)\.md", name)
+    if not match:
+        return {}
+    return {"conversation": f"conversation-{match['conversation']}", "number": int(match["number"])}
+
+
+def _document(text: str) -> MarkdownDocument:
+    """A file a tool sent: front matter between ``---`` lines, or - the same form the connector
+    accepts - its header lines (``schema: ...``, ``profile: ...``) on top, up to the first blank
+    line. Both mean the same, so both are read the same."""
+    document = MarkdownDocument.parse(text)
+    if document.meta or not re.match(r"\s*schema:\s*\S", text):
+        return document
+    head, _, body = text.lstrip().partition("\n\n")
+    try:
+        meta = yaml_io.load(head)
+    except Exception:  # noqa: BLE001 - not header lines after all: the form check reports it
+        return document
+    return MarkdownDocument(dict(meta) if isinstance(meta, dict) else {}, body.lstrip("\n"))
 
 
 def _files(entries: list[dict[str, Any]] | None, folder: str = "") -> dict[str, bytes]:

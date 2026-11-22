@@ -30,7 +30,7 @@ const save = (file_name, content) =>
   call({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "save_to_harness", arguments: { file_name, content } } })
     .then((r) => r.json()).then((j) => j.result);
 
-const GOOD = "---\nschema: harness-conversation/1\nprofile: claude-ai-work-cloud\ntool: claude-ai\ntitle: x\n---\n## Goal\nx\n";
+const GOOD = "---\nschema: harness-conversation/1\nprofile: claude-ai-work-cloud\ntool: claude-ai\ntitle: x\nsaved_at: 2026-11-19T07:00:00Z\n---\n## Goal\nx\n";
 
 test("without the secret address there is nothing", async () => {
   assert.equal((await call({ id: 1, method: "tools/list" }, "/mcp/wrong")).status, 404);

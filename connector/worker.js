@@ -18,6 +18,13 @@
 
 const NAME = /^(describe-[A-Za-z0-9._-]{1,120}\.yaml|(conversation|exchange)-[A-Za-z0-9._-]{1,140}\.md)$/;
 const SCHEMAS = { describe: "harness-describe/1", conversation: "harness-conversation/1", exchange: "harness-exchange/1" };
+// What each kind of file must say: the `required` of the engine's schemas (schemas/harness-*.json;
+// a test in the engine keeps the two the same).
+const REQUIRED = {
+  describe: ["profile", "tool", "captured_at"],
+  conversation: ["profile", "tool", "title", "saved_at"],
+  exchange: ["profile", "tool", "conversation", "number"],
+};
 const MAX_BYTES = 1_000_000;
 const WORKFLOW = "harness-inbox.yml";
 
@@ -288,8 +295,11 @@ function checkAtTheDoor(name, content) {
   if (!new RegExp(`^\\s*(---\\s*\\n)?schema:\\s*${schema.replace("/", "\\/")}\\s*$`, "m").test(content)) {
     return `the file must start with "schema: ${schema}" (see the harness skill)`;
   }
-  for (const field of ["profile", "tool"]) {
-    if (!new RegExp(`^${field}:\\s*\\S+`, "m").test(content)) return `"${field}:" is missing`;
+  // the same required fields the engine checks (schemas/harness-*.schema.json): a file the
+  // engine would reject is refused here, so the tool can fix it in the same turn
+  const required = REQUIRED[name.split("-")[0]];
+  for (const field of required) {
+    if (!new RegExp(`^${field}:\\s*\\S+`, "m").test(content)) return `"${field}:" is missing (see the harness skill)`;
   }
   if (/(ghp_|github_pat_|sk-ant-|xox[bp]-|AKIA)[A-Za-z0-9_-]{8,}/.test(content)) {
     return "it looks like it contains a secret (a token or key); remove it";
