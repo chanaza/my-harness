@@ -742,7 +742,7 @@ anything from this page.
 
 ## Start here
 
-- **Continue a conversation** in any tool: find it in the index (by `last_active` date, topic,
+- **Continue a conversation** in any tool: find it in the index (by `date` - the day it was last active - topic,
   tool, agent or project). Read its `summary.md`, then the replies in its `log.md` after the
   reply the summary covers (`summary_reply` in `meta.yaml`; an older summary without it: the
   replies dated after the summary's `updated_at`). No `summary.md` (runs and conversations pulled
@@ -815,7 +815,7 @@ Each entry has `kind`, `name`, `path` and the account (`profile`), and, where kn
   when switched off - or another service), `explained_in` - the memory files that explain it;
 - `needs_settings` - secrets and settings it reads (names only), `runs` and `status` for
   workflows (`active`, or not scheduled any more);
-- for conversations: `date` (started), `last_active`, `tool`, `account`, `project`, `agent`,
+- for conversations: `date` (the day it was last active), `started`, `tool`, `account`, `project`, `agent`,
   the goal from the summary,
   the first message, and where the `summary`, `log`, `raw` transcript and `files` are.
 

@@ -350,7 +350,9 @@ class HarnessIndex:
             started = str(data.get("started_at") or "")
             missing = ConversationLog(SessionRecord(self.repo, folder.parent.name, folder.name)).missing()
             last = str(data.get("last_activity_at") or data.get("activity_at") or "")
-            extra = {"date": started[:10], "last_active": last[:10] or None,
+            # `date` is when it was last active: a long conversation still going is found among
+            # the recent ones (harness_find's date filter); `started` keeps its first day
+            extra = {"date": last[:10] or started[:10], "started": started[:10] or None,
                      "tool": profile.tool if profile else None,
                      "replies_saved": data.get("log_last"), "replies_missing": missing or None,
                      "account": profile.label if profile else None, "project": data.get("project"),

@@ -11,7 +11,8 @@ the **harness connector**:
   needs. `sessions/README.md` lists every conversation.
 - `harness_find` - search the index: `query` (words), optional `kind` (guide, agent, skill,
   instruction, memory, project, app, function, table, workflow, connection, conversation,
-  file). Each result has a `path` to read, and where known the `agent` it belongs to, what it
+  file). For conversations, `date` is the day it was last active (a long conversation that is still going
+  shows under today), `started` its first day. Each result has a `path` to read, and where known the `agent` it belongs to, what it
   `uses` and what it is `used_by`.
 - `harness_read` - read one file by its `path`; long files come in parts (`offset`).
   A path that starts with `transcripts:` is a raw record (large; read the log instead
