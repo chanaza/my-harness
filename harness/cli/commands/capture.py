@@ -400,7 +400,9 @@ class UpdateCommand(Command):
         parser.add_argument("--no-engine", action="store_true", help="Keep the installed engine code.")
 
     def run(self, args: argparse.Namespace) -> int:
-        report = Updater().update(engine=not args.no_engine)
+        print("Updating (a few minutes: the engine is downloaded, then every tool is captured once).")
+        report = Updater(progress=lambda message: print(f"  ... {message}", flush=True)).update(
+            engine=not args.no_engine)
         for step in report.steps:
             print(f"  + {step}")
         for problem in report.problems:

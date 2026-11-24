@@ -31,9 +31,13 @@ class UpdateReport:
 
 class Updater:
     def __init__(self, local: LocalHome | None = None,
-                 run: Callable[..., subprocess.CompletedProcess[str]] = process.run) -> None:
+                 run: Callable[..., subprocess.CompletedProcess[str]] = process.run,
+                 progress: Callable[[str], None] | None = None) -> None:
         self.local = local or LocalHome()
         self._run = run
+        #: Told before each step starts: an update takes minutes (downloads, then a capture of
+        #: every tool), and with no output it looks stuck and gets stopped half way.
+        self._progress = progress or (lambda message: None)
 
     def update(self, engine: bool = True) -> UpdateReport:
         report = UpdateReport()
@@ -59,6 +63,7 @@ class Updater:
 
     def _step(self, report: UpdateReport, label: str | None, *args: str,
               env: dict[str, str] | None = None) -> None:
+        self._progress(' '.join(a for a in args[:5] if not a.startswith('--')))
         result = self._run([sys.executable, *args], capture_output=True, text=True, env=env)
         if result.returncode != 0:
             report.problems.append(f"{' '.join(args[:4])}: {(result.stderr or result.stdout).strip()}")
