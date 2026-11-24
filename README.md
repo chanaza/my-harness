@@ -36,15 +36,22 @@ computer run the same command and give it another name.
 connector** once (about 15 minutes, free, no command line:
 [docs/connector.md](docs/connector.md)) and add it to each Claude account. Then
 upload the skill file the installer put in your Downloads folder (one per
-account) and, in Cowork, type `Set up harness-account`. The skill updates
-itself: improvements arrive without uploading it again.
+account) and, in Cowork, type `Set up harness-account`. **Required:** add the
+always-on line the installer prints to claude.ai Settings > General > personal
+preferences. A skill is read only when the model finds it relevant, so without
+this line conversations are not saved after every reply. The instructions the
+skill follows come from your harness and stay current; the skill file itself and
+the always-on line do not change by themselves (`harness status` and the served
+instructions tell you when one is missing).
 (Can't find the file? Run `python -m harness skill claude-ai`.)
 
 From then on, everything is saved by itself. Nothing is shown while it runs.
 
 **Remove something that should not be there** (e.g. a leftover): `python -m harness remove <path> --reason "..."`.
 **Check that it works:** `python -m harness status` (and `python -m harness sources`: how each tool is captured).
-**Update later:** run the same installation command again.
+**Update later:** a computer whose engine is older than the one that last wrote your
+harness (GitHub Actions always runs the latest) updates itself in the background, at most
+once a day, and `harness status` shows the gap; to update at once: `python -m harness update`.
 **More details, cloud sessions and troubleshooting:** [docs/getting-started.md](docs/getting-started.md).
 
 ### What is saved today

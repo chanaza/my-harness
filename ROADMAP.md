@@ -26,7 +26,10 @@ Built and tested (connector with simulated GitHub, inbox processing, forms, the 
 summary sections as Claude Code). Not yet run for real:
 - Deploying the connector (Cloudflare) and adding it to claude.ai as a custom connector.
 - What Claude sees inside a Cowork scheduled task (the first describe's `cannot_see`).
-- How reliably a model saves after every reply without a hook.
+- How reliably a model saves after every reply without a hook. Seen for real (11.2026): with
+  the skill alone, claude.ai saved no ordinary conversation for days; the always-on line is
+  what makes it happen. Accounts set up before the line existed are now told (status and the
+  served instructions).
 - GitHub Actions run in the content repository (started by the connector, daily sweep).
 Fallback for history: the data export, downloaded once into the watch folder.
 - Full content in descriptions (skills, plugins, agents, projects' knowledge, apps):

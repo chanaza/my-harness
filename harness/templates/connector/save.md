@@ -9,6 +9,7 @@ mention the saving in your answer unless it failed.
 
 ${NOT_HERE}
 
+${ACTION_NEEDED}
 If the harness connector is not available here, say so in one sentence once per
 conversation and continue normally.
 

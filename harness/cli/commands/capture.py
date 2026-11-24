@@ -245,6 +245,12 @@ class StatusCommand(Command):
                 print(f"  {tool}: {folder} -> {profile} (latest session: {current})")
         if repo_path:
             repo = ContentRepo(repo_path)
+            from ...freshness import EngineFreshness
+            stale = EngineFreshness(local).message(repo)
+            print(f"Engine on this computer: v{EngineFreshness(local).installed}"
+                  + (f"\n  ! {stale}" if stale else " (up to date with the harness)"))
+            for line in _always_on_missing(repo):
+                print(f"  ! {line}")
             report = RepoValidator.default(repo.layout).validate(repo)
             print(f"Repository check: {'OK' if report.ok else f'{len(report.problems)} problem(s)'}")
             for problem in report.problems[: args.problems]:
@@ -601,6 +607,8 @@ class HookCommand(Command):
         local = LocalHome()
         try:
             event = json.loads(sys.stdin.read() or "{}")
+            if not args.deferred:
+                _update_if_behind(local)
             response = adapters.create(args.tool, local).handle_hook(event, deferred=args.deferred)
             if response:
                 print(json.dumps(response))
@@ -609,6 +617,37 @@ class HookCommand(Command):
         except Exception:  # capture must never break the tool
             local.log(f"hook {args.tool} failed:\n{traceback.format_exc()}")
         return 0
+
+
+def _always_on_missing(repo: ContentRepo) -> list[str]:
+    """Accounts saved through the connector whose always-on line is missing (status lists them)."""
+    from ...adapters.connector import ConnectorAdapter
+    lines = []
+    for name in adapters.names():
+        adapter = adapters.create(name)
+        if not isinstance(adapter, ConnectorAdapter):
+            continue
+        try:
+            missing = adapter.always_on_missing(repo)
+        except Exception:  # noqa: BLE001 - status shows what it can
+            continue
+        for profile in missing:
+            lines.append(f"{profile}: conversations are not saved after every reply - add to "
+                         f"{adapter.ALWAYS_ON}: {adapter.always_on_line()}")
+    return lines
+
+
+def _update_if_behind(local: LocalHome) -> None:
+    """A computer whose engine is older than the shared repository's updates itself in the
+    background (at most once a day); it never delays or breaks the tool's hook."""
+    try:
+        root = local.content_repo()
+        if root:
+            from ...background import spawn_detached
+            from ...freshness import EngineFreshness
+            EngineFreshness(local).update_if_behind(ContentRepo(root), spawn_detached)
+    except Exception:  # noqa: BLE001 - checking freshness must never break capture
+        local.log(f"engine freshness check failed:\n{traceback.format_exc()}")
 
 
 # --- content written by models ------------------------------------------------------------

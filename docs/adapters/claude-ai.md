@@ -27,6 +27,13 @@ way to read them from outside for a single person. So the account saves itself:
 
 Each account (by e-mail) is its own profile, e.g. `claude-ai-personal-cloud`.
 
+**The always-on line is required.** A skill is read only when the model finds it relevant,
+and after an ordinary reply it does not: with the skill alone, no ordinary conversation is
+saved. The line in personal preferences goes with every reply. The engine checks each
+account's personal preferences as its daily describe captured them; while the line is
+missing, `harness status` names the account and the instructions the connector serves tell
+the model to ask the user to add it.
+
 ## Settings (`claude_ai:` in harness.config.yaml)
 
 | Setting | Default | Meaning |

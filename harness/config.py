@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from fnmatch import fnmatch
@@ -231,8 +232,31 @@ class ConfigFile:
     def load(self) -> HarnessConfig:
         # Settings a newer engine removed are ignored (another computer may still have them,
         # or `harness upgrade` has not run yet); `upgrade` deletes them from the file.
-        own = self._validated(_without(self._open().to_plain(), OBSOLETE_SETTINGS))
+        # Settings a newer engine added are ignored too: the repository is shared, and the
+        # engine in GitHub Actions is always the latest, so it may add a setting this
+        # computer's engine does not know yet. Failing on it would stop all capture here
+        # without a word; `newer_settings()` names them and `harness status` says to update.
+        own = _without(self._open().to_plain(), OBSOLETE_SETTINGS)
+        own = self._validated(_without(own, tuple(self._unknown(own))))
         return HarnessConfig(_deep_merge(yaml_io.load(template_config_text()), own))
+
+    def newer_settings(self) -> list[str]:
+        """Settings in this file that this engine does not know: written by a newer engine
+        (fixed by `harness update` on this computer)."""
+        return self._unknown(_without(self._open().to_plain(), OBSOLETE_SETTINGS))
+
+    def _unknown(self, data: Any) -> list[str]:
+        """Dotted keys the schema does not allow where they are (unknown properties)."""
+        unknown = []
+        for error in self.schemas.validator(self.SCHEMA).iter_errors(data):
+            if error.validator != "additionalProperties" or not isinstance(error.instance, dict):
+                continue
+            known = set(error.schema.get("properties", {}))
+            patterns = list(error.schema.get("patternProperties", {}))
+            prefix = "".join(f"{part}." for part in error.path)
+            unknown += [f"{prefix}{key}" for key in error.instance
+                        if key not in known and not any(re.search(p, key) for p in patterns)]
+        return sorted(set(unknown))
 
     def obsolete_settings(self) -> list[str]:
         """Settings in this file that the engine no longer has."""
@@ -256,7 +280,7 @@ class ConfigFile:
         for key, value in _leaves(self._open().to_plain()).items():
             if key not in removed:
                 document.set(key, value, create=True)
-        self._validated(document.to_plain())
+        self._validated_known(document.to_plain())
         document.save()
         return added, removed
 
@@ -274,7 +298,7 @@ class ConfigFile:
                 document.set(key, value, create=True)
             except KeyError as exc:
                 raise ConfigError(f"Cannot set {key!r}: {exc}") from None
-        self._validated(document.to_plain())
+        self._validated_known(document.to_plain(), keep=tuple(changes))
         document.save()
 
     def _open(self) -> YamlDocument:
@@ -284,6 +308,12 @@ class ConfigFile:
             return YamlDocument(self.path)
         except YAMLError as exc:
             raise ConfigError(f"{self.path} is not valid YAML: {exc}") from None
+
+    def _validated_known(self, data: Any, keep: tuple[str, ...] = ()) -> Mapping[str, Any]:
+        """Validate what this engine knows; settings from a newer engine are kept in the file
+        as they are (another computer needs them). A setting being changed is always checked."""
+        newer = tuple(k for k in self._unknown(data) if k not in keep)
+        return self._validated(_without(data, newer))
 
     def _validated(self, data: Any) -> Mapping[str, Any]:
         errors = self.schemas.errors(self.SCHEMA, data)

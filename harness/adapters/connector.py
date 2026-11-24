@@ -93,6 +93,7 @@ class ConnectorAdapter(AccountBoundAdapter):
             templates.joinpath("reader.md").read_text("utf-8")
         return Template(text).safe_substitute(
             notes, VERSION=__version__, TOOL=self.tool, SAVED_APPS=saved,
+            ACTION_NEEDED=self.action_needed(repo),
             AFTER_EVERY_REPLY=Template(AFTER_EVERY_REPLY[config.connector.transcript]).substitute(
                 EVERY=config.connector.summary_every_replies),
             SUMMARY_REQUEST=summary_request(config.checkpoints.summary_max_words, config.working_language))
@@ -140,6 +141,42 @@ class ConnectorAdapter(AccountBoundAdapter):
         model finds it relevant; custom instructions go with every reply."""
         return ("After each of your replies, save the exchange to my harness: send it with the harness "
                 "connector's save_to_harness, as the harness-account skill says (exchange mode).")
+
+    #: Words of the always-on line that show it is there (any language around them).
+    ALWAYS_ON_MARKERS = ("save the exchange to my harness", "save_to_harness")
+
+    def always_on_missing(self, repo: ContentRepo) -> list[str]:
+        """Profiles of this tool whose always-on instructions (as their last describe captured
+        them) lack the always-on line. Without it, saving after every reply depends on the
+        model choosing to read the skill, which it rarely does: conversations are silently not
+        saved. The line was added to setup after some accounts were set up, and nothing told
+        them; this is how they are told. Profiles never described are not judged."""
+        missing = []
+        for profile in ProfileRegistry(repo).all():
+            if profile.tool != self.tool:
+                continue
+            folder = repo.path("core", "instructions", profile.id)
+            captured = [p for p in sorted(folder.glob("*.md"))
+                        if "origin: describe-" in p.read_text("utf-8", errors="replace")[:400]]
+            if not captured:
+                continue
+            text = "\n".join(p.read_text("utf-8", errors="replace") for p in captured).lower()
+            if not any(marker in text for marker in self.ALWAYS_ON_MARKERS):
+                missing.append(profile.id)
+        return missing
+
+    def action_needed(self, repo: ContentRepo) -> str:
+        """The block the served instructions carry while some account lacks the always-on line."""
+        missing = self.always_on_missing(repo)
+        if not missing:
+            return ""
+        return ("## Action needed: tell the user (once per conversation)\n\n"
+                f"These accounts do not have the required always-on line yet: {', '.join(missing)}. "
+                "Without it, conversations are not saved after every reply. If you are running in "
+                "one of them, tell the user in one short paragraph, in their language, to add this "
+                f"line to {self.ALWAYS_ON} (only they can change it), word for word:\n\n"
+                f"> {self.always_on_line()}\n\n"
+                "Then save this conversation's exchanges as usual.\n")
 
     def setup_steps(self, account: str, profile: str) -> list[str]:
         target = self.deliver_skill(account=account)
